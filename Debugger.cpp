@@ -1,6 +1,27 @@
 
 #include "Debugger.hpp"
 #include "Process.hpp"
+#include <csignal>
+
+/**
+ * @brief Construct a new Debugger:: Debugger object
+ *
+ */
+Debugger::Debugger() {
+
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &mask, &prev_mask_);
+}
+
+/**
+ * @brief Destroy the Debugger:: Debugger object
+ *
+ */
+Debugger::~Debugger() {
+	sigprocmask(SIG_SETMASK, &prev_mask_, nullptr);
+}
 
 /**
  * @brief attaches to the process identified by <pid>

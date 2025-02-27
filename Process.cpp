@@ -47,7 +47,6 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	sigaddset(&mask, SIGCHLD);
 	sigprocmask(SIG_BLOCK, &mask, nullptr);
 	const int ret = ::sigtimedwait(&mask, &info, &ts);
-	// sigprocmask(SIG_UNBLOCK, &mask, nullptr);
 	return ret == SIGCHLD;
 }
 
@@ -289,7 +288,7 @@ void Process::detach() {
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout) {
 
-#if 0
+#if 1
 	if (!wait_for_sigchild(timeout)) {
 		printf("No SIGCHLD\n");
 		return false;

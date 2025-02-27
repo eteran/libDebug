@@ -12,6 +12,10 @@ class Process;
 
 class Debugger {
 public:
+	Debugger();
+	~Debugger();
+
+public:
 	std::shared_ptr<Process> attach(pid_t pid);
 	std::shared_ptr<Process> spawn(int argc, char *argv[]);
 
@@ -20,6 +24,7 @@ public:
 
 private:
 	std::shared_ptr<Process> process_;
+	sigset_t prev_mask_;
 };
 
 #endif
