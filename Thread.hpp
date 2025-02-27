@@ -2,14 +2,26 @@
 #ifndef THREAD_HPP_
 #define THREAD_HPP_
 
+#include <memory>
 #include <sys/types.h>
 
 class Thread {
 	friend class Debugger;
 	friend class Process;
 
+	enum class State {
+		Stopped,
+		Running,
+	};
+
+	enum class Flags {
+		NoAttach,
+		Attach,
+	};
+
 public:
-	Thread(pid_t tid);
+	Thread(pid_t pid, pid_t tid, Flags f);
+	~Thread();
 
 public:
 	pid_t tid() const { return tid_; }
@@ -35,8 +47,10 @@ public:
 	void wait();
 
 private:
+	pid_t pid_   = 0;
 	pid_t tid_   = 0;
 	int wstatus_ = 0;
+	State state_ = State::Running;
 };
 
 #endif

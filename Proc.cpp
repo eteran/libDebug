@@ -49,7 +49,7 @@ std::vector<pid_t> enumerate_threads(pid_t pid) {
 	std::vector<pid_t> threads;
 
 	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "/proc/%d/task/", pid);
+	::snprintf(path, sizeof(path), "/proc/%d/task/", pid);
 
 	proc_enumerator(path, [&threads](long tid) {
 		threads.push_back(static_cast<pid_t>(tid));

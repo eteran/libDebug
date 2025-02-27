@@ -1,87 +1,36 @@
 
 #include "Thread.hpp"
 
+#include <cassert>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 
-#include <signal.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
+
+constexpr long TraceOptions = PTRACE_O_TRACECLONE |
+							  PTRACE_O_TRACEFORK |
+							  PTRACE_O_TRACEEXIT |
+							  PTRACE_O_EXITKILL;
 
 /**
  * @brief Construct a new Thread object
  *
  * @param tid
  */
-Thread::Thread(pid_t tid)
-	: tid_(tid) {
-}
+Thread::Thread(pid_t pid, pid_t tid, Flags f)
+	: pid_(pid), tid_(tid) {
 
-/**
- * @brief
- *
- */
-void Thread::step() {
-	long ret = ::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L);
-	if (ret == -1) {
-		perror("ptrace");
-		exit(0);
+	if (f == Flags::Attach) {
+		long ret = ::ptrace(PTRACE_ATTACH, tid, 0L, 0L);
+		if (ret == -1) {
+			perror("ptrace (attach)");
+			exit(0);
+		}
 	}
-}
 
-/**
- * @brief
- *
- */
-void Thread::resume() {
-	long ret = ::ptrace(PTRACE_CONT, tid_, 0L, 0L);
-	if (ret == -1) {
-		perror("ptrace");
-		exit(0);
-	}
-}
-
-/**
- * @brief
- *
- */
-void Thread::stop() {
-	long ret = ::kill(tid_, SIGSTOP);
-	if (ret == -1) {
-		perror("ptrace");
-		exit(0);
-	}
-}
-
-/**
- * @brief
- *
- */
-void Thread::kill() {
-	long ret = ::ptrace(PTRACE_KILL, tid_, 0L, 0L);
-	if (ret == -1) {
-		perror("ptrace");
-		exit(0);
-	}
-}
-
-/**
- * @brief
- *
- */
-void Thread::detach() {
-	long ret = ::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
-	if (ret == -1) {
-		perror("ptrace");
-		exit(0);
-	}
-}
-
-/**
- * @brief
- *
- */
-void Thread::wait() {
+	assert(state_ == State::Running);
 
 	int wstatus = 0;
 
@@ -92,6 +41,120 @@ void Thread::wait() {
 	}
 
 	wstatus_ = wstatus;
+	state_   = State::Stopped;
+
+	ptrace(PTRACE_SETOPTIONS, tid, 0L, TraceOptions);
+	printf("Finished Attaching To Thread: [%d]\n", tid);
+}
+
+/**
+ * @brief Destroy the Thread object
+ *
+ */
+Thread::~Thread() {
+	detach();
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::wait() {
+
+	assert(state_ == State::Running);
+
+	int wstatus = 0;
+
+	long ret = ::waitpid(tid_, &wstatus, __WALL);
+	if (ret == -1) {
+		perror("waitpid");
+		exit(0);
+	}
+
+	wstatus_ = wstatus;
+	state_   = State::Stopped;
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::detach() {
+	if (tid_ != -1) {
+		long ret = ::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
+		if (ret == -1) {
+			perror("ptrace (detach)");
+			exit(0);
+		}
+		tid_ = -1;
+	}
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::step() {
+
+	assert(state_ == State::Stopped);
+
+	long ret = ::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L);
+	if (ret == -1) {
+		perror("ptrace (step)");
+		exit(0);
+	}
+
+	state_ = State::Running;
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::resume() {
+
+	printf("Resuming Thread [%d]\n", tid_);
+
+	assert(state_ == State::Stopped);
+
+	long ret = ::ptrace(PTRACE_CONT, tid_, 0L, 0L);
+	if (ret == -1) {
+		perror("ptrace (resume)");
+		exit(0);
+	}
+
+	state_ = State::Running;
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::stop() {
+
+	printf("Stopping Thread [%d]\n", tid_);
+
+	assert(state_ == State::Running);
+
+	long ret = ::tgkill(pid_, tid_, SIGSTOP);
+	if (ret == -1) {
+		perror("tgkill");
+		exit(0);
+	}
+}
+
+/**
+ * @brief
+ *
+ */
+void Thread::kill() {
+	assert(state_ == State::Running);
+
+	long ret = ::tgkill(pid_, tid_, SIGKILL);
+	if (ret == -1) {
+		perror("tgkill");
+		exit(0);
+	}
 }
 
 /**
@@ -101,6 +164,7 @@ void Thread::wait() {
  * @return false
  */
 bool Thread::is_exited() const {
+	assert(state_ == State::Stopped);
 	return WIFEXITED(wstatus_);
 }
 
@@ -111,6 +175,7 @@ bool Thread::is_exited() const {
  * @return false
  */
 bool Thread::is_signaled() const {
+	assert(state_ == State::Stopped);
 	return WIFSIGNALED(wstatus_);
 }
 
@@ -121,6 +186,7 @@ bool Thread::is_signaled() const {
  * @return false
  */
 bool Thread::is_stopped() const {
+	assert(state_ == State::Stopped);
 	return WIFSTOPPED(wstatus_);
 }
 
@@ -131,6 +197,7 @@ bool Thread::is_stopped() const {
  * @return false
  */
 bool Thread::is_continued() const {
+	assert(state_ == State::Stopped);
 	return WIFCONTINUED(wstatus_);
 }
 
@@ -140,6 +207,7 @@ bool Thread::is_continued() const {
  * @return int
  */
 int Thread::exit_status() const {
+	assert(state_ == State::Stopped);
 	return WEXITSTATUS(wstatus_);
 }
 
@@ -149,6 +217,7 @@ int Thread::exit_status() const {
  * @return int
  */
 int Thread::signal_status() const {
+	assert(state_ == State::Stopped);
 	return WTERMSIG(wstatus_);
 }
 
@@ -158,5 +227,6 @@ int Thread::signal_status() const {
  * @return int
  */
 int Thread::stop_status() const {
+	assert(state_ == State::Stopped);
 	return WSTOPSIG(wstatus_);
 }

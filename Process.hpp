@@ -5,6 +5,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <unordered_map>
 
 #include <sys/types.h>
 
@@ -16,13 +17,14 @@ class Process {
 
 public:
 	Process(pid_t pid);
+	~Process();
 
 public:
 	pid_t pid() const { return pid_; }
 
 public:
-	void read_memory(uint64_t address, void *buffer, size_t n);
-	void write_memory(uint64_t address, const void *buffer, size_t n);
+	int64_t read_memory(uint64_t address, void *buffer, size_t n);
+	int64_t write_memory(uint64_t address, const void *buffer, size_t n);
 
 public:
 	void kill();
@@ -30,17 +32,19 @@ public:
 	void resume();
 	void stop();
 	void detach();
-	bool wait();
+	bool next_debug_event(std::chrono::milliseconds timeout);
 
 public:
-	static bool wait_for_sigchild(std::chrono::milliseconds timeout);
+	void report() const;
 
 public:
-	std::map<pid_t, std::shared_ptr<Thread>> threads() const { return threads_; }
+	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const { return threads_; }
 
 private:
 	pid_t pid_ = 0;
-	std::map<pid_t, std::shared_ptr<Thread>> threads_;
+	int memfd_ = -1;
+	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
+	std::shared_ptr<Thread> active_thread_;
 };
 
 #endif
