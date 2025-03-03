@@ -6,5 +6,6 @@ words:
   - eteran
   - tgkill
   - tracee
+  - PTRACE_TRACEME
 ignoreWords: []
 import: []

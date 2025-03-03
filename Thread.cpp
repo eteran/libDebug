@@ -9,6 +9,8 @@
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 
+#define IGNORE(x) (void)x
+
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
 							  PTRACE_O_TRACEEXIT |
@@ -25,7 +27,7 @@ Thread::Thread(pid_t pid, pid_t tid, Flags f)
 	if (f == Flags::Attach) {
 		long ret = ::ptrace(PTRACE_ATTACH, tid, 0L, 0L);
 		if (ret == -1) {
-			perror("ptrace (attach)");
+			perror("ptrace(PTRACE_ATTACH)");
 			exit(0);
 		}
 	}
@@ -44,7 +46,6 @@ Thread::Thread(pid_t pid, pid_t tid, Flags f)
 	state_   = State::Stopped;
 
 	ptrace(PTRACE_SETOPTIONS, tid, 0L, TraceOptions);
-	printf("Finished Attaching To Thread: [%d]\n", tid);
 }
 
 /**
@@ -82,10 +83,7 @@ void Thread::wait() {
 void Thread::detach() {
 	if (tid_ != -1) {
 		long ret = ::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
-		if (ret == -1) {
-			perror("ptrace (detach)");
-			exit(0);
-		}
+		IGNORE(ret);
 		tid_ = -1;
 	}
 }
@@ -100,7 +98,7 @@ void Thread::step() {
 
 	long ret = ::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace (step)");
+		perror("ptrace(PTRACE_SINGLESTEP)");
 		exit(0);
 	}
 
@@ -113,13 +111,11 @@ void Thread::step() {
  */
 void Thread::resume() {
 
-	printf("Resuming Thread [%d]\n", tid_);
-
 	assert(state_ == State::Stopped);
 
 	long ret = ::ptrace(PTRACE_CONT, tid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace (resume)");
+		perror("ptrace(PTRACE_CONT)");
 		exit(0);
 	}
 
@@ -131,8 +127,6 @@ void Thread::resume() {
  *
  */
 void Thread::stop() {
-
-	printf("Stopping Thread [%d]\n", tid_);
 
 	assert(state_ == State::Running);
 

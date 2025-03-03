@@ -2,8 +2,10 @@
 #ifndef PROCESS_HPP_
 #define PROCESS_HPP_
 
+#include "Event.hpp"
+
 #include <chrono>
-#include <map>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 
@@ -16,7 +18,15 @@ class Process {
 	friend class Thread;
 
 public:
-	Process(pid_t pid);
+	using event_callback = std::function<void(const Event &)>;
+
+	enum class Flags {
+		NoAttach,
+		Attach,
+	};
+
+public:
+	Process(pid_t pid, Flags flags);
 	~Process();
 
 public:
@@ -32,7 +42,7 @@ public:
 	void resume();
 	void stop();
 	void detach();
-	bool next_debug_event(std::chrono::milliseconds timeout);
+	bool next_debug_event(std::chrono::milliseconds timeout, event_callback callback);
 
 public:
 	void report() const;

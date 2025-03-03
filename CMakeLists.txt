@@ -39,6 +39,8 @@ endif()
 add_library(Debug
     Debugger.cpp
     Debugger.hpp
+    Event.cpp
+    Event.hpp
     Proc.cpp
     Proc.hpp
     Process.cpp

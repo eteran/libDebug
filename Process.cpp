@@ -70,6 +70,16 @@ constexpr bool is_exit_trace_event(int status) {
 	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_EXIT << 8)));
 }
 
+/**
+ * @brief
+ *
+ * @param status
+ * @return constexpr bool
+ */
+constexpr bool is_trap_event(int status) {
+	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
+}
+
 }
 
 /**
@@ -77,33 +87,36 @@ constexpr bool is_exit_trace_event(int status) {
  * to the process identified by `pid`
  *
  * @param pid The process to attach to
+ * @param flags Controls the attach behavior of this constructor
  */
-Process::Process(pid_t pid)
+Process::Process(pid_t pid, Flags flags)
 	: pid_(pid) {
 
-	while (true) {
+	if (flags == Process::Flags::Attach) {
+		while (true) {
 
-		const std::vector<pid_t> threads = enumerate_threads(pid);
+			const std::vector<pid_t> threads = enumerate_threads(pid);
 
-		bool inserted = false;
-		for (pid_t tid : threads) {
-			auto it = threads_.find(tid);
-			if (it != threads_.end()) {
-				continue;
+			bool inserted = false;
+			for (pid_t tid : threads) {
+				auto it = threads_.find(tid);
+				if (it != threads_.end()) {
+					continue;
+				}
+
+				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Flags::Attach);
+				threads_.emplace(tid, new_thread);
+
+				if (!active_thread_) {
+					active_thread_ = new_thread;
+				}
+
+				inserted = true;
 			}
 
-			auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Flags::Attach);
-			threads_.emplace(tid, new_thread);
-
-			if (!active_thread_) {
-				active_thread_ = new_thread;
+			if (!inserted) {
+				break;
 			}
-
-			inserted = true;
-		}
-
-		if (!inserted) {
-			break;
 		}
 	}
 
@@ -114,6 +127,10 @@ Process::Process(pid_t pid)
 	report();
 }
 
+/**
+ * @brief
+ *
+ */
 void Process::report() const {
 	for (auto [tid, thread] : threads_) {
 
@@ -246,8 +263,6 @@ void Process::resume() {
  */
 void Process::stop() {
 
-	printf("Stopping Process [%d]\n", pid_);
-
 	if (active_thread_) {
 		active_thread_->stop();
 	} else {
@@ -266,7 +281,7 @@ void Process::stop() {
 void Process::kill() {
 	long ret = ::ptrace(PTRACE_KILL, pid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace (kill)");
+		perror("ptrace(PTRACE_KILL)");
 		exit(0);
 	}
 }
@@ -281,25 +296,25 @@ void Process::detach() {
 /**
  * @brief waits for `timeout` milliseconds for the next debug event to occur.
  * If there was a debug event, and we are in "all-stop" mode, then it will also
- * stop all other running threads
+ * stop all other running threads. Events will be reported by calling `callback`.
+ * Note that it is possible for a single call to this function can result in
+ * multiple events to be reported.
  *
  * @param timeout the amount of milliseconds to wait for the next event
+ * @param callback the function to call when an event occurs
  * @return bool true if a debug event occurred withing `timeout` milliseconds, otherwise false
  */
-bool Process::next_debug_event(std::chrono::milliseconds timeout) {
+bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
 
-#if 1
 	if (!wait_for_sigchild(timeout)) {
-		printf("No SIGCHLD\n");
 		return false;
 	}
-#endif
 
 	active_thread_ = nullptr;
 
 	while (true) {
 		int wstatus     = 0;
-		const pid_t tid = ::waitpid(-1, &wstatus, __WALL);
+		const pid_t tid = ::waitpid(-1, &wstatus, __WALL | WNOHANG);
 
 		if (tid == -1) {
 			perror("waitpid");
@@ -307,47 +322,60 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout) {
 		}
 
 		if (tid == 0) {
-			printf("No Event\n");
 			break;
-		}
-
-		printf("Wait Event Success! [%d] [%d]\n", tid, wstatus);
-
-		if (is_exit_trace_event(wstatus)) {
-			printf("EXIT EVENT!\n");
-		}
-
-		if (is_clone_event(wstatus)) {
-			printf("CLONE EVENT!\n");
-
-			unsigned long message;
-			if (ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
-
-				auto new_tid = static_cast<pid_t>(message);
-				printf("Cloned Thread ID [%d]\n", new_tid);
-				auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::Flags::NoAttach);
-				threads_.emplace(new_tid, new_thread);
-
-				new_thread->wstatus_ = wstatus;
-				new_thread->state_   = Thread::State::Stopped;
-				new_thread->resume();
-			}
 		}
 
 		auto it = threads_.find(tid);
 		if (it != threads_.end()) {
 			it->second->wstatus_ = wstatus;
 			it->second->state_   = Thread::State::Stopped;
-			it->second->resume();
-			if (!active_thread_) {
-				active_thread_ = it->second;
+		}
+
+		Event e;
+		e.pid_     = pid_;
+		e.tid_     = tid;
+		e.status_  = wstatus;
+		e.siginfo_ = {};
+
+		if (WIFEXITED(wstatus)) {
+			if (it != threads_.end()) {
+				threads_.erase(it);
 			}
 		} else {
-			printf("Unknown Thread?! [%d]\n", tid);
+			if (is_trap_event(wstatus)) {
+
+				if (ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo_) == -1) {
+					perror("ptrace(PTRACE_GETSIGINFO)");
+				}
+
+				if (is_exit_trace_event(wstatus)) {
+					// Thread is about to exit, beyond that, this is a normal trap event
+				} else if (is_clone_event(wstatus)) {
+					unsigned long message;
+					if (ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
+
+						auto new_tid    = static_cast<pid_t>(message);
+						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::Flags::NoAttach);
+						threads_.emplace(new_tid, new_thread);
+
+						new_thread->wstatus_ = 0;
+						new_thread->state_   = Thread::State::Stopped;
+						new_thread->resume();
+					}
+				}
+			}
+
+			if (it != threads_.end()) {
+				it->second->resume();
+				if (!active_thread_) {
+					active_thread_ = it->second;
+				}
+			}
+
+			callback(e);
 		}
 	}
 
-	assert(active_thread_);
-
+	// assert(active_thread_);
 	return true;
 }
