@@ -89,10 +89,10 @@ constexpr bool is_trap_event(int status) {
  * @param pid The process to attach to
  * @param flags Controls the attach behavior of this constructor
  */
-Process::Process(pid_t pid, Flags flags)
+Process::Process(pid_t pid, Flag flags)
 	: pid_(pid) {
 
-	if (flags == Process::Flags::Attach) {
+	if (flags & Process::Attach) {
 		while (true) {
 
 			const std::vector<pid_t> threads = enumerate_threads(pid);
@@ -104,7 +104,7 @@ Process::Process(pid_t pid, Flags flags)
 					continue;
 				}
 
-				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Flags::Attach);
+				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Attach);
 				threads_.emplace(tid, new_thread);
 
 				if (!active_thread_) {
@@ -118,6 +118,9 @@ Process::Process(pid_t pid, Flags flags)
 				break;
 			}
 		}
+	} else {
+		auto threads = std::make_shared<Thread>(pid, pid, Thread::NoAttach);
+		threads_.emplace(pid, threads);
 	}
 
 	char path[PATH_MAX];
@@ -306,6 +309,9 @@ void Process::detach() {
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
 
+	// TODO(eteran): handle breakpoints
+	// TODO(eteran): handle ignored exceptions
+
 	if (!wait_for_sigchild(timeout)) {
 		return false;
 	}
@@ -317,8 +323,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		const pid_t tid = ::waitpid(-1, &wstatus, __WALL | WNOHANG);
 
 		if (tid == -1) {
-			perror("waitpid");
-			exit(0);
+			break;
 		}
 
 		if (tid == 0) {
@@ -355,7 +360,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					if (ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
 
 						auto new_tid    = static_cast<pid_t>(message);
-						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::Flags::NoAttach);
+						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach);
 						threads_.emplace(new_tid, new_thread);
 
 						new_thread->wstatus_ = 0;

@@ -37,6 +37,8 @@ if(LIST_OF_SANITIZERS)
 endif()
 
 add_library(Debug
+    Breakpoint.cpp
+    Breakpoint.hpp
     Debugger.cpp
     Debugger.hpp
     Event.cpp

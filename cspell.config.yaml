@@ -3,9 +3,10 @@ ignorePaths: []
 dictionaryDefinitions: []
 dictionaries: []
 words:
+  - ASLR
   - eteran
+  - PTRACE_TRACEME
   - tgkill
   - tracee
-  - PTRACE_TRACEME
 ignoreWords: []
 import: []

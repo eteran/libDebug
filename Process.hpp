@@ -20,13 +20,16 @@ class Process {
 public:
 	using event_callback = std::function<void(const Event &)>;
 
-	enum class Flags {
-		NoAttach,
-		Attach,
-	};
+public:
+	using Flag                               = uint32_t;
+	static constexpr Flag Attach             = 0;
+	static constexpr Flag NoAttach           = 1;
+	static constexpr Flag KillOnTracerExit   = 2;
+	static constexpr Flag DisableAslr        = 4;
+	static constexpr Flag DisableLazyBinding = 8;
 
 public:
-	Process(pid_t pid, Flags flags);
+	Process(pid_t pid, Flag flags);
 	~Process();
 
 public:

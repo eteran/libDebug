@@ -21,10 +21,10 @@ constexpr long TraceOptions = PTRACE_O_TRACECLONE |
  *
  * @param tid
  */
-Thread::Thread(pid_t pid, pid_t tid, Flags f)
+Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	: pid_(pid), tid_(tid) {
 
-	if (f == Flags::Attach) {
+	if (f & Thread::Attach) {
 		long ret = ::ptrace(PTRACE_ATTACH, tid, 0L, 0L);
 		if (ret == -1) {
 			perror("ptrace(PTRACE_ATTACH)");
@@ -38,7 +38,7 @@ Thread::Thread(pid_t pid, pid_t tid, Flags f)
 
 	long ret = ::waitpid(tid_, &wstatus, __WALL);
 	if (ret == -1) {
-		perror("waitpid");
+		perror("waitpid(Thread::Thread)");
 		exit(0);
 	}
 
@@ -68,7 +68,7 @@ void Thread::wait() {
 
 	long ret = ::waitpid(tid_, &wstatus, __WALL);
 	if (ret == -1) {
-		perror("waitpid");
+		perror("waitpid(Thread::wait)");
 		exit(0);
 	}
 

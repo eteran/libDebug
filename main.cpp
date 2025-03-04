@@ -43,7 +43,7 @@ void tracer(pid_t cpid) {
 
 	while (1) {
 		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
-				printf("Stop Complete!\n");
+				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
 			exit(0);
@@ -56,7 +56,7 @@ void tracer(pid_t cpid) {
 
 int main() {
 
-#if 1
+#if 0
 	switch (const pid_t cpid = fork()) {
 	case 0:
 		tracee();
@@ -72,19 +72,20 @@ int main() {
 	auto debugger = std::make_unique<Debugger>();
 
 	const char *argv[] = {
-		"/bin/ls",
+		"/usr/bin/sleep",
+		"999",
 		nullptr,
 	};
 
-	auto process = debugger->spawn(nullptr, nullptr, argv);
+	auto process = debugger->spawn("/etc/", argv);
 	process->resume();
 
 	while (1) {
 		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
-				printf("Stop Complete!\n");
+				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
-			exit(0);
+			//exit(0);
 		}
 	}
 #endif

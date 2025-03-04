@@ -17,7 +17,7 @@ public:
 
 public:
 	std::shared_ptr<Process> attach(pid_t pid);
-	std::shared_ptr<Process> spawn(const char *cwd, const char *tty, const char *argv[]);
+	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[]);
 
 public:
 	std::shared_ptr<Process> process() const { return process_; };

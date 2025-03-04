@@ -14,13 +14,14 @@ class Thread {
 		Running,
 	};
 
-	enum class Flags {
-		NoAttach,
-		Attach,
-	};
+public:
+	using Flag                             = uint32_t;
+	static constexpr Flag Attach           = 0;
+	static constexpr Flag NoAttach         = 1;
+	static constexpr Flag KillOnTracerExit = 2;
 
 public:
-	Thread(pid_t pid, pid_t tid, Flags f);
+	Thread(pid_t pid, pid_t tid, Flag f);
 	~Thread();
 
 public:
