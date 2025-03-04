@@ -54,6 +54,53 @@ void tracer(pid_t cpid) {
 	// process->kill();
 }
 
+/**
+ * @brief
+ *
+ * @param process
+ * @param address
+ * @param n
+ */
+void dump_memory(Process *process, uint64_t address, size_t n) {
+
+	uint64_t first            = address;
+	const uint64_t last       = address + n;
+	int64_t remaining         = 0;
+	size_t buffer_index       = 0;
+	constexpr size_t StepSize = 16;
+
+	uint8_t buffer[4096] = {};
+
+	while (first < last) {
+		if (remaining <= 0) {
+			remaining = process->read_memory(first, buffer, sizeof(buffer));
+			if (remaining == -1) {
+				printf("Error Reading Memory\n");
+				return;
+			}
+			buffer_index = 0;
+		}
+
+		const size_t line_end = std::min(StepSize, last - first);
+
+		::printf("%016lx: ", first);
+		for (size_t i = 0; i < line_end; ++i) {
+			::printf("%02x ", buffer[buffer_index + i]);
+		}
+
+		for (size_t i = 0; i < line_end; ++i) {
+			const uint8_t ch = buffer[buffer_index + i];
+			::printf("%c", ::isprint(ch) ? ch : '.');
+		}
+
+		::printf("\n");
+
+		buffer_index += StepSize;
+		first += StepSize;
+		remaining -= StepSize;
+	}
+}
+
 int main() {
 
 #if 0
@@ -78,14 +125,15 @@ int main() {
 	};
 
 	auto process = debugger->spawn("/etc/", argv);
+
 	process->resume();
+	dump_memory(process.get(), 0x555555554000, 256);
 
 	while (1) {
-		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
+		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
-			//exit(0);
 		}
 	}
 #endif
