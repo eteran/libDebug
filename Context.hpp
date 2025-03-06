@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-struct PrStatus_X86 {
+struct Context_x86 {
 	uint32_t ebx;
 	uint32_t ecx;
 	uint32_t edx;
@@ -24,9 +24,9 @@ struct PrStatus_X86 {
 	uint32_t ss;
 };
 
-static_assert(sizeof(PrStatus_X86) == 68, "PrStatus_X86 is messed up!");
+static_assert(sizeof(Context_x86) == 68, "Context_x86 is messed up!");
 
-struct PrStatus_X86_64 {
+struct Context_x86_64 {
 	uint64_t r15;
 	uint64_t r14;
 	uint64_t r13;
@@ -45,7 +45,7 @@ struct PrStatus_X86_64 {
 	uint64_t orig_rax;
 	uint64_t rip;
 	uint64_t cs;
-	uint64_t rflags;
+	uint64_t eflags;
 	uint64_t rsp;
 	uint64_t ss;
 	uint64_t fs_base;
@@ -56,12 +56,12 @@ struct PrStatus_X86_64 {
 	uint64_t gs;
 };
 
-static_assert(sizeof(PrStatus_X86_64) == 216, "PrStatus_X86_64 is messed up!");
+static_assert(sizeof(Context_x86_64) == 216, "Context_x86_64 is messed up!");
 
-struct PrStatus_ARM {
+struct Context_arm {
 	uint32_t regs[18];
 };
 
-static_assert(sizeof(PrStatus_ARM) == 72, "PrStatus_ARM is messed up!");
+static_assert(sizeof(Context_arm) == 72, "Context_arm is messed up!");
 
 #endif

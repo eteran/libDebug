@@ -6,7 +6,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <elf.h>
 #include <sys/ptrace.h>
+#include <sys/uio.h>
+#include <sys/user.h>
 #include <sys/wait.h>
 
 #define IGNORE(x) (void)x
@@ -154,8 +157,7 @@ void Thread::kill() {
 /**
  * @brief
  *
- * @return true
- * @return false
+ * @return bool
  */
 bool Thread::is_exited() const {
 	assert(state_ == State::Stopped);
@@ -165,8 +167,7 @@ bool Thread::is_exited() const {
 /**
  * @brief
  *
- * @return true
- * @return false
+ * @return bool
  */
 bool Thread::is_signaled() const {
 	assert(state_ == State::Stopped);
@@ -176,8 +177,7 @@ bool Thread::is_signaled() const {
 /**
  * @brief
  *
- * @return true
- * @return false
+ * @return bool
  */
 bool Thread::is_stopped() const {
 	assert(state_ == State::Stopped);
@@ -187,8 +187,7 @@ bool Thread::is_stopped() const {
 /**
  * @brief
  *
- * @return true
- * @return false
+ * @return bool
  */
 bool Thread::is_continued() const {
 	assert(state_ == State::Stopped);
@@ -223,4 +222,44 @@ int Thread::signal_status() const {
 int Thread::stop_status() const {
 	assert(state_ == State::Stopped);
 	return WSTOPSIG(wstatus_);
+}
+
+/**
+ * @brief
+ *
+ * @param ctx
+ */
+void Thread::get_state(void *ctx, size_t size) const {
+
+	assert(state_ == State::Stopped);
+
+	struct iovec iov = {ctx, size};
+
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		perror("ptrace(PTRACE_GETREGSET)");
+		exit(0);
+	}
+
+	// TODO(eteran): FPU
+	// TODO(eteran): SSE/SSE2/etc...
+}
+
+/**
+ * @brief
+ *
+ * @param ctx
+ */
+void Thread::set_state(const void *ctx, size_t size) const {
+
+	assert(state_ == State::Stopped);
+
+	struct iovec iov = {const_cast<void *>(ctx), size};
+
+	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		perror("ptrace(PTRACE_GETREGSET)");
+		exit(0);
+	}
+
+	// TODO(eteran): FPU
+	// TODO(eteran): SSE/SSE2/etc...
 }

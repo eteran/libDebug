@@ -6,6 +6,7 @@ words:
   - ASLR
   - eteran
   - PTRACE_TRACEME
+  - NT_PRSTATUS
   - tgkill
   - tracee
 ignoreWords: []

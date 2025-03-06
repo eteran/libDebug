@@ -4,6 +4,9 @@
 #include "Thread.hpp"
 
 #include <csignal>
+#include <cstdio>
+#include <cstdlib>
+
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 

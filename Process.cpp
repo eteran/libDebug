@@ -1,5 +1,6 @@
 
 #include "Process.hpp"
+#include "Breakpoint.hpp"
 #include "Proc.hpp"
 #include "Thread.hpp"
 
@@ -7,6 +8,7 @@
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
@@ -135,6 +137,7 @@ Process::Process(pid_t pid, Flag flags)
  *
  */
 void Process::report() const {
+
 	for (auto [tid, thread] : threads_) {
 
 		if (thread->state_ == Thread::State::Running) {
@@ -156,6 +159,19 @@ void Process::report() const {
 			if (thread->is_continued()) {
 				printf("Thread: %d [CONTINUED]\n", thread->tid());
 			}
+
+			Context_x86_64 ctx;
+			thread->get_state(&ctx, sizeof(ctx));
+
+			printf("RIP: %016lx RFL: %016lx\n", ctx.rip, ctx.eflags);
+			printf("RSP: %016lx R8 : %016lx\n", ctx.rsp, ctx.r8);
+			printf("RBP: %016lx R9 : %016lx\n", ctx.rbp, ctx.r9);
+			printf("RAX: %016lx R10: %016lx\n", ctx.rax, ctx.r10);
+			printf("RBX: %016lx R11: %016lx\n", ctx.rbx, ctx.r11);
+			printf("RCX: %016lx R12: %016lx\n", ctx.rcx, ctx.r12);
+			printf("RDX: %016lx R13: %016lx\n", ctx.rdx, ctx.r13);
+			printf("RSI: %016lx R14: %016lx\n", ctx.rsi, ctx.r14);
+			printf("RDI: %016lx R15: %016lx\n", ctx.rdi, ctx.r15);
 		}
 	}
 }
@@ -180,7 +196,7 @@ Process::~Process() {
  * @param n how many bytes to read
  * @return int64_t how many bytes actually read
  */
-int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) {
+int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 1
 	return ::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
@@ -206,7 +222,7 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) {
  * @param n how many bytes to write
  * @return int64_t how many bytes actually written
  */
-int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) {
+int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
 #if 1
 	return ::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 #else
@@ -293,6 +309,7 @@ void Process::kill() {
  * @brief detaches the debugger from the attached process
  */
 void Process::detach() {
+	breakpoints_.clear();
 	threads_.clear();
 }
 
@@ -323,6 +340,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		const pid_t tid = ::waitpid(-1, &wstatus, __WALL | WNOHANG);
 
 		if (tid == -1) {
+			perror("waitpid");
 			break;
 		}
 
@@ -331,22 +349,38 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		}
 
 		auto it = threads_.find(tid);
-		if (it != threads_.end()) {
-			it->second->wstatus_ = wstatus;
-			it->second->state_   = Thread::State::Stopped;
+		if (it == threads_.end()) {
+			printf("Event for untraced thread occurred...ignoring\n");
+			continue;
 		}
 
-		Event e;
-		e.pid_     = pid_;
-		e.tid_     = tid;
-		e.status_  = wstatus;
-		e.siginfo_ = {};
+		auto &current_thread     = it->second;
+		current_thread->wstatus_ = wstatus;
+		current_thread->state_   = Thread::State::Stopped;
 
-		if (WIFEXITED(wstatus)) {
-			if (it != threads_.end()) {
-				threads_.erase(it);
-			}
-		} else {
+		if (current_thread->is_exited()) {
+			threads_.erase(it);
+			continue;
+		}
+
+		if (current_thread->is_signaled()) {
+		}
+
+		if (current_thread->is_continued()) {
+			// NOTE(eteran): not 100% when this can actually happen...
+			continue;
+		}
+
+		if (current_thread->is_stopped()) {
+
+			Event e;
+			e.pid_     = pid_;
+			e.tid_     = tid;
+			e.status_  = wstatus;
+			e.siginfo_ = {};
+
+			printf("Stopped Status: %d\n", current_thread->stop_status());
+
 			if (is_trap_event(wstatus)) {
 
 				if (ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo_) == -1) {
@@ -365,22 +399,78 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 						new_thread->wstatus_ = 0;
 						new_thread->state_   = Thread::State::Stopped;
+						// TODO(eteran): start the new thread optionally
 						new_thread->resume();
+					}
+				} else {
+					// general trap event, likely one of: single step finished, processes stopped, or a breakpoint
+
+					Context_x86_64 ctx;
+					current_thread->get_state(&ctx, sizeof(ctx));
+
+					auto bp = breakpoints_.find(ctx.rip - 1);
+					if (bp != breakpoints_.end()) {
+						printf("Breakpoint!\n");
+
+						ctx.rip--;
+						current_thread->set_state(&ctx, sizeof(ctx));
+
+						// BREAKPOINT!
+						// TODO(eteran): report as a trap event
+						// TODO(eteran): rewind RIP by appropriate amount
 					}
 				}
 			}
 
-			if (it != threads_.end()) {
-				it->second->resume();
-				if (!active_thread_) {
-					active_thread_ = it->second;
-				}
-			}
-
+			// TODO(eteran): the callback should dictate what to do next
 			callback(e);
+
+			// TODO(eteran_): conditionally resume
+			current_thread->resume();
+			if (!active_thread_) {
+				active_thread_ = current_thread;
+			}
+			continue;
 		}
+
+		// NOTE(eteran): should never get here
+		break;
 	}
 
 	// assert(active_thread_);
 	return true;
+}
+
+/**
+ * @brief
+ *
+ * @param address
+ */
+void Process::add_breakpoint(uint64_t address) {
+	auto bp = std::make_shared<Breakpoint>(this, address);
+	breakpoints_.emplace(address, bp);
+}
+
+/**
+ * @brief
+ *
+ * @param address
+ */
+void Process::remove_breakpoint(uint64_t address) {
+	breakpoints_.erase(address);
+}
+
+/**
+ * @brief
+ *
+ * @param tid
+ * @return std::shared_ptr<Thread>
+ */
+std::shared_ptr<Thread> Process::find_thread(pid_t tid) const {
+	auto it = threads_.find(tid);
+	if (it != threads_.end()) {
+		return it->second;
+	}
+
+	return nullptr;
 }

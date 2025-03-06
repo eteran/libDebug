@@ -3,8 +3,6 @@
 #define DEBUGGER_HPP_
 
 #include <memory>
-#include <string>
-#include <vector>
 
 #include <sys/types.h>
 

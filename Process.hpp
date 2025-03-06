@@ -12,8 +12,10 @@
 #include <sys/types.h>
 
 class Thread;
+class Breakpoint;
 
 class Process {
+
 	friend class Debugger;
 	friend class Thread;
 
@@ -33,11 +35,13 @@ public:
 	~Process();
 
 public:
-	pid_t pid() const { return pid_; }
+	pid_t pid() const {
+		return pid_;
+	}
 
 public:
-	int64_t read_memory(uint64_t address, void *buffer, size_t n);
-	int64_t write_memory(uint64_t address, const void *buffer, size_t n);
+	int64_t read_memory(uint64_t address, void *buffer, size_t n) const;
+	int64_t write_memory(uint64_t address, const void *buffer, size_t n) const;
 
 public:
 	void kill();
@@ -46,18 +50,26 @@ public:
 	void stop();
 	void detach();
 	bool next_debug_event(std::chrono::milliseconds timeout, event_callback callback);
+	std::shared_ptr<Thread> find_thread(pid_t tid) const;
+
+public:
+	void add_breakpoint(uint64_t address);
+	void remove_breakpoint(uint64_t address);
 
 public:
 	void report() const;
 
 public:
-	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const { return threads_; }
+	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const {
+		return threads_;
+	}
 
 private:
 	pid_t pid_ = 0;
 	int memfd_ = -1;
-	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::shared_ptr<Thread> active_thread_;
+	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
+	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
 };
 
 #endif

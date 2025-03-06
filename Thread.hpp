@@ -2,6 +2,8 @@
 #ifndef THREAD_HPP_
 #define THREAD_HPP_
 
+#include "Context.hpp"
+
 #include <memory>
 #include <sys/types.h>
 
@@ -38,6 +40,10 @@ public:
 	int exit_status() const;
 	int signal_status() const;
 	int stop_status() const;
+
+public:
+	void get_state(void *ctx, size_t size) const;
+	void set_state(const void *ctx, size_t size) const;
 
 public:
 	void kill();

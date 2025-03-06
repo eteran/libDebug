@@ -3,9 +3,13 @@
 #include "Process.hpp"
 #include "Thread.hpp"
 
-#include <signal.h>
-#include <sys/wait.h>
+#include <cctype>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <thread>
+
+#include <sys/wait.h>
 
 void tracee() {
 #if 1
@@ -16,7 +20,7 @@ void tracee() {
 				printf("In child, doing some work [%d]...\n", n);
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 
-				if (j++ == 3 && n == 4) {
+				if (j++ == 3 && n == 1) {
 					printf("Exiting Thread!\n");
 					return;
 				}
@@ -126,14 +130,18 @@ int main() {
 
 	auto process = debugger->spawn("/etc/", argv);
 
-	process->resume();
-	dump_memory(process.get(), 0x555555554000, 256);
+	process->add_breakpoint(0x00007ffff7fe4540);
 
-	while (1) {
-		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
+	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
+
+	process->resume();
+
+	for (int i = 0; i < 20; ++i) {
+		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
+			exit(0);
 		}
 	}
 #endif
