@@ -50,7 +50,7 @@ void tracer(pid_t cpid) {
 				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
-			exit(0);
+			::exit(0);
 		}
 	}
 
@@ -113,8 +113,8 @@ int main() {
 		tracee();
 		break;
 	case -1:
-		perror("fork");
-		exit(1);
+		::perror("fork");
+		::exit(1);
 	default:
 		tracer(cpid);
 		break;
@@ -141,7 +141,7 @@ int main() {
 				printf("Debug Event!\n");
 			})) {
 			printf("Timeout!\n");
-			exit(0);
+			::exit(0);
 		}
 	}
 #endif

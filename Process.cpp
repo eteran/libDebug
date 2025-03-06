@@ -106,7 +106,7 @@ Process::Process(pid_t pid, Flag flags)
 					continue;
 				}
 
-				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Attach);
+				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Attach | Thread::KillOnTracerExit);
 				threads_.emplace(tid, new_thread);
 
 				if (!active_thread_) {
@@ -121,7 +121,7 @@ Process::Process(pid_t pid, Flag flags)
 			}
 		}
 	} else {
-		auto threads = std::make_shared<Thread>(pid, pid, Thread::NoAttach);
+		auto threads = std::make_shared<Thread>(pid, pid, Thread::NoAttach | Thread::KillOnTracerExit);
 		threads_.emplace(pid, threads);
 	}
 
@@ -200,7 +200,6 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 1
 	return ::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
-	// NOTE(eteran): perhaps not viable for a ptrace API?
 	struct iovec local[1];
 	struct iovec remote[1];
 
@@ -300,8 +299,8 @@ void Process::stop() {
 void Process::kill() {
 	long ret = ::ptrace(PTRACE_KILL, pid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace(PTRACE_KILL)");
-		exit(0);
+		::perror("ptrace(PTRACE_KILL)");
+		::exit(0);
 	}
 }
 
@@ -333,14 +332,14 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		return false;
 	}
 
-	active_thread_ = nullptr;
+	bool first_stop = true;
 
 	while (true) {
 		int wstatus     = 0;
 		const pid_t tid = ::waitpid(-1, &wstatus, __WALL | WNOHANG);
 
 		if (tid == -1) {
-			perror("waitpid");
+			::perror("waitpid");
 			break;
 		}
 
@@ -358,20 +357,41 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		current_thread->wstatus_ = wstatus;
 		current_thread->state_   = Thread::State::Stopped;
 
-		if (current_thread->is_exited()) {
+		if (WIFEXITED(wstatus)) {
 			threads_.erase(it);
+
+			// if the active thread just exited... pick any other thread to be the active thread
+			if (active_thread_->tid() == tid) {
+				if (!threads_.empty()) {
+					active_thread_ = threads_.begin()->second;
+				} else {
+					active_thread_ = nullptr;
+				}
+			}
 			continue;
 		}
 
-		if (current_thread->is_signaled()) {
-		}
-
-		if (current_thread->is_continued()) {
+		if (WIFCONTINUED(wstatus)) {
 			// NOTE(eteran): not 100% when this can actually happen...
 			continue;
 		}
 
-		if (current_thread->is_stopped()) {
+		if (WIFSIGNALED(wstatus)) {
+			// TODO(eteran): implement
+			if (first_stop) {
+				active_thread_ = current_thread;
+				first_stop     = false;
+			}
+
+			continue;
+		}
+
+		if (WIFSTOPPED(wstatus)) {
+
+			if (first_stop) {
+				active_thread_ = current_thread;
+				first_stop     = false;
+			}
 
 			Event e;
 			e.pid_     = pid_;
@@ -383,18 +403,18 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			if (is_trap_event(wstatus)) {
 
-				if (ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo_) == -1) {
-					perror("ptrace(PTRACE_GETSIGINFO)");
+				if (::ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo_) == -1) {
+					::perror("ptrace(PTRACE_GETSIGINFO)");
 				}
 
 				if (is_exit_trace_event(wstatus)) {
 					// Thread is about to exit, beyond that, this is a normal trap event
 				} else if (is_clone_event(wstatus)) {
 					unsigned long message;
-					if (ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
+					if (::ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
 
 						auto new_tid    = static_cast<pid_t>(message);
-						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach);
+						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
 						threads_.emplace(new_tid, new_thread);
 
 						new_thread->wstatus_ = 0;
@@ -408,8 +428,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					Context_x86_64 ctx;
 					current_thread->get_state(&ctx, sizeof(ctx));
 
-					auto bp = breakpoints_.find(ctx.rip - 1);
-					if (bp != breakpoints_.end()) {
+					if (auto bp = find_breakpoint(ctx.rip - 1)) {
 						printf("Breakpoint!\n");
 
 						ctx.rip--;
@@ -427,14 +446,11 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			// TODO(eteran_): conditionally resume
 			current_thread->resume();
-			if (!active_thread_) {
-				active_thread_ = current_thread;
-			}
 			continue;
 		}
 
 		// NOTE(eteran): should never get here
-		break;
+		assert(false && "internal error");
 	}
 
 	// assert(active_thread_);
@@ -469,6 +485,21 @@ void Process::remove_breakpoint(uint64_t address) {
 std::shared_ptr<Thread> Process::find_thread(pid_t tid) const {
 	auto it = threads_.find(tid);
 	if (it != threads_.end()) {
+		return it->second;
+	}
+
+	return nullptr;
+}
+
+/**
+ * @brief
+ *
+ * @param address
+ * @return std::shared_ptr<Breakpoint>
+ */
+std::shared_ptr<Breakpoint> Process::find_breakpoint(uint64_t address) const {
+	auto it = breakpoints_.find(address);
+	if (it != breakpoints_.end()) {
 		return it->second;
 	}
 

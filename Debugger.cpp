@@ -10,11 +10,8 @@
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 
-const bool DisableLazyBinding = true;
-const bool DisableASLR        = true;
-
 /**
- * @brief Construct a new Debugger:: Debugger object
+ * @brief Construct a new Debugger object
  *
  */
 Debugger::Debugger() {
@@ -26,7 +23,7 @@ Debugger::Debugger() {
 }
 
 /**
- * @brief Destroy the Debugger:: Debugger object
+ * @brief Destroy the Debugger object
  *
  */
 Debugger::~Debugger() {
@@ -34,9 +31,28 @@ Debugger::~Debugger() {
 }
 
 /**
+ * @brief enables or disables lazy binding for newly spawned processes
+ *
+ * @param value
+ */
+void Debugger::set_disable_lazy_binding(bool value) {
+	disableLazyBinding_ = value;
+}
+
+/**
+ * @brief enables or disables address space layout randomization for newly spawned processes
+ *
+ * @param value
+ */
+void Debugger::set_disable_aslr(bool value) {
+	disableASLR_ = value;
+}
+
+/**
  * @brief attaches to the process identified by <pid>
  *
  * @param pid
+ * @return std::shared_ptr<Process>
  */
 std::shared_ptr<Process> Debugger::attach(pid_t pid) {
 	process_ = std::make_shared<Process>(pid, Process::Attach);
@@ -52,26 +68,25 @@ std::shared_ptr<Process> Debugger::attach(pid_t pid) {
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
 
-	switch (pid_t cpid = fork()) {
+	switch (pid_t cpid = ::fork()) {
 	case 0:
-
-		if (DisableLazyBinding) {
-			if (setenv("LD_BIND_NOW", "1", true) == -1) {
-				perror("Failed to disable lazy binding");
+		if (disableLazyBinding_) {
+			if (::setenv("LD_BIND_NOW", "1", true) == -1) {
+				::perror("Failed to disable lazy binding");
 			}
 		}
 
-		if (DisableASLR) {
+		if (disableASLR_) {
 			const int current = ::personality(UINT32_MAX);
 			// This shouldn't fail, but let's at least perror if it does anyway
 			if (current == -1) {
-				perror("Failed to get current personality");
+				::perror("Failed to get current personality");
 			} else if (::personality(static_cast<uint32_t>(current | ADDR_NO_RANDOMIZE)) == -1) {
-				perror("Failed to disable ASLR");
+				::perror("Failed to disable ASLR");
 			}
 		}
 
-		ptrace(PTRACE_TRACEME, 0L, 0L, 0L);
+		::ptrace(PTRACE_TRACEME, 0L, 0L, 0L);
 
 		if (cwd) {
 			::chdir(cwd);
@@ -83,6 +98,8 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
 		return nullptr;
 	default:
 		printf("Debugging New Process: %d\n", cpid);
-		return std::make_shared<Process>(cpid, Process::NoAttach);
+
+		process_ = std::make_shared<Process>(cpid, Process::NoAttach);
+		return process_;
 	}
 }

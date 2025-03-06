@@ -20,9 +20,16 @@ public:
 public:
 	std::shared_ptr<Process> process() const { return process_; };
 
+public:
+	void set_disable_lazy_binding(bool value);
+	void set_disable_aslr(bool value);
+
 private:
 	std::shared_ptr<Process> process_;
 	sigset_t prev_mask_;
+
+	bool disableLazyBinding_ = true;
+	bool disableASLR_        = true;
 };
 
 #endif

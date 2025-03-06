@@ -16,8 +16,7 @@
 
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
-							  PTRACE_O_TRACEEXIT |
-							  PTRACE_O_EXITKILL;
+							  PTRACE_O_TRACEEXIT;
 
 /**
  * @brief Construct a new Thread object
@@ -30,25 +29,19 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	if (f & Thread::Attach) {
 		long ret = ::ptrace(PTRACE_ATTACH, tid, 0L, 0L);
 		if (ret == -1) {
-			perror("ptrace(PTRACE_ATTACH)");
-			exit(0);
+			::perror("ptrace(PTRACE_ATTACH)");
+			::exit(0);
 		}
 	}
 
-	assert(state_ == State::Running);
+	wait();
 
-	int wstatus = 0;
-
-	long ret = ::waitpid(tid_, &wstatus, __WALL);
-	if (ret == -1) {
-		perror("waitpid(Thread::Thread)");
-		exit(0);
+	long options = TraceOptions;
+	if (f & KillOnTracerExit) {
+		options |= PTRACE_O_EXITKILL;
 	}
 
-	wstatus_ = wstatus;
-	state_   = State::Stopped;
-
-	ptrace(PTRACE_SETOPTIONS, tid, 0L, TraceOptions);
+	::ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
 }
 
 /**
@@ -60,27 +53,25 @@ Thread::~Thread() {
 }
 
 /**
- * @brief
+ * @brief waits for an event on this thread
  *
  */
 void Thread::wait() {
 
 	assert(state_ == State::Running);
 
-	int wstatus = 0;
-
-	long ret = ::waitpid(tid_, &wstatus, __WALL);
+	long ret = ::waitpid(tid_, &wstatus_, __WALL);
 	if (ret == -1) {
-		perror("waitpid(Thread::wait)");
-		exit(0);
+		::perror("waitpid(Thread::wait)");
+		::exit(0);
 	}
 
-	wstatus_ = wstatus;
-	state_   = State::Stopped;
+	state_ = State::Stopped;
 }
 
 /**
- * @brief
+ * @brief detaches from the associated thread, if any
+ * no-op if already detached
  *
  */
 void Thread::detach() {
@@ -92,7 +83,8 @@ void Thread::detach() {
 }
 
 /**
- * @brief
+ * @brief causes the thread to step one instruction. This will be
+ * eventually followed by a debug event when it stops again
  *
  */
 void Thread::step() {
@@ -101,15 +93,15 @@ void Thread::step() {
 
 	long ret = ::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace(PTRACE_SINGLESTEP)");
-		exit(0);
+		::perror("ptrace(PTRACE_SINGLESTEP)");
+		::exit(0);
 	}
 
 	state_ = State::Running;
 }
 
 /**
- * @brief
+ * @brief causes the thread to resume execution
  *
  */
 void Thread::resume() {
@@ -118,15 +110,16 @@ void Thread::resume() {
 
 	long ret = ::ptrace(PTRACE_CONT, tid_, 0L, 0L);
 	if (ret == -1) {
-		perror("ptrace(PTRACE_CONT)");
-		exit(0);
+		::perror("ptrace(PTRACE_CONT)");
+		::exit(0);
 	}
 
 	state_ = State::Running;
 }
 
 /**
- * @brief
+ * @brief causes a running thread the stop execution. This will be
+ * eventually followed by a debug event when it actually stops
  *
  */
 void Thread::stop() {
@@ -135,13 +128,13 @@ void Thread::stop() {
 
 	long ret = ::tgkill(pid_, tid_, SIGSTOP);
 	if (ret == -1) {
-		perror("tgkill");
-		exit(0);
+		::perror("tgkill");
+		::exit(0);
 	}
 }
 
 /**
- * @brief
+ * @brief terminates this thread
  *
  */
 void Thread::kill() {
@@ -149,8 +142,8 @@ void Thread::kill() {
 
 	long ret = ::tgkill(pid_, tid_, SIGKILL);
 	if (ret == -1) {
-		perror("tgkill");
-		exit(0);
+		::perror("tgkill");
+		::exit(0);
 	}
 }
 
@@ -225,9 +218,10 @@ int Thread::stop_status() const {
 }
 
 /**
- * @brief
+ * @brief retrieves the thread context
  *
- * @param ctx
+ * @param ctx a pointer to the context object
+ * @param size the size of the `ctx` object
  */
 void Thread::get_state(void *ctx, size_t size) const {
 
@@ -236,8 +230,8 @@ void Thread::get_state(void *ctx, size_t size) const {
 	struct iovec iov = {ctx, size};
 
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		perror("ptrace(PTRACE_GETREGSET)");
-		exit(0);
+		::perror("ptrace(PTRACE_GETREGSET)");
+		::exit(0);
 	}
 
 	// TODO(eteran): FPU
@@ -245,9 +239,10 @@ void Thread::get_state(void *ctx, size_t size) const {
 }
 
 /**
- * @brief
+ * @brief sets the thread context
  *
- * @param ctx
+ * @param ctx a pointer to the context object
+ * @param size the size of the `ctx` object
  */
 void Thread::set_state(const void *ctx, size_t size) const {
 
@@ -256,8 +251,8 @@ void Thread::set_state(const void *ctx, size_t size) const {
 	struct iovec iov = {const_cast<void *>(ctx), size};
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		perror("ptrace(PTRACE_GETREGSET)");
-		exit(0);
+		::perror("ptrace(PTRACE_GETREGSET)");
+		::exit(0);
 	}
 
 	// TODO(eteran): FPU
