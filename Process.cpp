@@ -45,9 +45,9 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	const struct timespec ts = duration_to_timespec(timeout);
 	siginfo_t info;
 	sigset_t mask;
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &mask, nullptr);
+	::sigemptyset(&mask);
+	::sigaddset(&mask, SIGCHLD);
+	::sigprocmask(SIG_BLOCK, &mask, nullptr);
 	const int ret = ::sigtimedwait(&mask, &info, &ts);
 	return ret == SIGCHLD;
 }
@@ -56,7 +56,7 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
  * @brief
  *
  * @param status
- * @return constexpr bool
+ * @return bool
  */
 constexpr bool is_clone_event(int status) {
 	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_CLONE << 8)));
@@ -66,7 +66,7 @@ constexpr bool is_clone_event(int status) {
  * @brief
  *
  * @param status
- * @return constexpr bool
+ * @return bool
  */
 constexpr bool is_exit_trace_event(int status) {
 	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_EXIT << 8)));
@@ -76,7 +76,7 @@ constexpr bool is_exit_trace_event(int status) {
  * @brief
  *
  * @param status
- * @return constexpr bool
+ * @return bool
  */
 constexpr bool is_trap_event(int status) {
 	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
