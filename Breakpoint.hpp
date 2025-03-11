@@ -36,6 +36,8 @@ public:
 	void disable();
 	void hit();
 	TypeId type() const { return type_; }
+	uint8_t *old_bytes() { return old_bytes_; }
+	uint8_t *new_bytes() { return new_bytes_; }
 
 private:
 	const Process *process_ = nullptr;

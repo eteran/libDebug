@@ -189,6 +189,31 @@ Process::~Process() {
 }
 
 /**
+ * @brief given a buffer of memory, filters out any bytes that are part of a breakpoint
+ * and replaces them with the original bytes that were at that address before the breakpoint
+ *
+ * @param address the base address that was used to fill the buffer
+ * @param buffer the buffer to filter
+ * @param n the amount of bytes read into the buffer
+ */
+void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const {
+	for (auto &&[bp_address, bp] : breakpoints_) {
+		if (bp_address >= address && bp_address < address + n) {
+			const uint64_t offset    = bp_address - address;
+			const uint8_t *old_bytes = bp->old_bytes();
+
+			auto ptr = static_cast<uint8_t *>(buffer);
+
+			for (size_t i = 0; i < bp->size(); ++i) {
+				if (offset + i < n) {
+					ptr[offset + i] = old_bytes[i];
+				}
+			}
+		}
+	}
+}
+
+/**
  * @brief reads bytes from the attached process
  *
  * @param address the address in the attached process to read from
@@ -198,10 +223,15 @@ Process::~Process() {
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 1
-	return ::pread(memfd_, buffer, n, static_cast<off_t>(address));
+	int64_t ret = ::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
-	return read_memory_ptrace(address, buffer, n);
+	int64_t ret = read_memory_ptrace(address, buffer, n);
 #endif
+
+	if (ret > 0) {
+		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
+	}
+	return ret;
 }
 
 /**
