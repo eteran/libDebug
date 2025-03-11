@@ -3,6 +3,7 @@
 #define PROCESS_HPP_
 
 #include "Event.hpp"
+#include "EventStatus.hpp"
 
 #include <chrono>
 #include <functional>
@@ -15,12 +16,11 @@ class Thread;
 class Breakpoint;
 
 class Process {
-
 	friend class Debugger;
 	friend class Thread;
 
 public:
-	using event_callback = std::function<void(const Event &)>;
+	using event_callback = std::function<EventStatus(const Event &)>;
 
 public:
 	using Flag                               = uint32_t;
@@ -60,8 +60,7 @@ public:
 	std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
 
 public:
-	void
-	report() const;
+	void report() const;
 
 public:
 	std::shared_ptr<Thread> find_thread(pid_t tid) const;
@@ -75,11 +74,16 @@ public:
 	}
 
 private:
+	int64_t read_memory_ptrace(uint64_t address, void *buffer, size_t n) const;
+	int64_t write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const;
+
+private:
 	pid_t pid_ = 0;
 	int memfd_ = -1;
 	std::shared_ptr<Thread> active_thread_;
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
+	uint64_t prev_memory_map_hash_ = 0;
 };
 
 #endif

@@ -55,7 +55,7 @@ void Debugger::set_disable_aslr(bool value) {
  * @return std::shared_ptr<Process>
  */
 std::shared_ptr<Process> Debugger::attach(pid_t pid) {
-	process_ = std::make_shared<Process>(pid, Process::Attach);
+	process_ = std::make_unique<Process>(pid, Process::Attach);
 	return process_;
 }
 
@@ -99,7 +99,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
 	default:
 		printf("Debugging New Process: %d\n", cpid);
 
-		process_ = std::make_shared<Process>(cpid, Process::NoAttach);
+		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
 		return process_;
 	}
 }

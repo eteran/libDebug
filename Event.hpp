@@ -9,22 +9,18 @@
 class Event {
 public:
 	enum Type {
-		Exited,     // exited normally
-		Terminated, // terminated by event
-		Stopped,    // normal event
+		Exited,           // exited normally
+		Terminated,       // terminated by event
+		Stopped,          // normal event
 		Unknown,
 	};
 
-	enum Reason {
-		Stepping,
-		Breakpoint,
-	};
-
 public:
-	siginfo_t siginfo_ = {};
-	pid_t pid_         = 0;
-	pid_t tid_         = 0;
-	int status_        = 0;
+	siginfo_t siginfo = {};
+	pid_t pid         = 0;
+	pid_t tid         = 0;
+	int status        = 0;
+	Type type         = Type::Unknown;
 };
 
 #endif

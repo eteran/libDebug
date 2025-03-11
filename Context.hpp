@@ -1,6 +1,6 @@
 
-#ifndef STATE_HPP_
-#define STATE_HPP_
+#ifndef CONTEXT_HPP_
+#define CONTEXT_HPP_
 
 #include <cstdint>
 

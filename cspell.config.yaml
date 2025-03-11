@@ -5,9 +5,16 @@ dictionaries: []
 words:
   - ASLR
   - eteran
-  - PTRACE_TRACEME
+  - INSB
+  - INSD
   - NT_PRSTATUS
+  - OUTSB
+  - OUTSD
+  - PTRACE_PEEKDATA
+  - PTRACE_POKEDATA
+  - PTRACE_TRACEME
   - tgkill
   - tracee
+  - vdso
 ignoreWords: []
 import: []

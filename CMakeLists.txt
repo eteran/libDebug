@@ -49,6 +49,9 @@ add_library(Debug
     Process.hpp
     Thread.cpp
     Thread.hpp
+    Region.cpp
+    Region.hpp
+    EventStatus.hpp
 )
 
 set_target_properties(Debug

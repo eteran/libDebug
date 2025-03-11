@@ -11,6 +11,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <thread>
 
 #include <dirent.h>
@@ -48,8 +49,7 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	::sigemptyset(&mask);
 	::sigaddset(&mask, SIGCHLD);
 	::sigprocmask(SIG_BLOCK, &mask, nullptr);
-	const int ret = ::sigtimedwait(&mask, &info, &ts);
-	return ret == SIGCHLD;
+	return ::sigtimedwait(&mask, &info, &ts) == SIGCHLD;
 }
 
 /**
@@ -200,17 +200,38 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 1
 	return ::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
-	struct iovec local[1];
-	struct iovec remote[1];
-
-	local[0].iov_base = buffer;
-	local[0].iov_len  = n;
-
-	remote[0].iov_base = (void *)address;
-	remote[0].iov_len  = n;
-
-	return process_vm_readv(pid_, local, 1, remote, 1, 0);
+	return read_memory_ptrace(address, buffer, n);
 #endif
+}
+
+/**
+ * @brief reads bytes from the attached process using the `ptrace` syscall
+ *
+ * @param address the address in the attached process to read from
+ * @param buffer where to store the bytes, must be at least `n` bytes big
+ * @param n how many bytes to read
+ * @return int64_t how many bytes actually read
+ */
+int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) const {
+	auto ptr      = static_cast<uint8_t *>(buffer);
+	int64_t total = 0;
+
+	while (n > 0) {
+		const ssize_t ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0);
+		if (ret == -1) {
+			break;
+		}
+
+		const size_t count = std::min(n, sizeof(ret));
+		::memcpy(ptr, &ret, count);
+
+		address += count;
+		ptr += count;
+		total += count;
+		n -= count;
+	}
+
+	return total;
 }
 
 /**
@@ -222,25 +243,63 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
  * @return int64_t how many bytes actually written
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
-#if 1
+#if 0
 	return ::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 #else
-	// NOTE(eteran): perhaps not viable for a ptrace API?
-	struct iovec local[1];
-	struct iovec remote[1];
-
-	local[0].iov_base = const_cast<void *>(buffer);
-	local[0].iov_len  = n;
-
-	remote[0].iov_base = (void *)address;
-	remote[0].iov_len  = n;
-
-	return process_vm_writev(pid_, local, 1, remote, 1, 0);
+	return write_memory_ptrace(address, buffer, n);
 #endif
 }
 
 /**
- * @brief steps the active thread (and ONLY the active thread) one instruction.
+ * @brief writes bytes to the attached process using the `ptrace` syscall
+ *
+ * @param address the address in the attached process to write to
+ * @param buffer a buffer containing the bytes to write must be at least `n` bytes big
+ * @param n how many bytes to write
+ * @return int64_t how many bytes actually written
+ */
+int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const {
+	auto ptr      = static_cast<const uint8_t *>(buffer);
+	int64_t total = 0;
+
+	while (n > 0) {
+		const size_t count = std::min(n, sizeof(long));
+
+		alignas(long) uint8_t data[sizeof(long)] = {};
+		::memcpy(data, ptr, count);
+
+		if (count < sizeof(long)) {
+			const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0);
+			if (ret == -1) {
+				perror("ptrace(PTRACE_PEEKDATA)");
+				abort();
+			}
+
+			::memcpy(
+				data + count,
+				reinterpret_cast<const uint8_t *>(&ret) + count,
+				sizeof(long) - count);
+		}
+
+		long data_value;
+		::memcpy(&data_value, data, sizeof(long));
+
+		if (::ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
+			perror("ptrace(PTRACE_POKEDATA)");
+			abort();
+		}
+
+		address += count;
+		ptr += count;
+		total += count;
+		n -= count;
+	}
+
+	return total;
+}
+
+/**
+ * @brief steps the current active thread (and ONLY the active thread) one instruction.
  * If there is no current active thread, one is selected at random to become the active thread
  * from the set of currently attached, stopped threads
  */
@@ -393,17 +452,17 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				first_stop     = false;
 			}
 
-			Event e;
-			e.pid_     = pid_;
-			e.tid_     = tid;
-			e.status_  = wstatus;
-			e.siginfo_ = {};
+			Event e  = {};
+			e.pid    = pid_;
+			e.tid    = tid;
+			e.status = wstatus;
+			e.type   = Event::Type::Stopped;
 
 			printf("Stopped Status: %d\n", current_thread->stop_status());
 
 			if (is_trap_event(wstatus)) {
 
-				if (::ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo_) == -1) {
+				if (::ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo) == -1) {
 					::perror("ptrace(PTRACE_GETSIGINFO)");
 				}
 

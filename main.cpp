@@ -1,5 +1,6 @@
 
 #include "Debugger.hpp"
+#include "Proc.hpp"
 #include "Process.hpp"
 #include "Thread.hpp"
 
@@ -48,6 +49,7 @@ void tracer(pid_t cpid) {
 	while (1) {
 		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
+				return EventStatus::Stop;
 			})) {
 			printf("Timeout!\n");
 			::exit(0);
@@ -132,17 +134,36 @@ int main() {
 
 	process->add_breakpoint(0x00007ffff7fe4540);
 
+	uint64_t prev_memory_map_hash = hash_regions(process->pid());
+	auto regions = enumerate_regions(process->pid());
+	for (const auto &region : regions) {
+		printf("Region: %016lx - %016lx: %s\n", region.start(), region.end(), region.name().c_str());
+	}
+
 	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
 
 	process->resume();
 
+
 	for (int i = 0; i < 20; ++i) {
-		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
+		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
+
+				uint64_t current_memory_map_hash = hash_regions(process->pid());
+				if (current_memory_map_hash != prev_memory_map_hash) {
+					prev_memory_map_hash = current_memory_map_hash;
+					regions = enumerate_regions(process->pid());
+					printf("Memory Map Changed!\n");
+				}
+
+				return EventStatus::Stop;
 			})) {
 			printf("Timeout!\n");
 			::exit(0);
 		}
 	}
+
+	printf("Done Stepping\n");
+	process->detach();
 #endif
 }
