@@ -42,8 +42,8 @@ public:
 	int stop_status() const;
 
 public:
-	void get_state(void *ctx, size_t size) const;
-	void set_state(const void *ctx, size_t size) const;
+	void get_state(Context *ctx) const;
+	void set_state(const Context *ctx) const;
 
 public:
 	void kill();

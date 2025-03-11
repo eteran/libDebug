@@ -2,9 +2,55 @@
 #ifndef CONTEXT_HPP_
 #define CONTEXT_HPP_
 
+#include <cstddef>
 #include <cstdint>
 
-struct Context_x86 {
+#ifdef __x86_64__
+
+enum class RegisterId {
+
+	// x86_32 specific
+	EAX,
+	EBX,
+	ECX,
+	EDX,
+	ESI,
+	EDI,
+	EBP,
+	ESP,
+	EIP,
+	CS,
+	SS,
+	FS_BASE,
+	GS_BASE,
+	DS,
+	ES,
+	FS,
+	GS,
+
+	// x86_64 specific
+	R15,
+	R14,
+	R13,
+	R12,
+	RBP,
+	RBX,
+	R11,
+	R10,
+	R9,
+	R8,
+	RAX,
+	RCX,
+	RDX,
+	RSI,
+	RDI,
+	ORIG_RAX,
+	RIP,
+	EFLAGS,
+	RSP,
+};
+
+struct Context_x86_32 {
 	uint32_t ebx;
 	uint32_t ecx;
 	uint32_t edx;
@@ -24,7 +70,7 @@ struct Context_x86 {
 	uint32_t ss;
 };
 
-static_assert(sizeof(Context_x86) == 68, "Context_x86 is messed up!");
+static_assert(sizeof(Context_x86_32) == 68, "Context_x86_32 is messed up!");
 
 struct Context_x86_64 {
 	uint64_t r15;
@@ -58,10 +104,38 @@ struct Context_x86_64 {
 
 static_assert(sizeof(Context_x86_64) == 216, "Context_x86_64 is messed up!");
 
+class Context {
+	friend void fill_context(Context *ctx, const void *buffer, size_t n);
+
+
+public:
+	const uint64_t &
+	register_ref(RegisterId reg) const;
+
+public:
+	// TODO(eteran): make this private
+	// NOTE(eteran): normalizing on x86-64 for simplicity.
+	Context_x86_64 regs_;
+	size_t type_ = sizeof(Context_x86_64);
+};
+
+#elif defined(__arm__)
+
 struct Context_arm {
 	uint32_t regs[18];
 };
 
 static_assert(sizeof(Context_arm) == 72, "Context_arm is messed up!");
+
+class Context {
+public:
+	Context_arm regs_;
+};
+#else
+
+#endif
+
+void fill_context(Context *ctx, const void *buffer, size_t n);
+void store_context(void *buffer, const Context *ctx, size_t n);
 
 #endif

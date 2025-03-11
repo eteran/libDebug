@@ -39,19 +39,21 @@ endif()
 add_library(Debug
     Breakpoint.cpp
     Breakpoint.hpp
+    Context.cpp
+    Context.hpp
     Debugger.cpp
     Debugger.hpp
     Event.cpp
     Event.hpp
+    EventStatus.hpp
     Proc.cpp
     Proc.hpp
     Process.cpp
     Process.hpp
-    Thread.cpp
-    Thread.hpp
     Region.cpp
     Region.hpp
-    EventStatus.hpp
+    Thread.cpp
+    Thread.hpp
 )
 
 set_target_properties(Debug

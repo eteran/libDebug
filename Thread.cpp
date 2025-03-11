@@ -221,18 +221,24 @@ int Thread::stop_status() const {
  * @brief retrieves the thread context
  *
  * @param ctx a pointer to the context object
- * @param size the size of the `ctx` object
  */
-void Thread::get_state(void *ctx, size_t size) const {
+void Thread::get_state(Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	struct iovec iov = {ctx, size};
+	constexpr size_t MaxAlign = std::max(alignof(Context_x86_64), alignof(Context_x86_32));
+	constexpr size_t MaxSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
+	alignas(MaxAlign) char buffer[MaxSize];
 
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+	struct iovec iov = {buffer, sizeof(buffer)};
+	long ret         = ::ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov);
+
+	if (ret == -1) {
 		::perror("ptrace(PTRACE_GETREGSET)");
 		::exit(0);
 	}
+
+	fill_context(ctx, buffer, iov.iov_len);
 
 	// TODO(eteran): FPU
 	// TODO(eteran): SSE/SSE2/etc...
@@ -242,13 +248,18 @@ void Thread::get_state(void *ctx, size_t size) const {
  * @brief sets the thread context
  *
  * @param ctx a pointer to the context object
- * @param size the size of the `ctx` object
  */
-void Thread::set_state(const void *ctx, size_t size) const {
+void Thread::set_state(const Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	struct iovec iov = {const_cast<void *>(ctx), size};
+	constexpr size_t MaxAlign = std::max(alignof(Context_x86_64), alignof(Context_x86_32));
+	constexpr size_t MaxSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
+	alignas(MaxAlign) char buffer[MaxSize];
+
+	store_context(buffer, ctx, sizeof(buffer));
+
+	struct iovec iov = {buffer, ctx->type_};
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		::perror("ptrace(PTRACE_GETREGSET)");
