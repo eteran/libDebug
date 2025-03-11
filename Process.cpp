@@ -82,6 +82,18 @@ constexpr bool is_trap_event(int status) {
 	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
 }
 
+void dump_context(Context *ctx) {
+	printf("RIP: %016lx RFL: %016lx\n", ctx->register_ref(RegisterId::RIP), ctx->register_ref(RegisterId::EFLAGS));
+	printf("RSP: %016lx R8 : %016lx\n", ctx->register_ref(RegisterId::RSP), ctx->register_ref(RegisterId::R8));
+	printf("RBP: %016lx R9 : %016lx\n", ctx->register_ref(RegisterId::RBP), ctx->register_ref(RegisterId::R9));
+	printf("RAX: %016lx R10: %016lx\n", ctx->register_ref(RegisterId::RAX), ctx->register_ref(RegisterId::R10));
+	printf("RBX: %016lx R11: %016lx\n", ctx->register_ref(RegisterId::RBX), ctx->register_ref(RegisterId::R11));
+	printf("RCX: %016lx R12: %016lx\n", ctx->register_ref(RegisterId::RCX), ctx->register_ref(RegisterId::R12));
+	printf("RDX: %016lx R13: %016lx\n", ctx->register_ref(RegisterId::RDX), ctx->register_ref(RegisterId::R13));
+	printf("RSI: %016lx R14: %016lx\n", ctx->register_ref(RegisterId::RSI), ctx->register_ref(RegisterId::R14));
+	printf("RDI: %016lx R15: %016lx\n", ctx->register_ref(RegisterId::RDI), ctx->register_ref(RegisterId::R15));
+}
+
 }
 
 /**
@@ -161,17 +173,9 @@ void Process::report() const {
 			}
 
 			Context ctx;
-			thread->get_state(&ctx);
+			thread->get_context(&ctx);
 
-			printf("RIP: %016lx RFL: %016lx\n", ctx.register_ref(RegisterId::RIP), ctx.register_ref(RegisterId::EFLAGS));
-			printf("RSP: %016lx R8 : %016lx\n", ctx.register_ref(RegisterId::RSP), ctx.register_ref(RegisterId::R8));
-			printf("RBP: %016lx R9 : %016lx\n", ctx.register_ref(RegisterId::RBP), ctx.register_ref(RegisterId::R9));
-			printf("RAX: %016lx R10: %016lx\n", ctx.register_ref(RegisterId::RAX), ctx.register_ref(RegisterId::R10));
-			printf("RBX: %016lx R11: %016lx\n", ctx.register_ref(RegisterId::RBX), ctx.register_ref(RegisterId::R11));
-			printf("RCX: %016lx R12: %016lx\n", ctx.register_ref(RegisterId::RCX), ctx.register_ref(RegisterId::R12));
-			printf("RDX: %016lx R13: %016lx\n", ctx.register_ref(RegisterId::RDX), ctx.register_ref(RegisterId::R13));
-			printf("RSI: %016lx R14: %016lx\n", ctx.register_ref(RegisterId::RSI), ctx.register_ref(RegisterId::R14));
-			printf("RDI: %016lx R15: %016lx\n", ctx.register_ref(RegisterId::RDI), ctx.register_ref(RegisterId::R15));
+			dump_context(&ctx);
 		}
 	}
 }
@@ -273,7 +277,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  * @return int64_t how many bytes actually written
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
-#if 0
+#if 1
 	return ::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 #else
 	return write_memory_ptrace(address, buffer, n);
@@ -515,19 +519,23 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					// general trap event, likely one of: single step finished, processes stopped, or a breakpoint
 
 					Context ctx;
-					current_thread->get_state(&ctx);
+					current_thread->get_context(&ctx);
 
-					auto ip = ctx.register_ref(RegisterId::RIP);
+					uint64_t &ip = ctx.register_ref(RegisterId::RIP);
 
-					if (auto bp = find_breakpoint(ip - 1)) {
-						printf("Breakpoint!\n");
+					for (uint64_t i = 1; i <= 2; ++i) {
+						if (auto bp = find_breakpoint(ip - i)) {
 
-						ip--;
-						current_thread->set_state(&ctx);
+							if (bp->size() == i) {
+								printf("Breakpoint!\n");
 
-						// BREAKPOINT!
-						// TODO(eteran): report as a trap event
-						// TODO(eteran): rewind RIP by appropriate amount
+								ip -= i;
+								current_thread->set_context(&ctx);
+
+								// BREAKPOINT!
+								// TODO(eteran): report as a trap event
+							}
+						}
 					}
 				}
 			}

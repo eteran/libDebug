@@ -83,7 +83,7 @@ void store_context(void *buffer, const Context *ctx, size_t n) {
 	}
 }
 
-const uint64_t &Context::register_ref(RegisterId reg) const {
+uint64_t &Context::register_ref(RegisterId reg) {
 	switch (reg) {
 	case RegisterId::R15:
 		return regs_.r15;

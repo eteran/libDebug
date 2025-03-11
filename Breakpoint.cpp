@@ -99,10 +99,16 @@ Breakpoint::~Breakpoint() {
  */
 void Breakpoint::enable() {
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
-	assert(r == static_cast<int64_t>(size_));
+	if(r != static_cast<int64_t>(size_)) {
+		::perror("read_memory");
+		::abort();
+	}
 
 	const int64_t w = process_->write_memory(address_, new_bytes_, size_);
-	assert(w == static_cast<int64_t>(size_));
+	if(w != static_cast<int64_t>(size_)) {
+		::perror("write_memory");
+		::abort();
+	}
 }
 
 /**
@@ -115,7 +121,6 @@ void Breakpoint::disable() {
 		::perror("write_memory");
 		::abort();
 	}
-	assert(w == static_cast<int64_t>(size_));
 }
 
 /**

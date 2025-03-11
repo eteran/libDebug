@@ -222,7 +222,7 @@ int Thread::stop_status() const {
  *
  * @param ctx a pointer to the context object
  */
-void Thread::get_state(Context *ctx) const {
+void Thread::get_context(Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
@@ -249,7 +249,7 @@ void Thread::get_state(Context *ctx) const {
  *
  * @param ctx a pointer to the context object
  */
-void Thread::set_state(const Context *ctx) const {
+void Thread::set_context(const Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
@@ -262,7 +262,7 @@ void Thread::set_state(const Context *ctx) const {
 	struct iovec iov = {buffer, ctx->type_};
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		::perror("ptrace(PTRACE_GETREGSET)");
+		::perror("ptrace(PTRACE_SETREGSET)");
 		::exit(0);
 	}
 
