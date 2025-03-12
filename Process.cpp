@@ -251,7 +251,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 	int64_t total = 0;
 
 	while (n > 0) {
-		const ssize_t ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0);
+		const ssize_t ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
 		if (ret == -1) {
 			break;
 		}
@@ -303,7 +303,7 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 		::memcpy(data, ptr, count);
 
 		if (count < sizeof(long)) {
-			const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0);
+			const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
 			if (ret == -1) {
 				perror("ptrace(PTRACE_PEEKDATA)");
 				abort();
@@ -496,7 +496,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			if (is_trap_event(wstatus)) {
 
-				if (::ptrace(PTRACE_GETSIGINFO, tid, 0, &e.siginfo) == -1) {
+				if (::ptrace(PTRACE_GETSIGINFO, tid, 0L, &e.siginfo) == -1) {
 					::perror("ptrace(PTRACE_GETSIGINFO)");
 				}
 
@@ -504,7 +504,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					// Thread is about to exit, beyond that, this is a normal trap event
 				} else if (is_clone_event(wstatus)) {
 					unsigned long message;
-					if (::ptrace(PTRACE_GETEVENTMSG, tid, 0, &message) != -1) {
+					if (::ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
 
 						auto new_tid    = static_cast<pid_t>(message);
 						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);

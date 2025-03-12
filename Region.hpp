@@ -7,8 +7,8 @@
 
 class Region {
 public:
-	Region(uint64_t start, uint64_t end, uint64_t permissions, const std::string &name)
-		: start_(start), end_(end), permissions_(permissions), name_(name) {}
+	Region(uint64_t start, uint64_t end, uint64_t offset, uint64_t permissions, const std::string &name)
+		: start_(start), end_(end), offset_(offset), permissions_(permissions), name_(name) {}
 
 	Region(const Region &)            = default;
 	Region &operator=(const Region &) = default;
@@ -19,6 +19,7 @@ public:
 	uint64_t start() const { return start_; }
 	uint64_t end() const { return end_; }
 	uint64_t permissions() const { return permissions_; }
+	uint64_t offset() const { return offset_; }
 	const std::string &name() const { return name_; }
 
 public:
@@ -36,6 +37,7 @@ public:
 private:
 	uint64_t start_;
 	uint64_t end_;
+	uint64_t offset_;
 	uint64_t permissions_;
 	std::string name_;
 };

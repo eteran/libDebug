@@ -3,10 +3,13 @@
 #include "Process.hpp"
 #include "Thread.hpp"
 
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
+#include <sys/mman.h>
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 
@@ -62,11 +65,31 @@ std::shared_ptr<Process> Debugger::attach(pid_t pid) {
 /**
  * @brief spawns a process and attaches to it
  *
- * @param cwd
- * @param argv
+ * @param cwd the working directory to change to before executing the process
+ * @param argv the arguments to pass to the process
+ * @note the first argument in `argv` must be the path to the executable
  * @return std::shared_ptr<Process>
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
+	return spawn(cwd, argv, nullptr);
+}
+
+/**
+ * @brief spawns a process and attaches to it
+ *
+ * @param cwd the working directory to change to before executing the process
+ * @param argv the arguments to pass to the process
+ * @param envp the environment variables to pass to the process
+ * @note the first argument in `argv` must be the path to the executable
+ * @return std::shared_ptr<Process>
+ */
+std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], const char *envp[]) {
+
+	constexpr std::size_t SharedMemSize = 4096;
+
+	void *ptr       = ::mmap(nullptr, SharedMemSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	auto shared_mem = static_cast<char *>(ptr);
+	::memset(ptr, 0, SharedMemSize);
 
 	switch (pid_t cpid = ::fork()) {
 	case 0:
@@ -86,13 +109,25 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
 			}
 		}
 
-		::ptrace(PTRACE_TRACEME, 0L, 0L, 0L);
+		if (::ptrace(PTRACE_TRACEME, 0L, 0L, 0L) < 0) {
+			::perror("ptrace(PTRACE_TRACEME)");
+			::abort();
+		}
 
 		if (cwd) {
 			::chdir(cwd);
 		}
 
-		::execv(argv[0], const_cast<char **>(argv));
+		errno = 0;
+		if (envp) {
+			// TODO(eteran): work out the interaction between disableLazyBinding and envp
+			::execve(argv[0], const_cast<char **>(argv), const_cast<char **>(envp));
+		} else {
+			::execv(argv[0], const_cast<char **>(argv));
+		}
+
+		// NOTE(eteran): we only get here if execve failed, so no need to explicitly check the return value
+		::snprintf(shared_mem, SharedMemSize, "Failed to execv: %s", strerror(errno));
 		::abort();
 	case -1:
 		return nullptr;
@@ -100,6 +135,39 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
 		printf("Debugging New Process: %d\n", cpid);
 
 		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
+
+		auto thread = process_->find_thread(cpid);
+		if (!thread) {
+			printf("Failed to find thread for process %d\n", cpid);
+			::munmap(ptr, SharedMemSize);
+			return nullptr;
+		}
+
+		if (thread->is_exited()) {
+			printf("The child unexpectedly exited with code %d\n", thread->exit_status());
+			::munmap(ptr, SharedMemSize);
+			return nullptr;
+		}
+
+		if (thread->is_signaled()) {
+			printf("The child was unexpectedly killed by signal %d\n", thread->signal_status());
+			::munmap(ptr, SharedMemSize);
+			return nullptr;
+		}
+
+		if (thread->is_stopped() && thread->stop_status() == SIGABRT) {
+			printf("The child unexpectedly aborted: %s\n", shared_mem);
+			::munmap(ptr, SharedMemSize);
+			return nullptr;
+		}
+
+		if (!thread->is_stopped() || thread->stop_status() != SIGTRAP) {
+			printf("The child was not stopped by SIGTRAP, but by %d\n", thread->stop_status());
+			::munmap(ptr, SharedMemSize);
+			return nullptr;
+		}
+
+		::munmap(ptr, SharedMemSize);
 		return process_;
 	}
 }

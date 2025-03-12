@@ -2,6 +2,7 @@
 #include "Debugger.hpp"
 #include "Proc.hpp"
 #include "Process.hpp"
+#include "Region.hpp"
 #include "Thread.hpp"
 
 #include <cctype>
@@ -9,8 +10,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
-
-#include <sys/wait.h>
 
 void tracee() {
 #if 1
@@ -55,17 +54,14 @@ void tracer(pid_t cpid) {
 			::exit(0);
 		}
 	}
-
-	// printf("Killing Process\n");
-	// process->kill();
 }
 
 /**
- * @brief
+ * @brief dumps the memory of a given process
  *
- * @param process
- * @param address
- * @param n
+ * @param process the process to dump memory from
+ * @param address the address to start dumping from
+ * @param n the number of bytes to dump
  */
 void dump_memory(Process *process, uint64_t address, size_t n) {
 
@@ -107,6 +103,11 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 	}
 }
 
+/**
+ * @brief main function
+ *
+ * @return int
+ */
 int main() {
 
 #if 0
@@ -130,20 +131,21 @@ int main() {
 		nullptr,
 	};
 
+
 	auto process = debugger->spawn("/etc/", argv);
+	if(!process) {
+		printf("Failed to spawn process\n");
+		return 1;
+	}
 
 	process->add_breakpoint(0x00007ffff7fe4540);
-
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
-	auto regions = enumerate_regions(process->pid());
+	auto regions                  = enumerate_regions(process->pid());
 	for (const auto &region : regions) {
 		printf("Region: %016lx - %016lx: %s\n", region.start(), region.end(), region.name().c_str());
 	}
-
 	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
-
 	process->resume();
-
 
 	for (int i = 0; i < 20; ++i) {
 		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
@@ -152,7 +154,7 @@ int main() {
 				uint64_t current_memory_map_hash = hash_regions(process->pid());
 				if (current_memory_map_hash != prev_memory_map_hash) {
 					prev_memory_map_hash = current_memory_map_hash;
-					regions = enumerate_regions(process->pid());
+					regions              = enumerate_regions(process->pid());
 					printf("Memory Map Changed!\n");
 				}
 

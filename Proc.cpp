@@ -1,5 +1,6 @@
 
 #include "Proc.hpp"
+#include "Region.hpp"
 
 #include <cerrno>
 #include <cstdio>
@@ -166,7 +167,7 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		uint32_t dev_maj     = 0;
 		uint32_t dev_min     = 0;
 		uint32_t inode       = 0;
-		char perms[32]       = {};
+		char perms[8]        = {};
 		char name[PATH_MAX]  = {};
 
 		// address           perms offset  dev   inode       pathname
@@ -179,7 +180,7 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 			if (::strchr(name, 'p')) permissions |= 0x2000;
 			if (::strchr(name, 's')) permissions |= 0x1000;
 
-			regions.emplace_back(start, end, permissions, name);
+			regions.emplace_back(start, end, offset, permissions, name);
 		}
 	}
 
