@@ -111,7 +111,7 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
  */
 int main() {
 
-#if 0
+#if 1
 	switch (const pid_t cpid = fork()) {
 	case 0:
 		tracee();

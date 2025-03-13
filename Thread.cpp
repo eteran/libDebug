@@ -251,7 +251,7 @@ void Thread::set_context(const Context *ctx) const {
 
 	store_context(buffer, ctx, sizeof(buffer));
 
-	struct iovec iov = {buffer, ctx->type_};
+	struct iovec iov = {buffer, ctx->type()};
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		::perror("ptrace(PTRACE_SETREGSET)");

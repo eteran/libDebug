@@ -8,7 +8,7 @@
 #include <cstring>
 
 namespace {
-
+#ifdef __x86_64__
 void fill_from_x86_32(Context_x86_64 *ctx, const Context_x86_32 *regs) {
 	ctx->rax      = regs->eax;
 	ctx->rbx      = regs->ebx;
@@ -48,20 +48,26 @@ void store_to_x86_32(Context_x86_32 *ctx, const Context_x86_64 *regs) {
 	ctx->gs       = static_cast<uint32_t>(regs->gs);
 	ctx->orig_eax = static_cast<uint32_t>(regs->orig_rax);
 }
+#endif
 
 }
 
 void fill_context(Context *ctx, const void *buffer, size_t n) {
 
 	switch (n) {
+#ifdef __x86_64__
 	case sizeof(Context_x86_64):
 		::memcpy(&ctx->regs_, buffer, sizeof(Context_x86_64));
 		ctx->type_ = sizeof(Context_x86_64);
 		break;
 	case sizeof(Context_x86_32):
-		fill_from_x86_32(&ctx->regs_, static_cast<const Context_x86_32 *>(buffer));
+		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
+		Context_x86_32 regs32;
+		::memcpy(&regs32, buffer, sizeof(Context_x86_32));
+		fill_from_x86_32(&ctx->regs_, &regs32);
 		ctx->type_ = sizeof(Context_x86_32);
 		break;
+#endif
 	default:
 		printf("Unknown Context Size: %zu\n", n);
 		break;
@@ -71,22 +77,33 @@ void fill_context(Context *ctx, const void *buffer, size_t n) {
 void store_context(void *buffer, const Context *ctx, size_t n) {
 
 	switch (ctx->type_) {
+#ifdef __x86_64__
 	case sizeof(Context_x86_64):
 		assert(n >= sizeof(Context_x86_64));
 		::memcpy(buffer, &ctx->regs_, sizeof(Context_x86_64));
 		break;
 	case sizeof(Context_x86_32):
 		assert(n >= sizeof(Context_x86_32));
-		store_to_x86_32(static_cast<Context_x86_32 *>(buffer), &ctx->regs_);
+		Context_x86_32 regs32;
+		store_to_x86_32(&regs32, &ctx->regs_);
+		::memcpy(buffer, &regs32, sizeof(Context_x86_32));
 		break;
+#endif
 	default:
 		printf("Unknown Context Size: %zu\n", n);
 		break;
 	}
 }
 
+/**
+ * @brief returns a reference to the given register
+ *
+ * @param reg
+ * @return uint64_t&
+ */
 uint64_t &Context::register_ref(RegisterId reg) {
 	switch (reg) {
+#ifdef __x86_64__
 	case RegisterId::R15:
 		return regs_.r15;
 	case RegisterId::R14:
@@ -141,7 +158,9 @@ uint64_t &Context::register_ref(RegisterId reg) {
 		return regs_.fs;
 	case RegisterId::GS:
 		return regs_.gs;
+#endif
 	default:
+		printf("Unknown Register: %d\n", static_cast<int>(reg));
 		::abort();
 	}
 }

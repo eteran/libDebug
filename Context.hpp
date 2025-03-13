@@ -162,11 +162,13 @@ static_assert(sizeof(Context_x86_64) == 216, "Context_x86_64 is messed up!");
 
 class Context {
 	friend void fill_context(Context *ctx, const void *buffer, size_t n);
+	friend void store_context(void *buffer, const Context *ctx, size_t n);
 
 public:
-	uint64_t &register_ref(RegisterId reg);
+	[[nodiscard]] uint64_t &register_ref(RegisterId reg);
+	[[nodiscard]] size_t type() const { return type_; }
 
-public:
+private:
 	// TODO(eteran): make this private
 	// NOTE(eteran): normalizing on x86-64 for simplicity.
 	Context_x86_64 regs_;
