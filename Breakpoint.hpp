@@ -30,14 +30,14 @@ public:
 	~Breakpoint();
 
 public:
-	uint64_t address() const { return address_; }
-	size_t size() const { return size_; }
+	[[nodiscard]] uint64_t address() const { return address_; }
+	[[nodiscard]] size_t size() const { return size_; }
 	void enable();
 	void disable();
 	void hit();
-	TypeId type() const { return type_; }
-	uint8_t *old_bytes() { return old_bytes_; }
-	uint8_t *new_bytes() { return new_bytes_; }
+	[[nodiscard]] TypeId type() const { return type_; }
+	[[nodiscard]] uint8_t *old_bytes() { return old_bytes_; }
+	[[nodiscard]] uint8_t *new_bytes() { return new_bytes_; }
 
 private:
 	const Process *process_ = nullptr;

@@ -5,6 +5,7 @@
 #include "Thread.hpp"
 
 #include <cerrno>
+#include <climits>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -122,7 +123,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	auto shared_mem = static_cast<char *>(ptr);
 	::memset(ptr, 0, SharedMemSize);
 
-	switch (pid_t cpid = ::fork()) {
+	switch (const pid_t cpid = ::fork()) {
 	case 0:
 
 		if (disableLazyBinding_) {

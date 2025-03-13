@@ -19,7 +19,7 @@ public:
 	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[]);
 
 public:
-	std::shared_ptr<Process> process() const { return process_; };
+	[[nodiscard]] std::shared_ptr<Process> process() const { return process_; }
 
 public:
 	void set_disable_lazy_binding(bool value);

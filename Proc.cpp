@@ -27,7 +27,7 @@ public:
 		}
 	}
 
-	uint64_t digest() const { return state_; }
+	[[nodiscard]] uint64_t digest() const { return state_; }
 
 private:
 	uint64_t state_ = 0xcbf29ce484222325ULL;
@@ -124,7 +124,7 @@ uint64_t hash_regions(pid_t pid) {
 	char path[PATH_MAX];
 	::snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 
-	int fd = ::open(path, O_RDONLY);
+	const int fd = ::open(path, O_RDONLY);
 	if (fd == -1) {
 		return 0;
 	}
@@ -163,7 +163,7 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		uint64_t start       = 0;
 		uint64_t end         = 0;
 		uint64_t offset      = 0;
-		uint64_t permissions = 0;
+		uint64_t permissions = Region::None;
 		uint32_t dev_maj     = 0;
 		uint32_t dev_min     = 0;
 		uint32_t inode       = 0;
@@ -174,12 +174,19 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		// 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
 
 		if (::sscanf(line, "%lx-%lx %s %lx %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
-			if (::strchr(name, 'r')) permissions |= 1;
-			if (::strchr(name, 'w')) permissions |= 2;
-			if (::strchr(name, 'x')) permissions |= 4;
-			if (::strchr(name, 'p')) permissions |= 0x2000;
-			if (::strchr(name, 's')) permissions |= 0x1000;
-
+#if 0
+			if (::strchr(name, 'r')) permissions |= Region::Read;
+			if (::strchr(name, 'w')) permissions |= Region::Write;
+			if (::strchr(name, 'x')) permissions |= Region::Execute;
+			if (::strchr(name, 'p')) permissions |= Region::Private;
+			if (::strchr(name, 's')) permissions |= Region::Shared;
+#else
+			permissions |= (!!::strchr(name, 'r') * Region::Read);
+			permissions |= (!!::strchr(name, 'w') * Region::Write);
+			permissions |= (!!::strchr(name, 'x') * Region::Execute);
+			permissions |= (!!::strchr(name, 'p') * Region::Private);
+			permissions |= (!!::strchr(name, 's') * Region::Shared);
+#endif
 			regions.emplace_back(start, end, offset, permissions, name);
 		}
 	}

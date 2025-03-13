@@ -27,29 +27,29 @@ public:
 	~Thread();
 
 public:
-	pid_t tid() const { return tid_; }
-	int wait_status() const { return wstatus_; }
+	[[nodiscard]] pid_t tid() const { return tid_; }
+	[[nodiscard]] int wait_status() const { return wstatus_; }
 
 public:
-	bool is_exited() const;
-	bool is_signaled() const;
-	bool is_stopped() const;
-	bool is_continued() const;
+	[[nodiscard]] bool is_exited() const;
+	[[nodiscard]] bool is_signaled() const;
+	[[nodiscard]] bool is_stopped() const;
+	[[nodiscard]] bool is_continued() const;
 
 public:
-	int exit_status() const;
-	int signal_status() const;
-	int stop_status() const;
+	[[nodiscard]] int exit_status() const;
+	[[nodiscard]] int signal_status() const;
+	[[nodiscard]] int stop_status() const;
 
 public:
 	void get_context(Context *ctx) const;
 	void set_context(const Context *ctx) const;
 
 public:
-	void kill();
+	void kill() const;
 	void step();
 	void resume();
-	void stop();
+	void stop() const;
 	void detach();
 	void wait();
 

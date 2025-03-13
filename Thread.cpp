@@ -1,5 +1,6 @@
 
 #include "Thread.hpp"
+#include "Context.hpp"
 
 #include <cassert>
 #include <csignal>
@@ -27,8 +28,7 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	: pid_(pid), tid_(tid) {
 
 	if (f & Thread::Attach) {
-		long ret = ::ptrace(PTRACE_ATTACH, tid, 0L, 0L);
-		if (ret == -1) {
+		if (::ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
 			::perror("ptrace(PTRACE_ATTACH)");
 			::exit(0);
 		}
@@ -60,8 +60,7 @@ void Thread::wait() {
 
 	assert(state_ == State::Running);
 
-	long ret = ::waitpid(tid_, &wstatus_, __WALL);
-	if (ret == -1) {
+	if (::waitpid(tid_, &wstatus_, __WALL) == -1) {
 		::perror("waitpid(Thread::wait)");
 		::exit(0);
 	}
@@ -76,8 +75,7 @@ void Thread::wait() {
  */
 void Thread::detach() {
 	if (tid_ != -1) {
-		long ret = ::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
-		IGNORE(ret);
+		::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
 		tid_ = -1;
 	}
 }
@@ -91,8 +89,7 @@ void Thread::step() {
 
 	assert(state_ == State::Stopped);
 
-	long ret = ::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L);
-	if (ret == -1) {
+	if (::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L) == -1) {
 		::perror("ptrace(PTRACE_SINGLESTEP)");
 		::exit(0);
 	}
@@ -108,8 +105,7 @@ void Thread::resume() {
 
 	assert(state_ == State::Stopped);
 
-	long ret = ::ptrace(PTRACE_CONT, tid_, 0L, 0L);
-	if (ret == -1) {
+	if (::ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
 		::perror("ptrace(PTRACE_CONT)");
 		::exit(0);
 	}
@@ -122,12 +118,11 @@ void Thread::resume() {
  * eventually followed by a debug event when it actually stops
  *
  */
-void Thread::stop() {
+void Thread::stop() const {
 
 	assert(state_ == State::Running);
 
-	long ret = ::tgkill(pid_, tid_, SIGSTOP);
-	if (ret == -1) {
+	if (::tgkill(pid_, tid_, SIGSTOP) == -1) {
 		::perror("tgkill");
 		::exit(0);
 	}
@@ -137,11 +132,10 @@ void Thread::stop() {
  * @brief terminates this thread
  *
  */
-void Thread::kill() {
+void Thread::kill() const {
 	assert(state_ == State::Running);
 
-	long ret = ::tgkill(pid_, tid_, SIGKILL);
-	if (ret == -1) {
+	if (::tgkill(pid_, tid_, SIGKILL) == -1) {
 		::perror("tgkill");
 		::exit(0);
 	}
@@ -231,9 +225,7 @@ void Thread::get_context(Context *ctx) const {
 	alignas(MaxAlign) char buffer[MaxSize];
 
 	struct iovec iov = {buffer, sizeof(buffer)};
-	long ret         = ::ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov);
-
-	if (ret == -1) {
+	if (::ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		::perror("ptrace(PTRACE_GETREGSET)");
 		::exit(0);
 	}

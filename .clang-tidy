@@ -23,5 +23,10 @@ Checks: |-
   -readability-use-anyofallof,
   -readability-non-const-parameter,
   -readability-suspicious-call-argument,
+  -readability-avoid-unconditional-preprocessor-if,
   clang-analyzer-*,
   misc-*,
+  -misc-include-cleaner,
+
+HeaderFilterRegex: .*
+UseColor: true

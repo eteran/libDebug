@@ -51,7 +51,6 @@ add_library(Debug
     Proc.hpp
     Process.cpp
     Process.hpp
-    Region.cpp
     Region.hpp
     Thread.cpp
     Thread.hpp

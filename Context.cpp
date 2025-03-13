@@ -1,6 +1,8 @@
 
 #include "Context.hpp"
+
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -140,6 +142,6 @@ uint64_t &Context::register_ref(RegisterId reg) {
 	case RegisterId::GS:
 		return regs_.gs;
 	default:
-		abort();
+		::abort();
 	}
 }

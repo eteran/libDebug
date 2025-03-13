@@ -1,9 +1,11 @@
 
 #include "Process.hpp"
 #include "Breakpoint.hpp"
+#include "Event.hpp"
 #include "Proc.hpp"
 #include "Thread.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <chrono>
@@ -12,12 +14,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <thread>
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <sys/ptrace.h>
-#include <sys/uio.h>
 #include <sys/wait.h>
 
 namespace {
@@ -112,7 +113,7 @@ Process::Process(pid_t pid, Flag flags)
 			const std::vector<pid_t> threads = enumerate_threads(pid);
 
 			bool inserted = false;
-			for (pid_t tid : threads) {
+			for (const pid_t tid : threads) {
 				auto it = threads_.find(tid);
 				if (it != threads_.end()) {
 					continue;
@@ -226,10 +227,10 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
  * @return int64_t how many bytes actually read
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
-#if 1
-	int64_t ret = ::pread(memfd_, buffer, n, static_cast<off_t>(address));
+#if 0
+	const int64_t ret = ::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
-	int64_t ret = read_memory_ptrace(address, buffer, n);
+	const int64_t ret = read_memory_ptrace(address, buffer, n);
 #endif
 
 	if (ret > 0) {
@@ -251,8 +252,14 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 	int64_t total = 0;
 
 	while (n > 0) {
-		const ssize_t ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-		if (ret == -1) {
+		errno          = 0;
+		const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
+		if (ret == -1 && errno != 0) {
+			// we just ignore ESRCH because it means the process
+			// was terminated while we were trying to read
+			if (errno == ESRCH) {
+				return 0;
+			}
 			break;
 		}
 
@@ -261,7 +268,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 
 		address += count;
 		ptr += count;
-		total += count;
+		total += static_cast<int64_t>(count);
 		n -= count;
 	}
 
@@ -277,7 +284,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  * @return int64_t how many bytes actually written
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
-#if 1
+#if 0
 	return ::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 #else
 	return write_memory_ptrace(address, buffer, n);
@@ -303,10 +310,16 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 		::memcpy(data, ptr, count);
 
 		if (count < sizeof(long)) {
+			errno          = 0;
 			const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-			if (ret == -1) {
-				perror("ptrace(PTRACE_PEEKDATA)");
-				abort();
+			if (ret == -1 && errno != 0) {
+				// we just ignore ESRCH because it means the process
+				// was terminated while we were trying to read
+				if(errno == ESRCH) {
+					return 0;
+				}
+				::perror("ptrace(PTRACE_PEEKDATA)");
+				::abort();
 			}
 
 			::memcpy(
@@ -318,14 +331,15 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 		long data_value;
 		::memcpy(&data_value, data, sizeof(long));
 
+
 		if (::ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
-			perror("ptrace(PTRACE_POKEDATA)");
-			abort();
+			::perror("ptrace(PTRACE_POKEDATA)");
+			::abort();
 		}
 
 		address += count;
 		ptr += count;
-		total += count;
+		total += static_cast<int64_t>(count);
 		n -= count;
 	}
 
@@ -389,9 +403,8 @@ void Process::stop() {
 /**
  * @brief Terminates the attached process
  */
-void Process::kill() {
-	long ret = ::ptrace(PTRACE_KILL, pid_, 0L, 0L);
-	if (ret == -1) {
+void Process::kill() const {
+	if (::ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
 		::perror("ptrace(PTRACE_KILL)");
 		::exit(0);
 	}

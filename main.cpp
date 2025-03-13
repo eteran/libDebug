@@ -17,7 +17,7 @@ void tracee() {
 	for (int i = 0; i < 5; ++i) {
 		auto thr = std::thread([](int n) {
 			int j = 0;
-			while (1) {
+			while (true) {
 				printf("In child, doing some work [%d]...\n", n);
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -32,7 +32,7 @@ void tracee() {
 		thr.detach();
 	}
 #endif
-	while (1) {
+	while (true) {
 		printf("In child, doing some work [%d]...\n", -1);
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
@@ -46,7 +46,7 @@ void tracer(pid_t cpid) {
 	std::this_thread::sleep_for(std::chrono::seconds(5));
 	process->stop();
 
-	while (1) {
+	while (true) {
 		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
 				return EventStatus::Stop;
@@ -154,7 +154,7 @@ int main() {
 		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
 				printf("Debug Event!\n");
 
-				uint64_t current_memory_map_hash = hash_regions(process->pid());
+				const uint64_t current_memory_map_hash = hash_regions(process->pid());
 				if (current_memory_map_hash != prev_memory_map_hash) {
 					prev_memory_map_hash = current_memory_map_hash;
 					regions              = enumerate_regions(process->pid());

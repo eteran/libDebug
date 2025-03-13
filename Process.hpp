@@ -35,7 +35,7 @@ public:
 	~Process();
 
 public:
-	pid_t pid() const {
+	[[nodiscard]] pid_t pid() const {
 		return pid_;
 	}
 
@@ -46,7 +46,7 @@ public:
 
 public:
 	// event API
-	void kill();
+	void kill() const;
 	void step();
 	void resume();
 	void stop();
@@ -57,19 +57,19 @@ public:
 	// breakpoint API
 	void add_breakpoint(uint64_t address);
 	void remove_breakpoint(uint64_t address);
-	std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
+	[[nodiscard]] std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
 
 public:
 	void report() const;
 
 public:
-	std::shared_ptr<Thread> find_thread(pid_t tid) const;
+	[[nodiscard]] std::shared_ptr<Thread> find_thread(pid_t tid) const;
 
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const {
 		return threads_;
 	}
 
-	std::shared_ptr<Thread> active_thread() const {
+	[[nodiscard]] std::shared_ptr<Thread> active_thread() const {
 		return active_thread_;
 	}
 
