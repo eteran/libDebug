@@ -6,50 +6,56 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 
-namespace {
-#ifdef __x86_64__
-void fill_from_x86_32(Context_x86_64 *ctx, const Context_x86_32 *regs) {
-	ctx->rax      = regs->eax;
-	ctx->rbx      = regs->ebx;
-	ctx->rcx      = regs->ecx;
-	ctx->rdx      = regs->edx;
-	ctx->rsi      = regs->esi;
-	ctx->rdi      = regs->edi;
-	ctx->rbp      = regs->ebp;
-	ctx->rsp      = regs->esp;
-	ctx->rip      = regs->eip;
-	ctx->eflags   = regs->eflags;
-	ctx->cs       = regs->cs;
-	ctx->ss       = regs->ss;
-	ctx->ds       = regs->ds;
-	ctx->es       = regs->es;
-	ctx->fs       = regs->fs;
-	ctx->gs       = regs->gs;
-	ctx->orig_rax = regs->orig_eax;
+/**
+ * @brief store the given context into the given x86_32 context
+ *
+ * @param ctx the x86_32 context to store the given context into
+ */
+void Context::store_to_x86_32(Context_x86_32 *ctx) const {
+	ctx->eax      = static_cast<uint32_t>(regs_.rax);
+	ctx->ebx      = static_cast<uint32_t>(regs_.rbx);
+	ctx->ecx      = static_cast<uint32_t>(regs_.rcx);
+	ctx->edx      = static_cast<uint32_t>(regs_.rdx);
+	ctx->esi      = static_cast<uint32_t>(regs_.rsi);
+	ctx->edi      = static_cast<uint32_t>(regs_.rdi);
+	ctx->ebp      = static_cast<uint32_t>(regs_.rbp);
+	ctx->esp      = static_cast<uint32_t>(regs_.rsp);
+	ctx->eip      = static_cast<uint32_t>(regs_.rip);
+	ctx->eflags   = static_cast<uint32_t>(regs_.eflags);
+	ctx->cs       = static_cast<uint32_t>(regs_.cs);
+	ctx->ss       = static_cast<uint32_t>(regs_.ss);
+	ctx->ds       = static_cast<uint32_t>(regs_.ds);
+	ctx->es       = static_cast<uint32_t>(regs_.es);
+	ctx->fs       = static_cast<uint32_t>(regs_.fs);
+	ctx->gs       = static_cast<uint32_t>(regs_.gs);
+	ctx->orig_eax = static_cast<uint32_t>(regs_.orig_rax);
 }
 
-void store_to_x86_32(Context_x86_32 *ctx, const Context_x86_64 *regs) {
-	ctx->eax      = static_cast<uint32_t>(regs->rax);
-	ctx->ebx      = static_cast<uint32_t>(regs->rbx);
-	ctx->ecx      = static_cast<uint32_t>(regs->rcx);
-	ctx->edx      = static_cast<uint32_t>(regs->rdx);
-	ctx->esi      = static_cast<uint32_t>(regs->rsi);
-	ctx->edi      = static_cast<uint32_t>(regs->rdi);
-	ctx->ebp      = static_cast<uint32_t>(regs->rbp);
-	ctx->esp      = static_cast<uint32_t>(regs->rsp);
-	ctx->eip      = static_cast<uint32_t>(regs->rip);
-	ctx->eflags   = static_cast<uint32_t>(regs->eflags);
-	ctx->cs       = static_cast<uint32_t>(regs->cs);
-	ctx->ss       = static_cast<uint32_t>(regs->ss);
-	ctx->ds       = static_cast<uint32_t>(regs->ds);
-	ctx->es       = static_cast<uint32_t>(regs->es);
-	ctx->fs       = static_cast<uint32_t>(regs->fs);
-	ctx->gs       = static_cast<uint32_t>(regs->gs);
-	ctx->orig_eax = static_cast<uint32_t>(regs->orig_rax);
-}
-#endif
-
+/**
+ * @brief fill the given context with the given x86_32 context
+ *
+ * @param ctx the x86_32 context to fill the given context with
+ */
+void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
+	regs_.rax      = ctx->eax;
+	regs_.rbx      = ctx->ebx;
+	regs_.rcx      = ctx->ecx;
+	regs_.rdx      = ctx->edx;
+	regs_.rsi      = ctx->esi;
+	regs_.rdi      = ctx->edi;
+	regs_.rbp      = ctx->ebp;
+	regs_.rsp      = ctx->esp;
+	regs_.rip      = ctx->eip;
+	regs_.eflags   = ctx->eflags;
+	regs_.cs       = ctx->cs;
+	regs_.ss       = ctx->ss;
+	regs_.ds       = ctx->ds;
+	regs_.es       = ctx->es;
+	regs_.fs       = ctx->fs;
+	regs_.gs       = ctx->gs;
+	regs_.orig_rax = ctx->orig_eax;
 }
 
 /**
@@ -66,13 +72,15 @@ void Context::fill_from(const void *buffer, size_t n) {
 		::memcpy(&regs_, buffer, sizeof(Context_x86_64));
 		type_ = sizeof(Context_x86_64);
 		break;
-	case sizeof(Context_x86_32):
+	case sizeof(Context_x86_32): {
 		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
-		Context_x86_32 regs32;
-		::memcpy(&regs32, buffer, sizeof(Context_x86_32));
-		fill_from_x86_32(&regs_, &regs32);
+		// but this will do for now
+		__asm__("" ::"r"(buffer) : "memory");
+		auto ptr = static_cast<const Context_x86_32 *>(buffer);
+		fill_from_x86_32(ptr);
 		type_ = sizeof(Context_x86_32);
 		break;
+	}
 #endif
 	default:
 		printf("Unknown Context Size: %zu\n", n);
@@ -93,10 +101,15 @@ void Context::store_to(void *buffer, size_t n) const {
 		assert(n >= sizeof(Context_x86_64));
 		::memcpy(buffer, &regs_, sizeof(Context_x86_64));
 		break;
-	case sizeof(Context_x86_32):
+	case sizeof(Context_x86_32): {
 		assert(n >= sizeof(Context_x86_32));
-		store_to_x86_32(static_cast<Context_x86_32 *>(buffer), &regs_);
+		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
+		// but this will do for now
+		__asm__("" ::"r"(buffer) : "memory");
+		auto ptr = static_cast<Context_x86_32 *>(buffer);
+		store_to_x86_32(ptr);
 		break;
+	}
 #endif
 	default:
 		printf("Unknown Context Size: %zu\n", n);
