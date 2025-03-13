@@ -8,6 +8,7 @@
 #include <cstring>
 #include <new>
 
+#ifdef __x86_64__
 /**
  * @brief store the given context into the given x86_32 context
  *
@@ -57,6 +58,7 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 	regs_.gs       = ctx->gs;
 	regs_.orig_rax = ctx->orig_eax;
 }
+#endif
 
 /**
  * @brief fill the given context with the given buffer

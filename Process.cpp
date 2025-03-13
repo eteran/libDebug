@@ -315,7 +315,7 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 			if (ret == -1 && errno != 0) {
 				// we just ignore ESRCH because it means the process
 				// was terminated while we were trying to read
-				if(errno == ESRCH) {
+				if (errno == ESRCH) {
 					return 0;
 				}
 				::perror("ptrace(PTRACE_PEEKDATA)");
@@ -330,7 +330,6 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 
 		long data_value;
 		::memcpy(&data_value, data, sizeof(long));
-
 
 		if (::ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
 			::perror("ptrace(PTRACE_POKEDATA)");
@@ -482,6 +481,13 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
+		Context ctx;
+		current_thread->get_context(&ctx);
+
+		uint64_t &ip = ctx.register_ref(RegisterId::RIP);
+
+		printf("Stopped at: %016lx\n", ip);
+
 		if (WIFSIGNALED(wstatus)) {
 			// TODO(eteran): implement
 			if (first_stop) {
@@ -530,12 +536,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					}
 				} else {
 					// general trap event, likely one of: single step finished, processes stopped, or a breakpoint
-
-					Context ctx;
-					current_thread->get_context(&ctx);
-
-					uint64_t &ip = ctx.register_ref(RegisterId::RIP);
-
 					for (uint64_t i = 1; i <= 2; ++i) {
 						if (auto bp = find_breakpoint(ip - i)) {
 
@@ -550,6 +550,14 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 							}
 						}
 					}
+				}
+			} else {
+				if (auto bp = find_breakpoint(ip)) {
+					printf("Alt-Breakpoint!\n");
+					// NOTE(eteran): no need to rewind here because the instructure used for the BP
+					// didn't advance the instruction pointer
+
+					// TODO(eteran): report as a trap event
 				}
 			}
 
