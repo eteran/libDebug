@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 3.15)
-
 project(Debug CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENABLE_ASAN "Enable address sanitizer")
 option(ENABLE_MSAN "Enable memory sanitizer")
@@ -43,7 +44,7 @@ add_library(Debug
     Context.hpp
     Debugger.cpp
     Debugger.hpp
-    Event.cpp
+    DebuggerError.hpp
     Event.hpp
     EventStatus.hpp
     Proc.cpp
@@ -78,7 +79,6 @@ PUBLIC
     -Wsign-conversion
     -Wunused
 )
-
 
 add_executable(Debugger
     main.cpp

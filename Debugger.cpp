@@ -1,5 +1,6 @@
 
 #include "Debugger.hpp"
+#include "DebuggerError.hpp"
 #include "Process.hpp"
 #include "Thread.hpp"
 
@@ -12,6 +13,32 @@
 #include <sys/mman.h>
 #include <sys/personality.h>
 #include <sys/ptrace.h>
+
+template <class F>
+class defer_type {
+public:
+	defer_type(F &&func)
+		: func_(std::forward<F>(func)) {
+	}
+
+	~defer_type() {
+		func_();
+	}
+
+private:
+	F func_;
+};
+
+template <class F>
+defer_type<F> make_defer(F &&f) {
+	return defer_type<F>{std::forward<F>(f)};
+}
+
+#define CONCAT(a, b)  a##b
+#define CONCAT2(a, b) CONCAT(a, b)
+
+#define SCOPE_EXIT(...) \
+	auto CONCAT2(scope_exit_, __LINE__) = ::make_defer([&] __VA_ARGS__)
 
 /**
  * @brief Construct a new Debugger object
@@ -80,7 +107,11 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
  * @param cwd the working directory to change to before executing the process
  * @param argv the arguments to pass to the process
  * @param envp the environment variables to pass to the process
+ *
  * @note the first argument in `argv` must be the path to the executable
+ * @throws DebuggerError if any errors occur during the process creation
+ * @note the environment variables are passed as a null-terminated array of strings, where each string is of the form "KEY=VALUE"
+ *
  * @return std::shared_ptr<Process>
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], const char *envp[]) {
@@ -93,9 +124,11 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 	switch (pid_t cpid = ::fork()) {
 	case 0:
+
 		if (disableLazyBinding_) {
 			if (::setenv("LD_BIND_NOW", "1", true) == -1) {
-				::perror("Failed to disable lazy binding");
+				::snprintf(shared_mem, SharedMemSize, "Failed to disable lazy binding: %s", strerror(errno));
+				::abort();
 			}
 		}
 
@@ -103,22 +136,26 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 			const int current = ::personality(UINT32_MAX);
 			// This shouldn't fail, but let's at least perror if it does anyway
 			if (current == -1) {
-				::perror("Failed to get current personality");
+				::snprintf(shared_mem, SharedMemSize, "Failed to get current personality: %s", strerror(errno));
+				::abort();
 			} else if (::personality(static_cast<uint32_t>(current | ADDR_NO_RANDOMIZE)) == -1) {
-				::perror("Failed to disable ASLR");
+				::snprintf(shared_mem, SharedMemSize, "Failed to disable ASLR: %s", strerror(errno));
+				::abort();
 			}
 		}
 
-		if (::ptrace(PTRACE_TRACEME, 0L, 0L, 0L) < 0) {
-			::perror("ptrace(PTRACE_TRACEME)");
+		if (::ptrace(PTRACE_TRACEME, 0L, 0L, 0L) == -1) {
+			::snprintf(shared_mem, SharedMemSize, "Failed to enable tracing: %s", strerror(errno));
 			::abort();
 		}
 
 		if (cwd) {
-			::chdir(cwd);
+			if (::chdir(cwd) == -1) {
+				::snprintf(shared_mem, SharedMemSize, "Failed to change working directory: %s", strerror(errno));
+				::abort();
+			}
 		}
 
-		errno = 0;
 		if (envp) {
 			// TODO(eteran): work out the interaction between disableLazyBinding and envp
 			::execve(argv[0], const_cast<char **>(argv), const_cast<char **>(envp));
@@ -136,38 +173,41 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
 
+		SCOPE_EXIT({
+			::munmap(ptr, SharedMemSize);
+		});
+
 		auto thread = process_->find_thread(cpid);
 		if (!thread) {
-			printf("Failed to find thread for process %d\n", cpid);
-			::munmap(ptr, SharedMemSize);
-			return nullptr;
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), "Failed to find thread for process %d", cpid);
+			throw DebuggerError(buffer);
 		}
 
 		if (thread->is_exited()) {
-			printf("The child unexpectedly exited with code %d\n", thread->exit_status());
-			::munmap(ptr, SharedMemSize);
-			return nullptr;
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), "The child unexpectedly exited with code %d", thread->exit_status());
+			throw DebuggerError(buffer);
 		}
 
 		if (thread->is_signaled()) {
-			printf("The child was unexpectedly killed by signal %d\n", thread->signal_status());
-			::munmap(ptr, SharedMemSize);
-			return nullptr;
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), "The child was unexpectedly killed by signal %d", thread->signal_status());
+			throw DebuggerError(buffer);
 		}
 
 		if (thread->is_stopped() && thread->stop_status() == SIGABRT) {
-			printf("The child unexpectedly aborted: %s\n", shared_mem);
-			::munmap(ptr, SharedMemSize);
-			return nullptr;
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), "The child unexpectedly aborted: %s", shared_mem);
+			throw DebuggerError(buffer);
 		}
 
 		if (!thread->is_stopped() || thread->stop_status() != SIGTRAP) {
-			printf("The child was not stopped by SIGTRAP, but by %d\n", thread->stop_status());
-			::munmap(ptr, SharedMemSize);
-			return nullptr;
+			char buffer[1024];
+			snprintf(buffer, sizeof(buffer), "The child was not stopped by SIGTRAP, but by %d", thread->stop_status());
+			throw DebuggerError(buffer);
 		}
 
-		::munmap(ptr, SharedMemSize);
 		return process_;
 	}
 }

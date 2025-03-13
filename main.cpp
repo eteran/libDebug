@@ -1,5 +1,6 @@
 
 #include "Debugger.hpp"
+#include "DebuggerError.hpp"
 #include "Proc.hpp"
 #include "Process.hpp"
 #include "Region.hpp"
@@ -131,10 +132,12 @@ int main() {
 		nullptr,
 	};
 
+	std::shared_ptr<Process> process;
 
-	auto process = debugger->spawn("/etc/", argv);
-	if(!process) {
-		printf("Failed to spawn process\n");
+	try {
+		process = debugger->spawn("/etc/", argv);
+	} catch (const DebuggerError &e) {
+		printf("Debugger Error: %s\n", e.what());
 		return 1;
 	}
 
@@ -167,5 +170,6 @@ int main() {
 
 	printf("Done Stepping\n");
 	process->detach();
+
 #endif
 }
