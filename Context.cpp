@@ -84,9 +84,7 @@ void store_context(void *buffer, const Context *ctx, size_t n) {
 		break;
 	case sizeof(Context_x86_32):
 		assert(n >= sizeof(Context_x86_32));
-		Context_x86_32 regs32;
-		store_to_x86_32(&regs32, &ctx->regs_);
-		::memcpy(buffer, &regs32, sizeof(Context_x86_32));
+		store_to_x86_32(static_cast<Context_x86_32 *>(buffer), &ctx->regs_);
 		break;
 #endif
 	default:
