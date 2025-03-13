@@ -161,12 +161,15 @@ struct Context_x86_64 {
 static_assert(sizeof(Context_x86_64) == 216, "Context_x86_64 is messed up!");
 
 class Context {
-	friend void fill_context(Context *ctx, const void *buffer, size_t n);
 	friend void store_context(void *buffer, const Context *ctx, size_t n);
 
 public:
 	[[nodiscard]] uint64_t &register_ref(RegisterId reg);
 	[[nodiscard]] size_t type() const { return type_; }
+
+public:
+	void fill_from(const void *buffer, size_t n);
+	void store_to(void *buffer, size_t n) const;
 
 private:
 	// TODO(eteran): make this private
@@ -190,8 +193,5 @@ public:
 #else
 
 #endif
-
-void fill_context(Context *ctx, const void *buffer, size_t n);
-void store_context(void *buffer, const Context *ctx, size_t n);
 
 #endif

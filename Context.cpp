@@ -52,20 +52,26 @@ void store_to_x86_32(Context_x86_32 *ctx, const Context_x86_64 *regs) {
 
 }
 
-void fill_context(Context *ctx, const void *buffer, size_t n) {
+/**
+ * @brief fill the given context with the given buffer
+ *
+ * @param buffer the buffer to fill the context with
+ * @param n the size of the buffer
+ */
 
+void Context::fill_from(const void *buffer, size_t n) {
 	switch (n) {
 #ifdef __x86_64__
 	case sizeof(Context_x86_64):
-		::memcpy(&ctx->regs_, buffer, sizeof(Context_x86_64));
-		ctx->type_ = sizeof(Context_x86_64);
+		::memcpy(&regs_, buffer, sizeof(Context_x86_64));
+		type_ = sizeof(Context_x86_64);
 		break;
 	case sizeof(Context_x86_32):
 		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
 		Context_x86_32 regs32;
 		::memcpy(&regs32, buffer, sizeof(Context_x86_32));
-		fill_from_x86_32(&ctx->regs_, &regs32);
-		ctx->type_ = sizeof(Context_x86_32);
+		fill_from_x86_32(&regs_, &regs32);
+		type_ = sizeof(Context_x86_32);
 		break;
 #endif
 	default:
@@ -74,17 +80,22 @@ void fill_context(Context *ctx, const void *buffer, size_t n) {
 	}
 }
 
-void store_context(void *buffer, const Context *ctx, size_t n) {
-
-	switch (ctx->type_) {
+/**
+ * @brief store the context into the given buffer
+ *
+ * @param buffer the buffer to store the context into
+ * @param n the size of the buffer
+ */
+void Context::store_to(void *buffer, size_t n) const {
+	switch (type_) {
 #ifdef __x86_64__
 	case sizeof(Context_x86_64):
 		assert(n >= sizeof(Context_x86_64));
-		::memcpy(buffer, &ctx->regs_, sizeof(Context_x86_64));
+		::memcpy(buffer, &regs_, sizeof(Context_x86_64));
 		break;
 	case sizeof(Context_x86_32):
 		assert(n >= sizeof(Context_x86_32));
-		store_to_x86_32(static_cast<Context_x86_32 *>(buffer), &ctx->regs_);
+		store_to_x86_32(static_cast<Context_x86_32 *>(buffer), &regs_);
 		break;
 #endif
 	default:

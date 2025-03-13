@@ -230,7 +230,7 @@ void Thread::get_context(Context *ctx) const {
 		::exit(0);
 	}
 
-	fill_context(ctx, buffer, iov.iov_len);
+	ctx->fill_from(buffer, iov.iov_len);
 
 	// TODO(eteran): FPU
 	// TODO(eteran): SSE/SSE2/etc...
@@ -249,7 +249,7 @@ void Thread::set_context(const Context *ctx) const {
 	constexpr size_t MaxSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
 	alignas(MaxAlign) char buffer[MaxSize];
 
-	store_context(buffer, ctx, sizeof(buffer));
+	ctx->store_to(buffer, sizeof(buffer));
 
 	struct iovec iov = {buffer, ctx->type()};
 
