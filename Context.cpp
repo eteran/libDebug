@@ -15,23 +15,24 @@
  * @param ctx The x86_32 context to store the given context into.
  */
 void Context::store_to_x86_32(Context_x86_32 *ctx) const {
-	ctx->eax      = static_cast<uint32_t>(regs_.rax);
+
 	ctx->ebx      = static_cast<uint32_t>(regs_.rbx);
 	ctx->ecx      = static_cast<uint32_t>(regs_.rcx);
 	ctx->edx      = static_cast<uint32_t>(regs_.rdx);
 	ctx->esi      = static_cast<uint32_t>(regs_.rsi);
 	ctx->edi      = static_cast<uint32_t>(regs_.rdi);
 	ctx->ebp      = static_cast<uint32_t>(regs_.rbp);
-	ctx->esp      = static_cast<uint32_t>(regs_.rsp);
-	ctx->eip      = static_cast<uint32_t>(regs_.rip);
-	ctx->eflags   = static_cast<uint32_t>(regs_.eflags);
-	ctx->cs       = static_cast<uint32_t>(regs_.cs);
-	ctx->ss       = static_cast<uint32_t>(regs_.ss);
+	ctx->eax      = static_cast<uint32_t>(regs_.rax);
 	ctx->ds       = static_cast<uint32_t>(regs_.ds);
 	ctx->es       = static_cast<uint32_t>(regs_.es);
 	ctx->fs       = static_cast<uint32_t>(regs_.fs);
 	ctx->gs       = static_cast<uint32_t>(regs_.gs);
 	ctx->orig_eax = static_cast<uint32_t>(regs_.orig_rax);
+	ctx->eip      = static_cast<uint32_t>(regs_.rip);
+	ctx->cs       = static_cast<uint32_t>(regs_.cs);
+	ctx->eflags   = static_cast<uint32_t>(regs_.eflags);
+	ctx->esp      = static_cast<uint32_t>(regs_.rsp);
+	ctx->ss       = static_cast<uint32_t>(regs_.ss);
 }
 
 /**
@@ -40,23 +41,24 @@ void Context::store_to_x86_32(Context_x86_32 *ctx) const {
  * @param ctx The x86_32 context to fill the given context with.
  */
 void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
-	regs_.rax      = ctx->eax;
+
 	regs_.rbx      = ctx->ebx;
 	regs_.rcx      = ctx->ecx;
 	regs_.rdx      = ctx->edx;
 	regs_.rsi      = ctx->esi;
 	regs_.rdi      = ctx->edi;
 	regs_.rbp      = ctx->ebp;
-	regs_.rsp      = ctx->esp;
-	regs_.rip      = ctx->eip;
-	regs_.eflags   = ctx->eflags;
-	regs_.cs       = ctx->cs;
-	regs_.ss       = ctx->ss;
+	regs_.rax      = ctx->eax;
 	regs_.ds       = ctx->ds;
 	regs_.es       = ctx->es;
 	regs_.fs       = ctx->fs;
 	regs_.gs       = ctx->gs;
 	regs_.orig_rax = ctx->orig_eax;
+	regs_.rip      = ctx->eip;
+	regs_.cs       = ctx->cs;
+	regs_.eflags   = ctx->eflags;
+	regs_.rsp      = ctx->esp;
+	regs_.ss       = ctx->ss;
 }
 
 /**
@@ -67,6 +69,7 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 void Context::store_to_x86_64(Context_x86_64 *ctx) const {
 	std::memcpy(ctx, &regs_, sizeof(Context_x86_64));
 }
+
 /**
  * @brief Fill the given context with the given x86_64 context.
  *

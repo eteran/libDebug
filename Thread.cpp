@@ -225,6 +225,7 @@ void Thread::get_context(Context *ctx) const {
 	ctx->fill_from(buffer, iov.iov_len);
 
 	// TODO(eteran): FPU
+	// TODO(eteran): Debug registers
 	// TODO(eteran): SSE/SSE2/etc...
 }
 
@@ -242,12 +243,12 @@ void Thread::set_context(const Context *ctx) const {
 	ctx->store_to(buffer, sizeof(buffer));
 
 	struct iovec iov = {buffer, ctx->type()};
-
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		std::perror("ptrace(PTRACE_SETREGSET)");
 		std::exit(0);
 	}
 
 	// TODO(eteran): FPU
+	// TODO(eteran): Debug registers
 	// TODO(eteran): SSE/SSE2/etc...
 }

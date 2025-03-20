@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <memory>
 
+// TODO(eteran): make this platform agnostic.
+
 class Breakpoint {
 public:
 	enum class TypeId : int {
