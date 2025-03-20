@@ -2,6 +2,7 @@
 #ifndef CONTEXT_INTEL_HPP_
 #define CONTEXT_INTEL_HPP_
 
+#include "RegisterRef.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -11,7 +12,6 @@ enum class RegisterId {
 
 	Invalid,
 
-	ORIG_RAX,
 	ORIG_EAX,
 
 	GS,
@@ -59,6 +59,7 @@ enum class RegisterId {
 	EIP,
 
 #ifdef __x86_64__
+	ORIG_RAX,
 	RAX,
 	RBX,
 	RCX,
@@ -205,13 +206,13 @@ public:
 	static constexpr size_t BufferSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
 
 public:
-	[[nodiscard]] uint64_t &register_ref(RegisterId reg);
+	[[nodiscard]] RegisterRef get(RegisterId reg);
 	[[nodiscard]] bool is_64_bit() const { return is_64_bit_; }
 	[[nodiscard]] bool is_set() const { return is_set_; }
 
 private:
-	[[nodiscard]] uint64_t &register_ref_64(RegisterId reg);
-	[[nodiscard]] uint64_t &register_ref_32(RegisterId reg);
+	[[nodiscard]] RegisterRef get_64(RegisterId reg);
+	[[nodiscard]] RegisterRef get_32(RegisterId reg);
 
 public:
 	// TODO(eteran): make these private

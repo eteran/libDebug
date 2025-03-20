@@ -303,7 +303,7 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 	(void)reg;
 #if 0
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	uint64_t segment = ctx->register_ref(reg);
+	uint64_t segment = ctx->get(reg);
 	if (segment == 0) {
 		return 0;
 	}
@@ -332,8 +332,8 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 void Thread::get_segment_bases(Context *ctx) const {
 
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	// ctx->register_ref(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
-	ctx->register_ref(RegisterId::FS_BASE) = get_segment_base(ctx, RegisterId::FS);
+	// ctx->get(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
+	ctx->get(RegisterId::FS_BASE) = get_segment_base(ctx, RegisterId::FS);
 }
 
 /**

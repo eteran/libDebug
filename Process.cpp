@@ -84,19 +84,21 @@ constexpr bool is_trap_event(int status) {
 }
 
 void dump_context(Context *ctx) {
-	std::printf("RIP: %016lx RFL: %016lx\n", ctx->register_ref(RegisterId::RIP), ctx->register_ref(RegisterId::EFLAGS));
-	std::printf("RSP: %016lx R8 : %016lx\n", ctx->register_ref(RegisterId::RSP), ctx->register_ref(RegisterId::R8));
-	std::printf("RBP: %016lx R9 : %016lx\n", ctx->register_ref(RegisterId::RBP), ctx->register_ref(RegisterId::R9));
-	std::printf("RAX: %016lx R10: %016lx\n", ctx->register_ref(RegisterId::RAX), ctx->register_ref(RegisterId::R10));
-	std::printf("RBX: %016lx R11: %016lx\n", ctx->register_ref(RegisterId::RBX), ctx->register_ref(RegisterId::R11));
-	std::printf("RCX: %016lx R12: %016lx\n", ctx->register_ref(RegisterId::RCX), ctx->register_ref(RegisterId::R12));
-	std::printf("RDX: %016lx R13: %016lx\n", ctx->register_ref(RegisterId::RDX), ctx->register_ref(RegisterId::R13));
-	std::printf("RSI: %016lx R14: %016lx\n", ctx->register_ref(RegisterId::RSI), ctx->register_ref(RegisterId::R14));
-	std::printf("RDI: %016lx R15: %016lx\n", ctx->register_ref(RegisterId::RDI), ctx->register_ref(RegisterId::R15));
-	std::printf("CS: %016lx SS : %016lx\n", ctx->register_ref(RegisterId::CS), ctx->register_ref(RegisterId::SS));
-	std::printf("DS: %016lx ES : %016lx\n", ctx->register_ref(RegisterId::DS), ctx->register_ref(RegisterId::ES));
-	std::printf("FS: %016lx GS : %016lx\n", ctx->register_ref(RegisterId::FS), ctx->register_ref(RegisterId::GS));
-	std::printf("FS_BASE: %016lx GS_BASE: %016lx\n", ctx->register_ref(RegisterId::FS_BASE), ctx->register_ref(RegisterId::GS_BASE));
+	std::printf("RIP: %016lx RFL: %016lx\n", ctx->get(RegisterId::RIP).as<uint64_t>(), ctx->get(RegisterId::EFLAGS).as<uint64_t>());
+	std::printf("RSP: %016lx R8 : %016lx\n", ctx->get(RegisterId::RSP).as<uint64_t>(), ctx->get(RegisterId::R8).as<uint64_t>());
+	std::printf("RBP: %016lx R9 : %016lx\n", ctx->get(RegisterId::RBP).as<uint64_t>(), ctx->get(RegisterId::R9).as<uint64_t>());
+	std::printf("RAX: %016lx R10: %016lx\n", ctx->get(RegisterId::RAX).as<uint64_t>(), ctx->get(RegisterId::R10).as<uint64_t>());
+	std::printf("RBX: %016lx R11: %016lx\n", ctx->get(RegisterId::RBX).as<uint64_t>(), ctx->get(RegisterId::R11).as<uint64_t>());
+	std::printf("RCX: %016lx R12: %016lx\n", ctx->get(RegisterId::RCX).as<uint64_t>(), ctx->get(RegisterId::R12).as<uint64_t>());
+	std::printf("RDX: %016lx R13: %016lx\n", ctx->get(RegisterId::RDX).as<uint64_t>(), ctx->get(RegisterId::R13).as<uint64_t>());
+	std::printf("RSI: %016lx R14: %016lx\n", ctx->get(RegisterId::RSI).as<uint64_t>(), ctx->get(RegisterId::R14).as<uint64_t>());
+	std::printf("RDI: %016lx R15: %016lx\n", ctx->get(RegisterId::RDI).as<uint64_t>(), ctx->get(RegisterId::R15).as<uint64_t>());
+	std::printf("CS: %04x SS : %04x\n", ctx->get(RegisterId::CS).as<uint16_t>(), ctx->get(RegisterId::SS).as<uint16_t>());
+	std::printf("DS: %04x ES : %04x\n", ctx->get(RegisterId::DS).as<uint16_t>(), ctx->get(RegisterId::ES).as<uint16_t>());
+	std::printf("FS: %04x GS : %04x\n", ctx->get(RegisterId::FS).as<uint16_t>(), ctx->get(RegisterId::GS).as<uint16_t>());
+	std::printf("FS_BASE: %016lx GS_BASE: %016lx\n", ctx->get(RegisterId::FS_BASE).as<uint64_t>(), ctx->get(RegisterId::GS_BASE).as<uint64_t>());
+
+	std::printf("EIP: %08x\n", ctx->get(RegisterId::EIP).as<uint32_t>());
 }
 
 }
@@ -488,7 +490,9 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		Context ctx;
 		current_thread->get_context(&ctx);
 
-		uint64_t &ip = ctx.register_ref(RegisterId::RIP);
+		auto ip_ref = ctx.get(RegisterId::RIP);
+
+		uint64_t ip = ip_ref.as<uint64_t>();
 
 		std::printf("Stopped at: %016lx\n", ip);
 
@@ -545,12 +549,12 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 							if (bp->size() == i) {
 								std::printf("Breakpoint!\n");
-
-								ip -= i;
+								ip_ref = ip - i;
 								current_thread->set_context(&ctx);
 
 								// BREAKPOINT!
 								// TODO(eteran): report as a trap event
+								break;
 							}
 						}
 					}

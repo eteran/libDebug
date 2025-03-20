@@ -1,12 +1,6 @@
 
 #include "Context.hpp"
-
-#include <cassert>
-#include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <new>
 
 /**
  * @brief Returns a reference to the given register in a 64-bit context.
@@ -14,66 +8,87 @@
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-uint64_t &Context::register_ref_64(RegisterId reg) {
+RegisterRef Context::get_64(RegisterId reg) {
 	switch (reg) {
 #ifdef __x86_64__
+	// 64-bit registers
 	case RegisterId::R15:
-		return regs_64_.r15;
+		return make_register(regs_64_.r15);
 	case RegisterId::R14:
-		return regs_64_.r14;
+		return make_register(regs_64_.r14);
 	case RegisterId::R13:
-		return regs_64_.r13;
+		return make_register(regs_64_.r13);
 	case RegisterId::R12:
-		return regs_64_.r12;
+		return make_register(regs_64_.r12);
 	case RegisterId::RBP:
-		return regs_64_.rbp;
+		return make_register(regs_64_.rbp);
 	case RegisterId::RBX:
-		return regs_64_.rbx;
+		return make_register(regs_64_.rbx);
 	case RegisterId::R11:
-		return regs_64_.r11;
+		return make_register(regs_64_.r11);
 	case RegisterId::R10:
-		return regs_64_.r10;
+		return make_register(regs_64_.r10);
 	case RegisterId::R9:
-		return regs_64_.r9;
+		return make_register(regs_64_.r9);
 	case RegisterId::R8:
-		return regs_64_.r8;
+		return make_register(regs_64_.r8);
 	case RegisterId::RAX:
-		return regs_64_.rax;
+		return make_register(regs_64_.rax);
 	case RegisterId::RCX:
-		return regs_64_.rcx;
+		return make_register(regs_64_.rcx);
 	case RegisterId::RDX:
-		return regs_64_.rdx;
+		return make_register(regs_64_.rdx);
 	case RegisterId::RSI:
-		return regs_64_.rsi;
+		return make_register(regs_64_.rsi);
 	case RegisterId::RDI:
-		return regs_64_.rdi;
+		return make_register(regs_64_.rdi);
 	case RegisterId::ORIG_RAX:
-		return regs_64_.orig_rax;
+		return make_register(regs_64_.orig_rax);
 	case RegisterId::RIP:
-		return regs_64_.rip;
+		return make_register(regs_64_.rip);
 	case RegisterId::CS:
-		return regs_64_.cs;
+		return make_register(regs_64_.cs);
 	case RegisterId::EFLAGS:
-		return regs_64_.eflags;
+		return make_register(regs_64_.eflags);
 	case RegisterId::RSP:
-		return regs_64_.rsp;
+		return make_register(regs_64_.rsp);
 	case RegisterId::SS:
-		return regs_64_.ss;
+		return make_register(regs_64_.ss);
 	case RegisterId::FS_BASE:
-		return regs_64_.fs_base;
+		return make_register(regs_64_.fs_base);
 	case RegisterId::GS_BASE:
-		return regs_64_.gs_base;
+		return make_register(regs_64_.gs_base);
 	case RegisterId::DS:
-		return regs_64_.ds;
+		return make_register(regs_64_.ds);
 	case RegisterId::ES:
-		return regs_64_.es;
+		return make_register(regs_64_.es);
 	case RegisterId::FS:
-		return regs_64_.fs;
+		return make_register(regs_64_.fs);
 	case RegisterId::GS:
-		return regs_64_.gs;
+		return make_register(regs_64_.gs);
+
+	// 32-bit registers
+	case RegisterId::EAX:
+		return make_register(regs_64_.rax);
+	case RegisterId::ECX:
+		return make_register(regs_64_.rcx);
+	case RegisterId::EDX:
+		return make_register(regs_64_.rdx);
+	case RegisterId::ESI:
+		return make_register(regs_64_.rsi);
+	case RegisterId::EDI:
+		return make_register(regs_64_.rdi);
+	case RegisterId::ORIG_EAX:
+		return make_register(regs_64_.orig_rax);
+	case RegisterId::EIP:
+		return make_register(regs_64_.rip);
+	case RegisterId::ESP:
+		return make_register(regs_64_.rsp);
+	case RegisterId::EBP:
+		return make_register(regs_64_.rbp);
 #endif
 	default:
-		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
+		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
 		std::abort();
 	}
 }
@@ -84,50 +99,50 @@ uint64_t &Context::register_ref_64(RegisterId reg) {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-uint64_t &Context::register_ref_32(RegisterId reg) {
+RegisterRef Context::get_32(RegisterId reg) {
 	switch (reg) {
-#ifdef __i386__
+#if defined(__i386__)
 	case RegisterId::EAX:
-		return regs_32_.eax;
+		return make_register(regs_32_.eax);
 	case RegisterId::ECX:
-		return regs_32_.ecx;
+		return make_register(regs_32_.ecx);
 	case RegisterId::EDX:
-		return regs_32_.edx;
+		return make_register(regs_32_.edx);
 	case RegisterId::ESI:
-		return regs_32_.esi;
+		return make_register(regs_32_.esi);
 	case RegisterId::EDI:
-		return regs_32_.edi;
+		return make_register(regs_32_.edi);
 	case RegisterId::ORIG_EAX:
-		return regs_32_.orig_eax;
+		return make_register(regs_32_.orig_eax);
 	case RegisterId::EIP:
-		return regs_32_.eip;
+		return make_register(regs_32_.eip);
 	case RegisterId::CS:
-		return regs_32_.cs;
+		return make_register(regs_32_.cs);
 	case RegisterId::EFLAGS:
-		return regs_32_.eflags;
+		return make_register(regs_32_.eflags);
 	case RegisterId::ESP:
-		return regs_32_.esp;
+		return make_register(regs_32_.esp);
 	case RegisterId::EBP:
-		return regs_32_.ebp;
+		return make_register(regs_32_.ebp);
 	case RegisterId::SS:
-		return regs_32_.ss;
+		return make_register(regs_32_.ss);
+	case RegisterId::DS:
+		return make_register(regs_32_.ds);
+	case RegisterId::ES:
+		return make_register(regs_32_.es);
+	case RegisterId::FS:
+		return make_register(regs_32_.fs);
+	case RegisterId::GS:
+		return make_register(regs_32_.gs);
 #if 0
 	case RegisterId::FS_BASE:
-		return regs_32_.fs_base;
+		return make_register(regs_32_.fs_base);
 	case RegisterId::GS_BASE:
-		return regs_32_.gs_base;
+		return make_register(regs_32_.gs_base);
 #endif
-	case RegisterId::DS:
-		return regs_32_.ds;
-	case RegisterId::ES:
-		return regs_32_.es;
-	case RegisterId::FS:
-		return regs_32_.fs;
-	case RegisterId::GS:
-		return regs_32_.gs;
 #endif
 	default:
-		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
+		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
 		std::abort();
 	}
 }
@@ -138,11 +153,11 @@ uint64_t &Context::register_ref_32(RegisterId reg) {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-uint64_t &Context::register_ref(RegisterId reg) {
+RegisterRef Context::get(RegisterId reg) {
 
 	if (is_64_bit_) {
-		return register_ref_64(reg);
+		return get_64(reg);
 	} else {
-		return register_ref_32(reg);
+		return get_32(reg);
 	}
 }
