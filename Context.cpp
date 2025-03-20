@@ -98,29 +98,33 @@ uint64_t &Context::register_ref_32(RegisterId reg) {
 	case RegisterId::EDI:
 		return regs_32_.edi;
 	case RegisterId::ORIG_EAX:
-		return regs_64_.orig_eax;
+		return regs_32_.orig_eax;
 	case RegisterId::EIP:
 		return regs_32_.eip;
 	case RegisterId::CS:
-		return regs_64_.cs;
+		return regs_32_.cs;
 	case RegisterId::EFLAGS:
-		return regs_64_.eflags;
+		return regs_32_.eflags;
 	case RegisterId::ESP:
 		return regs_32_.esp;
+	case RegisterId::EBP:
+		return regs_32_.ebp;
 	case RegisterId::SS:
-		return regs_64_.ss;
+		return regs_32_.ss;
+#if 0
 	case RegisterId::FS_BASE:
-		return regs_64_.fs_base;
+		return regs_32_.fs_base;
 	case RegisterId::GS_BASE:
-		return regs_64_.gs_base;
+		return regs_32_.gs_base;
+#endif
 	case RegisterId::DS:
-		return regs_64_.ds;
+		return regs_32_.ds;
 	case RegisterId::ES:
-		return regs_64_.es;
+		return regs_32_.es;
 	case RegisterId::FS:
-		return regs_64_.fs;
+		return regs_32_.fs;
 	case RegisterId::GS:
-		return regs_64_.gs;
+		return regs_32_.gs;
 #endif
 	default:
 		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));

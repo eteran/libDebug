@@ -12,6 +12,7 @@ enum class RegisterId {
 	Invalid,
 
 	ORIG_RAX,
+	ORIG_EAX,
 
 	GS,
 	FS,

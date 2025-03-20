@@ -46,14 +46,6 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 
 	ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
 
-	// determine if this thread is 64-bit or 32-bit
-	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
-	struct iovec iov = {buffer, sizeof(buffer)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
-		std::exit(0);
-	}
-
 	is_64_bit_ = detect_64_bit();
 }
 
@@ -81,7 +73,15 @@ bool Thread::detect_64_bit() const {
 		std::exit(0);
 	}
 
-	return iov.iov_len == sizeof(Context_x86_64);
+	switch (iov.iov_len) {
+	case sizeof(Context_x86_32):
+		return false;
+	case sizeof(Context_x86_64):
+		return true;
+	default:
+		std::printf("Unknown iov_len: %zu\n", iov.iov_len);
+		std::abort();
+	}
 }
 
 /**
