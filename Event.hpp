@@ -9,9 +9,9 @@
 class Event {
 public:
 	enum Type {
-		Exited,           // exited normally
-		Terminated,       // terminated by event
-		Stopped,          // normal event
+		Exited,     // exited normally
+		Terminated, // terminated by event
+		Stopped,    // normal event
 		Unknown,
 	};
 

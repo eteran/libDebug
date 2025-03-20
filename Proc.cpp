@@ -38,8 +38,8 @@ private:
  *
  *
  * @tparam Callback
- * @param path Where to enumerate, typically either `/proc/` or `/proc/<pid>/task/`
- * @param callback The function to call for each numeric directory,
+ * @param path Where to enumerate, typically either `/proc/` or `/proc/<pid>/task/`.
+ * @param callback The function to call for each numeric directory,.
  * it should return false if it wants to abort enumeration
  */
 template <class Callback>

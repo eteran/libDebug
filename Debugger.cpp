@@ -92,14 +92,17 @@ std::shared_ptr<Process> Debugger::attach(pid_t pid) {
 /**
  * @brief Spawns a process and attaches to it.
  *
- * @param cwd The working directory to change to before executing the process
- * @param argv The arguments to pass to the process
- * @param envp The environment variables to pass to the process (if nullptr, the current environment is used)
+ * @param cwd The working directory to change to before executing the process.
+ * @param argv The arguments to pass to the process.
+ * @param envp The environment variables to pass to the process.
  *
  * @return The process object.
- * @note the first argument in `argv` must be the path to the executable
- * @note the environment variables are passed as a null-terminated array of strings, where each string is of the form "KEY=VALUE"
- * @throws DebuggerError if any errors occur during the process creation
+ * @note The first argument in `argv` must be the path to the executable.
+ * @note The last argument in `argv` must be nullptr.
+ * @note If envp is nullptr, the current environment is used.
+ * @note The environment variables are passed as a null-terminated array of strings, where each string is of the form "KEY=VALUE".
+ * @note The last argument in `envp` must be nullptr.
+ * @throws DebuggerError if any errors occur during the process creation.
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], const char *envp[]) {
 
@@ -156,7 +159,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	case -1:
 		return nullptr;
 	default:
-		printf("Debugging New Process: %d\n", cpid);
+		std::printf("Debugging New Process: %d\n", cpid);
 
 		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
 

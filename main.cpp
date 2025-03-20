@@ -18,11 +18,11 @@ void tracee() {
 		auto thr = std::thread([](int n) {
 			int j = 0;
 			while (true) {
-				printf("In child, doing some work [%d]...\n", n);
+				std::printf("In child, doing some work [%d]...\n", n);
 				std::this_thread::sleep_for(std::chrono::seconds(1));
 
 				if (j++ == 3 && n == 1) {
-					printf("Exiting Thread!\n");
+					std::printf("Exiting Thread!\n");
 					return;
 				}
 			}
@@ -33,7 +33,7 @@ void tracee() {
 	}
 #endif
 	while (true) {
-		printf("In child, doing some work [%d]...\n", -1);
+		std::printf("In child, doing some work [%d]...\n", -1);
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
 }
@@ -48,10 +48,10 @@ void tracer(pid_t cpid) {
 
 	while (true) {
 		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
-				printf("Debug Event!\n");
+				std::printf("Debug Event!\n");
 				return EventStatus::Stop;
 			})) {
-			printf("Timeout!\n");
+			std::printf("Timeout!\n");
 			std::exit(0);
 		}
 	}
@@ -60,9 +60,9 @@ void tracer(pid_t cpid) {
 /**
  * @brief Dumps the memory of a given process.
  *
- * @param process The process to dump memory from
- * @param address The address to start dumping from
- * @param n The number of bytes to dump
+ * @param process The process to dump memory from.
+ * @param address The address to start dumping from.
+ * @param n The number of bytes to dump.
  */
 void dump_memory(Process *process, uint64_t address, size_t n) {
 
@@ -78,7 +78,7 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 		if (remaining <= 0) {
 			remaining = process->read_memory(first, buffer, sizeof(buffer));
 			if (remaining == -1) {
-				printf("Error Reading Memory\n");
+				std::printf("Error Reading Memory\n");
 				return;
 			}
 			buffer_index = 0;
@@ -137,7 +137,7 @@ int main() {
 	try {
 		process = debugger->spawn("/etc/", argv);
 	} catch (const DebuggerError &e) {
-		printf("Debugger Error: %s\n", e.what());
+		std::printf("Debugger Error: %s\n", e.what());
 		return 1;
 	}
 
@@ -145,30 +145,30 @@ int main() {
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
 	auto regions                  = enumerate_regions(process->pid());
 	for (const auto &region : regions) {
-		printf("Region: %016lx - %016lx: %s\n", region.start(), region.end(), region.name().c_str());
+		std::printf("Region: %016lx - %016lx: %s\n", region.start(), region.end(), region.name().c_str());
 	}
 	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
 	process->resume();
 
 	for (int i = 0; i < 20; ++i) {
 		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
-				printf("Debug Event!\n");
+				std::printf("Debug Event!\n");
 
 				const uint64_t current_memory_map_hash = hash_regions(process->pid());
 				if (current_memory_map_hash != prev_memory_map_hash) {
 					prev_memory_map_hash = current_memory_map_hash;
 					regions              = enumerate_regions(process->pid());
-					printf("Memory Map Changed!\n");
+					std::printf("Memory Map Changed!\n");
 				}
 
 				return EventStatus::Stop;
 			})) {
-			printf("Timeout!\n");
+			std::printf("Timeout!\n");
 			std::exit(0);
 		}
 	}
 
-	printf("Done Stepping\n");
+	std::printf("Done Stepping\n");
 	process->detach();
 
 #endif

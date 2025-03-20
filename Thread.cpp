@@ -80,7 +80,7 @@ void Thread::detach() {
 
 /**
  * @brief Causes the thread to step one instruction. This will be
- * eventually followed by a debug event when it stops again
+ * eventually followed by a debug event when it stops again.
  */
 void Thread::step() {
 
@@ -111,7 +111,7 @@ void Thread::resume() {
 
 /**
  * @brief Causes a running thread the stop execution. This will be
- * eventually followed by a debug event when it actually stops
+ * eventually followed by a debug event when it actually stops.
  */
 void Thread::stop() const {
 

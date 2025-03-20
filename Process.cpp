@@ -39,7 +39,7 @@ struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 /**
  * @brief Waits for `timeout` milliseconds for a SIGCHLD signal.
  *
- * @param timeout How long to wait for the SIGCHLD signal in milliseconds
+ * @param timeout How long to wait for the SIGCHLD signal in milliseconds.
  * @return true if a SIGCHLD was encountered, false if a timeout occurred.
  */
 bool wait_for_sigchild(std::chrono::milliseconds timeout) {
@@ -84,15 +84,15 @@ constexpr bool is_trap_event(int status) {
 }
 
 void dump_context(Context *ctx) {
-	printf("RIP: %016lx RFL: %016lx\n", ctx->register_ref(RegisterId::RIP), ctx->register_ref(RegisterId::EFLAGS));
-	printf("RSP: %016lx R8 : %016lx\n", ctx->register_ref(RegisterId::RSP), ctx->register_ref(RegisterId::R8));
-	printf("RBP: %016lx R9 : %016lx\n", ctx->register_ref(RegisterId::RBP), ctx->register_ref(RegisterId::R9));
-	printf("RAX: %016lx R10: %016lx\n", ctx->register_ref(RegisterId::RAX), ctx->register_ref(RegisterId::R10));
-	printf("RBX: %016lx R11: %016lx\n", ctx->register_ref(RegisterId::RBX), ctx->register_ref(RegisterId::R11));
-	printf("RCX: %016lx R12: %016lx\n", ctx->register_ref(RegisterId::RCX), ctx->register_ref(RegisterId::R12));
-	printf("RDX: %016lx R13: %016lx\n", ctx->register_ref(RegisterId::RDX), ctx->register_ref(RegisterId::R13));
-	printf("RSI: %016lx R14: %016lx\n", ctx->register_ref(RegisterId::RSI), ctx->register_ref(RegisterId::R14));
-	printf("RDI: %016lx R15: %016lx\n", ctx->register_ref(RegisterId::RDI), ctx->register_ref(RegisterId::R15));
+	std::printf("RIP: %016lx RFL: %016lx\n", ctx->register_ref(RegisterId::RIP), ctx->register_ref(RegisterId::EFLAGS));
+	std::printf("RSP: %016lx R8 : %016lx\n", ctx->register_ref(RegisterId::RSP), ctx->register_ref(RegisterId::R8));
+	std::printf("RBP: %016lx R9 : %016lx\n", ctx->register_ref(RegisterId::RBP), ctx->register_ref(RegisterId::R9));
+	std::printf("RAX: %016lx R10: %016lx\n", ctx->register_ref(RegisterId::RAX), ctx->register_ref(RegisterId::R10));
+	std::printf("RBX: %016lx R11: %016lx\n", ctx->register_ref(RegisterId::RBX), ctx->register_ref(RegisterId::R11));
+	std::printf("RCX: %016lx R12: %016lx\n", ctx->register_ref(RegisterId::RCX), ctx->register_ref(RegisterId::R12));
+	std::printf("RDX: %016lx R13: %016lx\n", ctx->register_ref(RegisterId::RDX), ctx->register_ref(RegisterId::R13));
+	std::printf("RSI: %016lx R14: %016lx\n", ctx->register_ref(RegisterId::RSI), ctx->register_ref(RegisterId::R14));
+	std::printf("RDI: %016lx R15: %016lx\n", ctx->register_ref(RegisterId::RDI), ctx->register_ref(RegisterId::R15));
 }
 
 }
@@ -153,23 +153,23 @@ void Process::report() const {
 	for (auto [tid, thread] : threads_) {
 
 		if (thread->state_ == Thread::State::Running) {
-			printf("Thread: %d [RUNNING]\n", thread->tid());
+			std::printf("Thread: %d [RUNNING]\n", thread->tid());
 		} else {
 
 			if (thread->is_exited()) {
-				printf("Thread: %d [EXITED] [%d]\n", thread->tid(), thread->exit_status());
+				std::printf("Thread: %d [EXITED] [%d]\n", thread->tid(), thread->exit_status());
 			}
 
 			if (thread->is_signaled()) {
-				printf("Thread: %d [SIGNALED] [%d]\n", thread->tid(), thread->signal_status());
+				std::printf("Thread: %d [SIGNALED] [%d]\n", thread->tid(), thread->signal_status());
 			}
 
 			if (thread->is_stopped()) {
-				printf("Thread: %d [STOPPED] [%d]\n", thread->tid(), thread->stop_status());
+				std::printf("Thread: %d [STOPPED] [%d]\n", thread->tid(), thread->stop_status());
 			}
 
 			if (thread->is_continued()) {
-				printf("Thread: %d [CONTINUED]\n", thread->tid());
+				std::printf("Thread: %d [CONTINUED]\n", thread->tid());
 			}
 
 			Context ctx;
@@ -196,9 +196,9 @@ Process::~Process() {
  * @brief Given a buffer of memory, filters out any bytes that are part of a breakpoint.
  * and replaces them with the original bytes that were at that address before the breakpoint
  *
- * @param address The base address that was used to fill the buffer
- * @param buffer The buffer to filter
- * @param n The amount of bytes read into the buffer
+ * @param address The base address that was used to fill the buffer.
+ * @param buffer The buffer to filter.
+ * @param n The amount of bytes read into the buffer.
  */
 void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const {
 	for (auto &&[bp_address, bp] : breakpoints_) {
@@ -380,9 +380,10 @@ void Process::resume() {
 /**
  * @brief Stops the current active thread. If there is no current active thread,
  * one is selected at random to become the active thread from the set of currently
- * attached, running threads. NOTE: this is enough to stop the whole process if
- * desired because the event handler will stop all other threads if in "all-stop"
- * mode
+ * attached, running threads.
+ *
+ * @note This is enough to stop the whole process if desired because the event
+ * handler will stop all other threads if in "all-stop" mode.
  */
 void Process::stop() {
 
@@ -453,7 +454,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 		auto it = threads_.find(tid);
 		if (it == threads_.end()) {
-			printf("Event for untraced thread occurred...ignoring\n");
+			std::printf("Event for untraced thread occurred...ignoring\n");
 			continue;
 		}
 
@@ -485,7 +486,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 		uint64_t &ip = ctx.register_ref(RegisterId::RIP);
 
-		printf("Stopped at: %016lx\n", ip);
+		std::printf("Stopped at: %016lx\n", ip);
 
 		if (WIFSIGNALED(wstatus)) {
 			// TODO(eteran): implement
@@ -510,7 +511,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			e.status = wstatus;
 			e.type   = Event::Type::Stopped;
 
-			printf("Stopped Status: %d\n", current_thread->stop_status());
+			std::printf("Stopped Status: %d\n", current_thread->stop_status());
 
 			if (is_trap_event(wstatus)) {
 
@@ -539,7 +540,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 						if (auto bp = find_breakpoint(ip - i)) {
 
 							if (bp->size() == i) {
-								printf("Breakpoint!\n");
+								std::printf("Breakpoint!\n");
 
 								ip -= i;
 								current_thread->set_context(&ctx);
@@ -552,7 +553,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				}
 			} else {
 				if (auto bp = find_breakpoint(ip)) {
-					printf("Alt-Breakpoint!\n");
+					std::printf("Alt-Breakpoint!\n");
 					// NOTE(eteran): no need to rewind here because the instructure used for the BP
 					// didn't advance the instruction pointer
 
@@ -579,7 +580,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 /**
  * @brief Adds a breakpoint to the process.
  *
- * @param address The address to add the breakpoint at
+ * @param address The address to add the breakpoint at.
  */
 void Process::add_breakpoint(uint64_t address) {
 	auto bp = std::make_shared<Breakpoint>(this, address);
@@ -589,7 +590,7 @@ void Process::add_breakpoint(uint64_t address) {
 /**
  * @brief Removes a breakpoint from the process.
  *
- * @param address The address to remove the breakpoint from
+ * @param address The address to remove the breakpoint from.
  */
 void Process::remove_breakpoint(uint64_t address) {
 	breakpoints_.erase(address);

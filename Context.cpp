@@ -62,7 +62,7 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 /**
  * @brief Store the given context into the given x86_64 context.
  *
- * @param ctx The x86_64 context to store the given context into
+ * @param ctx The x86_64 context to store the given context into.
  */
 void Context::store_to_x86_64(Context_x86_64 *ctx) const {
 	std::memcpy(ctx, &regs_, sizeof(Context_x86_64));
@@ -70,7 +70,7 @@ void Context::store_to_x86_64(Context_x86_64 *ctx) const {
 /**
  * @brief Fill the given context with the given x86_64 context.
  *
- * @param ctx The x86_64 context to fill the given context with
+ * @param ctx The x86_64 context to fill the given context with.
  */
 void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
 	std::memcpy(&regs_, ctx, sizeof(Context_x86_64));
@@ -80,8 +80,8 @@ void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
 /**
  * @brief Fill the given context with the given buffer.
  *
- * @param buffer The buffer to fill the context with
- * @param n The size of the buffer
+ * @param buffer The buffer to fill the context with.
+ * @param n The size of the buffer.
  */
 
 void Context::fill_from(const void *buffer, size_t n) {
@@ -101,7 +101,7 @@ void Context::fill_from(const void *buffer, size_t n) {
 	}
 #endif
 	default:
-		printf("Unknown Context Size: %zu\n", n);
+		std::printf("Unknown Context Size: %zu\n", n);
 		break;
 	}
 }
@@ -109,8 +109,8 @@ void Context::fill_from(const void *buffer, size_t n) {
 /**
  * @brief Store the context into the given buffer.
  *
- * @param buffer The buffer to store the context into
- * @param n The size of the buffer
+ * @param buffer The buffer to store the context into.
+ * @param n The size of the buffer.
  */
 void Context::store_to(void *buffer, size_t n) const {
 	switch (type_) {
@@ -129,7 +129,7 @@ void Context::store_to(void *buffer, size_t n) const {
 	}
 #endif
 	default:
-		printf("Unknown Context Size: %zu\n", n);
+		std::printf("Unknown Context Size: %zu\n", n);
 		break;
 	}
 }
@@ -199,7 +199,7 @@ uint64_t &Context::register_ref(RegisterId reg) {
 		return regs_.gs;
 #endif
 	default:
-		printf("Unknown Register: %d\n", static_cast<int>(reg));
+		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
 		std::abort();
 	}
 }
