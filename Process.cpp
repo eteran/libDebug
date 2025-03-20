@@ -9,6 +9,7 @@
 #include <cassert>
 #include <cerrno>
 #include <chrono>
+#include <cinttypes>
 #include <climits>
 #include <csignal>
 #include <cstdio>
@@ -31,8 +32,8 @@ namespace {
  */
 struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 	struct timespec ts;
-	ts.tv_sec  = (msecs.count() / 1000);
-	ts.tv_nsec = (msecs.count() % 1000) * 1000000;
+	ts.tv_sec  = static_cast<time_t>(msecs.count() / 1000);
+	ts.tv_nsec = static_cast<long>((msecs.count() % 1000) * 1000000);
 	return ts;
 }
 
@@ -84,21 +85,32 @@ constexpr bool is_trap_event(int status) {
 }
 
 void dump_context(Context *ctx) {
-	std::printf("RIP: %016lx RFL: %016lx\n", ctx->get(RegisterId::RIP).as<uint64_t>(), ctx->get(RegisterId::EFLAGS).as<uint64_t>());
-	std::printf("RSP: %016lx R8 : %016lx\n", ctx->get(RegisterId::RSP).as<uint64_t>(), ctx->get(RegisterId::R8).as<uint64_t>());
-	std::printf("RBP: %016lx R9 : %016lx\n", ctx->get(RegisterId::RBP).as<uint64_t>(), ctx->get(RegisterId::R9).as<uint64_t>());
-	std::printf("RAX: %016lx R10: %016lx\n", ctx->get(RegisterId::RAX).as<uint64_t>(), ctx->get(RegisterId::R10).as<uint64_t>());
-	std::printf("RBX: %016lx R11: %016lx\n", ctx->get(RegisterId::RBX).as<uint64_t>(), ctx->get(RegisterId::R11).as<uint64_t>());
-	std::printf("RCX: %016lx R12: %016lx\n", ctx->get(RegisterId::RCX).as<uint64_t>(), ctx->get(RegisterId::R12).as<uint64_t>());
-	std::printf("RDX: %016lx R13: %016lx\n", ctx->get(RegisterId::RDX).as<uint64_t>(), ctx->get(RegisterId::R13).as<uint64_t>());
-	std::printf("RSI: %016lx R14: %016lx\n", ctx->get(RegisterId::RSI).as<uint64_t>(), ctx->get(RegisterId::R14).as<uint64_t>());
-	std::printf("RDI: %016lx R15: %016lx\n", ctx->get(RegisterId::RDI).as<uint64_t>(), ctx->get(RegisterId::R15).as<uint64_t>());
+#ifdef __x86_64__
+	std::printf("RIP: %016" PRIx64 " RFL: %016" PRIx64 "\n", ctx->get(RegisterId::RIP).as<uint64_t>(), ctx->get(RegisterId::EFLAGS).as<uint64_t>());
+	std::printf("RSP: %016" PRIx64 " R8 : %016" PRIx64 "\n", ctx->get(RegisterId::RSP).as<uint64_t>(), ctx->get(RegisterId::R8).as<uint64_t>());
+	std::printf("RBP: %016" PRIx64 " R9 : %016" PRIx64 "\n", ctx->get(RegisterId::RBP).as<uint64_t>(), ctx->get(RegisterId::R9).as<uint64_t>());
+	std::printf("RAX: %016" PRIx64 " R10: %016" PRIx64 "\n", ctx->get(RegisterId::RAX).as<uint64_t>(), ctx->get(RegisterId::R10).as<uint64_t>());
+	std::printf("RBX: %016" PRIx64 " R11: %016" PRIx64 "\n", ctx->get(RegisterId::RBX).as<uint64_t>(), ctx->get(RegisterId::R11).as<uint64_t>());
+	std::printf("RCX: %016" PRIx64 " R12: %016" PRIx64 "\n", ctx->get(RegisterId::RCX).as<uint64_t>(), ctx->get(RegisterId::R12).as<uint64_t>());
+	std::printf("RDX: %016" PRIx64 " R13: %016" PRIx64 "\n", ctx->get(RegisterId::RDX).as<uint64_t>(), ctx->get(RegisterId::R13).as<uint64_t>());
+	std::printf("RSI: %016" PRIx64 " R14: %016" PRIx64 "\n", ctx->get(RegisterId::RSI).as<uint64_t>(), ctx->get(RegisterId::R14).as<uint64_t>());
+	std::printf("RDI: %016" PRIx64 " R15: %016" PRIx64 "\n", ctx->get(RegisterId::RDI).as<uint64_t>(), ctx->get(RegisterId::R15).as<uint64_t>());
 	std::printf("CS: %04x SS : %04x\n", ctx->get(RegisterId::CS).as<uint16_t>(), ctx->get(RegisterId::SS).as<uint16_t>());
 	std::printf("DS: %04x ES : %04x\n", ctx->get(RegisterId::DS).as<uint16_t>(), ctx->get(RegisterId::ES).as<uint16_t>());
 	std::printf("FS: %04x GS : %04x\n", ctx->get(RegisterId::FS).as<uint16_t>(), ctx->get(RegisterId::GS).as<uint16_t>());
-	std::printf("FS_BASE: %016lx GS_BASE: %016lx\n", ctx->get(RegisterId::FS_BASE).as<uint64_t>(), ctx->get(RegisterId::GS_BASE).as<uint64_t>());
+	std::printf("FS_BASE:  %016" PRIx64 " GS_BASE : %016" PRIx64 "\n", ctx->get(RegisterId::FS_BASE).as<uint64_t>(), ctx->get(RegisterId::GS_BASE).as<uint64_t>());
+#else
+	std::printf("EIP: %08x EFL: %08x\n", ctx->get(RegisterId::EIP).as<uint32_t>(), ctx->get(RegisterId::EFLAGS).as<uint32_t>());
+	std::printf("ESP: %08x EBP: %08x\n", ctx->get(RegisterId::ESP).as<uint32_t>(), ctx->get(RegisterId::EBP).as<uint32_t>());
+	std::printf("EAX: %08x EBX: %08x\n", ctx->get(RegisterId::EAX).as<uint32_t>(), ctx->get(RegisterId::EBX).as<uint32_t>());
+	std::printf("ECX: %08x EDX: %08x\n", ctx->get(RegisterId::ECX).as<uint32_t>(), ctx->get(RegisterId::EDX).as<uint32_t>());
+	std::printf("ESI: %08x EDI: %08x\n", ctx->get(RegisterId::ESI).as<uint32_t>(), ctx->get(RegisterId::EDI).as<uint32_t>());
 
-	std::printf("EIP: %08x\n", ctx->get(RegisterId::EIP).as<uint32_t>());
+	std::printf("CS: %04x SS : %04x\n", ctx->get(RegisterId::CS).as<uint16_t>(), ctx->get(RegisterId::SS).as<uint16_t>());
+	std::printf("DS: %04x ES : %04x\n", ctx->get(RegisterId::DS).as<uint16_t>(), ctx->get(RegisterId::ES).as<uint16_t>());
+	std::printf("FS: %04x GS : %04x\n", ctx->get(RegisterId::FS).as<uint16_t>(), ctx->get(RegisterId::GS).as<uint16_t>());
+	std::printf("FS_BASE: %08x GS_BASE: %08x\n", ctx->get(RegisterId::FS_BASE).as<uint32_t>(), ctx->get(RegisterId::GS_BASE).as<uint32_t>());
+#endif
 }
 
 }
@@ -490,11 +502,11 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		Context ctx;
 		current_thread->get_context(&ctx);
 
-		auto ip_ref = ctx.get(RegisterId::RIP);
+		auto ip_ref = ctx.get(RegisterId::EIP);
 
 		uint64_t ip = ip_ref.as<uint64_t>();
 
-		std::printf("Stopped at: %016lx\n", ip);
+		std::printf("Stopped at: %016" PRIx64 "\n", ip);
 
 		if (WIFSIGNALED(wstatus)) {
 			// TODO(eteran): implement
@@ -507,7 +519,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		}
 
 		if (WIFSTOPPED(wstatus)) {
-
 			if (first_stop) {
 				active_thread_ = current_thread;
 				first_stop     = false;

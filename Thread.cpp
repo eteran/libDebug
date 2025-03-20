@@ -75,8 +75,10 @@ bool Thread::detect_64_bit() const {
 
 	switch (iov.iov_len) {
 	case sizeof(Context_x86_32):
+		printf("Is 32-bit\n");
 		return false;
 	case sizeof(Context_x86_64):
+		printf("Is 64-bit\n");
 		return true;
 	default:
 		std::printf("Unknown iov_len: %zu\n", iov.iov_len);
@@ -286,9 +288,14 @@ void Thread::get_xstate(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers(Context *ctx) const {
-	for (int n = 0; n < 8; ++n) {
-		ctx->debug_regs_[n] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[n]), 0L));
-	}
+	ctx->debug_regs_[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+	ctx->debug_regs_[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+	ctx->debug_regs_[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+	ctx->debug_regs_[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+	ctx->debug_regs_[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+	ctx->debug_regs_[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+	ctx->debug_regs_[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+	ctx->debug_regs_[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
 }
 
 /**

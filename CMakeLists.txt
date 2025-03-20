@@ -61,6 +61,7 @@ set_target_properties(Debug
 PROPERTIES
     CXX_STANDARD 17
     CXX_EXTENSIONS OFF
+    #COMPILE_OPTIONS "-m32" LINK_FLAGS "-m32"
 )
 
 target_compile_options(Debug
@@ -93,6 +94,7 @@ set_target_properties(Debugger
 PROPERTIES
     CXX_STANDARD 17
     CXX_EXTENSIONS OFF
+    #COMPILE_OPTIONS "-m32" LINK_FLAGS "-m32"
 )
 
 target_compile_options(Debugger

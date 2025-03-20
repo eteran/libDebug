@@ -58,7 +58,6 @@ enum class RegisterId {
 	SP,
 	EIP,
 
-#ifdef __x86_64__
 	ORIG_RAX,
 	RAX,
 	RBX,
@@ -105,7 +104,7 @@ enum class RegisterId {
 	R15D,
 	R15W,
 	R15B,
-#endif
+
 };
 
 // Reflects user_regs_struct in sys/user.h.

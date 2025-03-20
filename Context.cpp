@@ -10,7 +10,6 @@
  */
 RegisterRef Context::get_64(RegisterId reg) {
 	switch (reg) {
-#ifdef __x86_64__
 	// 64-bit registers
 	case RegisterId::R15:
 		return make_register(regs_64_.r15);
@@ -70,6 +69,8 @@ RegisterRef Context::get_64(RegisterId reg) {
 	// 32-bit registers
 	case RegisterId::EAX:
 		return make_register(regs_64_.rax);
+	case RegisterId::EBX:
+		return make_register(regs_64_.rbx);
 	case RegisterId::ECX:
 		return make_register(regs_64_.rcx);
 	case RegisterId::EDX:
@@ -86,10 +87,9 @@ RegisterRef Context::get_64(RegisterId reg) {
 		return make_register(regs_64_.rsp);
 	case RegisterId::EBP:
 		return make_register(regs_64_.rbp);
-#endif
 	default:
-		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
-		std::abort();
+		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
+		return RegisterRef();
 	}
 }
 
@@ -101,9 +101,10 @@ RegisterRef Context::get_64(RegisterId reg) {
  */
 RegisterRef Context::get_32(RegisterId reg) {
 	switch (reg) {
-#if defined(__i386__)
 	case RegisterId::EAX:
 		return make_register(regs_32_.eax);
+	case RegisterId::EBX:
+		return make_register(regs_32_.ebx);
 	case RegisterId::ECX:
 		return make_register(regs_32_.ecx);
 	case RegisterId::EDX:
@@ -140,10 +141,9 @@ RegisterRef Context::get_32(RegisterId reg) {
 	case RegisterId::GS_BASE:
 		return make_register(regs_32_.gs_base);
 #endif
-#endif
 	default:
-		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
-		std::abort();
+		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
+		return RegisterRef();
 	}
 }
 

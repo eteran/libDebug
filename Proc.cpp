@@ -3,6 +3,7 @@
 #include "Region.hpp"
 
 #include <cerrno>
+#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -173,7 +174,8 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		// address           perms offset  dev   inode       pathname
 		// 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
 
-		if (std::sscanf(line, "%lx-%lx %s %lx %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
+		//  PRIx32
+		if (std::sscanf(line, "%" PRIx64 "-%" PRIx64 " %s %" PRIx64 " %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
 #if 0
 			if (std::strchr(name, 'r')) permissions |= Region::Read;
 			if (std::strchr(name, 'w')) permissions |= Region::Write;

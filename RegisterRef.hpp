@@ -2,6 +2,7 @@
 #ifndef REGISTER_REF_HPP_
 #define REGISTER_REF_HPP_
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -10,9 +11,10 @@
 
 class RegisterRef {
 public:
-	RegisterRef(void *ptr, size_t size)
+	explicit RegisterRef(void *ptr, size_t size)
 		: ptr_(ptr), size_(size) {}
 
+	RegisterRef()                               = default;
 	RegisterRef(const RegisterRef &)            = default;
 	RegisterRef &operator=(const RegisterRef &) = default;
 	RegisterRef(RegisterRef &&)                 = default;
@@ -29,15 +31,16 @@ public:
 public:
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	Integer as() const {
-		assert(size_ >= sizeof(Integer));
 		Integer value;
-		std::memcpy(&value, ptr_, sizeof(Integer));
+		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
 		return value;
 	}
 
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	RegisterRef &operator=(Integer value) {
 		assert(size_ >= sizeof(Integer));
+		// NOTE(eteran): effectively zero-extend the value to the size of the register
+		std::memset(ptr_, 0, size_);
 		std::memcpy(ptr_, &value, sizeof(Integer));
 		return *this;
 	}

@@ -7,6 +7,7 @@
 #include "Thread.hpp"
 
 #include <cctype>
+#include <cinttypes>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -66,11 +67,11 @@ void tracer(pid_t cpid) {
  */
 void dump_memory(Process *process, uint64_t address, size_t n) {
 
-	uint64_t first            = address;
-	const uint64_t last       = address + n;
-	int64_t remaining         = 0;
-	size_t buffer_index       = 0;
-	constexpr size_t StepSize = 16;
+	uint64_t first             = address;
+	const uint64_t last        = address + n;
+	int64_t remaining          = 0;
+	int64_t buffer_index       = 0;
+	constexpr int64_t StepSize = 16;
 
 	uint8_t buffer[4096] = {};
 
@@ -84,14 +85,14 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 			buffer_index = 0;
 		}
 
-		const size_t line_end = std::min(StepSize, last - first);
+		const int64_t line_end = std::min(StepSize, static_cast<int64_t>(last - first));
 
-		std::printf("%016lx: ", first);
-		for (size_t i = 0; i < line_end; ++i) {
+		std::printf("%016" PRIx64 ": ", first);
+		for (int64_t i = 0; i < line_end; ++i) {
 			std::printf("%02x ", buffer[buffer_index + i]);
 		}
 
-		for (size_t i = 0; i < line_end; ++i) {
+		for (int64_t i = 0; i < line_end; ++i) {
 			const uint8_t ch = buffer[buffer_index + i];
 			std::printf("%c", std::isprint(ch) ? ch : '.');
 		}
@@ -145,7 +146,7 @@ int main() {
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
 	auto regions                  = enumerate_regions(process->pid());
 	for (const auto &region : regions) {
-		std::printf("Region: %016lx - %016lx: %s\n", region.start(), region.end(), region.name().c_str());
+		std::printf("Region: %016" PRIx64 " - %016" PRIx64 ": %s\n", region.start(), region.end(), region.name().c_str());
 	}
 	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
 	process->resume();
