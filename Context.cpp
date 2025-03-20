@@ -8,132 +8,123 @@
 #include <cstring>
 #include <new>
 
+/**
+ * @brief Returns a reference to the given register in a 64-bit context.
+ *
+ * @param reg The register to return a reference to.
+ * @return A reference to the given register.
+ */
+uint64_t &Context::register_ref_64(RegisterId reg) {
+	switch (reg) {
 #ifdef __x86_64__
-/**
- * @brief Store the given context into the given x86_32 context.
- *
- * @param ctx The x86_32 context to store the given context into.
- */
-void Context::store_to_x86_32(Context_x86_32 *ctx) const {
-
-	ctx->ebx      = static_cast<uint32_t>(regs_.rbx);
-	ctx->ecx      = static_cast<uint32_t>(regs_.rcx);
-	ctx->edx      = static_cast<uint32_t>(regs_.rdx);
-	ctx->esi      = static_cast<uint32_t>(regs_.rsi);
-	ctx->edi      = static_cast<uint32_t>(regs_.rdi);
-	ctx->ebp      = static_cast<uint32_t>(regs_.rbp);
-	ctx->eax      = static_cast<uint32_t>(regs_.rax);
-	ctx->ds       = static_cast<uint32_t>(regs_.ds);
-	ctx->es       = static_cast<uint32_t>(regs_.es);
-	ctx->fs       = static_cast<uint32_t>(regs_.fs);
-	ctx->gs       = static_cast<uint32_t>(regs_.gs);
-	ctx->orig_eax = static_cast<uint32_t>(regs_.orig_rax);
-	ctx->eip      = static_cast<uint32_t>(regs_.rip);
-	ctx->cs       = static_cast<uint32_t>(regs_.cs);
-	ctx->eflags   = static_cast<uint32_t>(regs_.eflags);
-	ctx->esp      = static_cast<uint32_t>(regs_.rsp);
-	ctx->ss       = static_cast<uint32_t>(regs_.ss);
-}
-
-/**
- * @brief Fill the given context with the given x86_32 context.
- *
- * @param ctx The x86_32 context to fill the given context with.
- */
-void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
-
-	regs_.rbx      = ctx->ebx;
-	regs_.rcx      = ctx->ecx;
-	regs_.rdx      = ctx->edx;
-	regs_.rsi      = ctx->esi;
-	regs_.rdi      = ctx->edi;
-	regs_.rbp      = ctx->ebp;
-	regs_.rax      = ctx->eax;
-	regs_.ds       = ctx->ds;
-	regs_.es       = ctx->es;
-	regs_.fs       = ctx->fs;
-	regs_.gs       = ctx->gs;
-	regs_.orig_rax = ctx->orig_eax;
-	regs_.rip      = ctx->eip;
-	regs_.cs       = ctx->cs;
-	regs_.eflags   = ctx->eflags;
-	regs_.rsp      = ctx->esp;
-	regs_.ss       = ctx->ss;
-}
-
-/**
- * @brief Store the given context into the given x86_64 context.
- *
- * @param ctx The x86_64 context to store the given context into.
- */
-void Context::store_to_x86_64(Context_x86_64 *ctx) const {
-	std::memcpy(ctx, &regs_, sizeof(Context_x86_64));
-}
-
-/**
- * @brief Fill the given context with the given x86_64 context.
- *
- * @param ctx The x86_64 context to fill the given context with.
- */
-void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
-	std::memcpy(&regs_, ctx, sizeof(Context_x86_64));
-}
-#endif
-
-/**
- * @brief Fill the given context with the given buffer.
- *
- * @param buffer The buffer to fill the context with.
- * @param n The size of the buffer.
- */
-
-void Context::fill_from(const void *buffer, size_t n) {
-	switch (n) {
-#ifdef __x86_64__
-	case sizeof(Context_x86_64): {
-		auto ptr = std::launder(reinterpret_cast<const Context_x86_64 *>(buffer));
-		fill_from_x86_64(ptr);
-		type_ = sizeof(Context_x86_64);
-		break;
-	}
-	case sizeof(Context_x86_32): {
-		auto ptr = std::launder(reinterpret_cast<const Context_x86_32 *>(buffer));
-		fill_from_x86_32(ptr);
-		type_ = sizeof(Context_x86_32);
-		break;
-	}
+	case RegisterId::R15:
+		return regs_64_.r15;
+	case RegisterId::R14:
+		return regs_64_.r14;
+	case RegisterId::R13:
+		return regs_64_.r13;
+	case RegisterId::R12:
+		return regs_64_.r12;
+	case RegisterId::RBP:
+		return regs_64_.rbp;
+	case RegisterId::RBX:
+		return regs_64_.rbx;
+	case RegisterId::R11:
+		return regs_64_.r11;
+	case RegisterId::R10:
+		return regs_64_.r10;
+	case RegisterId::R9:
+		return regs_64_.r9;
+	case RegisterId::R8:
+		return regs_64_.r8;
+	case RegisterId::RAX:
+		return regs_64_.rax;
+	case RegisterId::RCX:
+		return regs_64_.rcx;
+	case RegisterId::RDX:
+		return regs_64_.rdx;
+	case RegisterId::RSI:
+		return regs_64_.rsi;
+	case RegisterId::RDI:
+		return regs_64_.rdi;
+	case RegisterId::ORIG_RAX:
+		return regs_64_.orig_rax;
+	case RegisterId::RIP:
+		return regs_64_.rip;
+	case RegisterId::CS:
+		return regs_64_.cs;
+	case RegisterId::EFLAGS:
+		return regs_64_.eflags;
+	case RegisterId::RSP:
+		return regs_64_.rsp;
+	case RegisterId::SS:
+		return regs_64_.ss;
+	case RegisterId::FS_BASE:
+		return regs_64_.fs_base;
+	case RegisterId::GS_BASE:
+		return regs_64_.gs_base;
+	case RegisterId::DS:
+		return regs_64_.ds;
+	case RegisterId::ES:
+		return regs_64_.es;
+	case RegisterId::FS:
+		return regs_64_.fs;
+	case RegisterId::GS:
+		return regs_64_.gs;
 #endif
 	default:
-		std::printf("Unknown Context Size: %zu\n", n);
-		break;
+		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
+		std::abort();
 	}
 }
 
 /**
- * @brief Store the context into the given buffer.
+ * @brief Returns a reference to the given register in a 32-bit context.
  *
- * @param buffer The buffer to store the context into.
- * @param n The size of the buffer.
+ * @param reg The register to return a reference to.
+ * @return A reference to the given register.
  */
-void Context::store_to(void *buffer, size_t n) const {
-	switch (type_) {
-#ifdef __x86_64__
-	case sizeof(Context_x86_64): {
-		assert(n >= sizeof(Context_x86_64));
-		auto ptr = std::launder(reinterpret_cast<Context_x86_64 *>(buffer));
-		store_to_x86_64(ptr);
-		break;
-	}
-	case sizeof(Context_x86_32): {
-		assert(n >= sizeof(Context_x86_32));
-		auto ptr = std::launder(reinterpret_cast<Context_x86_32 *>(buffer));
-		store_to_x86_32(ptr);
-		break;
-	}
+uint64_t &Context::register_ref_32(RegisterId reg) {
+	switch (reg) {
+#ifdef __i386__
+	case RegisterId::EAX:
+		return regs_32_.eax;
+	case RegisterId::ECX:
+		return regs_32_.ecx;
+	case RegisterId::EDX:
+		return regs_32_.edx;
+	case RegisterId::ESI:
+		return regs_32_.esi;
+	case RegisterId::EDI:
+		return regs_32_.edi;
+	case RegisterId::ORIG_EAX:
+		return regs_64_.orig_eax;
+	case RegisterId::EIP:
+		return regs_32_.eip;
+	case RegisterId::CS:
+		return regs_64_.cs;
+	case RegisterId::EFLAGS:
+		return regs_64_.eflags;
+	case RegisterId::ESP:
+		return regs_32_.esp;
+	case RegisterId::SS:
+		return regs_64_.ss;
+	case RegisterId::FS_BASE:
+		return regs_64_.fs_base;
+	case RegisterId::GS_BASE:
+		return regs_64_.gs_base;
+	case RegisterId::DS:
+		return regs_64_.ds;
+	case RegisterId::ES:
+		return regs_64_.es;
+	case RegisterId::FS:
+		return regs_64_.fs;
+	case RegisterId::GS:
+		return regs_64_.gs;
 #endif
 	default:
-		std::printf("Unknown Context Size: %zu\n", n);
-		break;
+		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
+		std::abort();
 	}
 }
 
@@ -144,65 +135,10 @@ void Context::store_to(void *buffer, size_t n) const {
  * @return A reference to the given register.
  */
 uint64_t &Context::register_ref(RegisterId reg) {
-	switch (reg) {
-#ifdef __x86_64__
-	case RegisterId::R15:
-		return regs_.r15;
-	case RegisterId::R14:
-		return regs_.r14;
-	case RegisterId::R13:
-		return regs_.r13;
-	case RegisterId::R12:
-		return regs_.r12;
-	case RegisterId::RBP:
-		return regs_.rbp;
-	case RegisterId::RBX:
-		return regs_.rbx;
-	case RegisterId::R11:
-		return regs_.r11;
-	case RegisterId::R10:
-		return regs_.r10;
-	case RegisterId::R9:
-		return regs_.r9;
-	case RegisterId::R8:
-		return regs_.r8;
-	case RegisterId::RAX:
-		return regs_.rax;
-	case RegisterId::RCX:
-		return regs_.rcx;
-	case RegisterId::RDX:
-		return regs_.rdx;
-	case RegisterId::RSI:
-		return regs_.rsi;
-	case RegisterId::RDI:
-		return regs_.rdi;
-	case RegisterId::ORIG_RAX:
-		return regs_.orig_rax;
-	case RegisterId::RIP:
-		return regs_.rip;
-	case RegisterId::CS:
-		return regs_.cs;
-	case RegisterId::EFLAGS:
-		return regs_.eflags;
-	case RegisterId::RSP:
-		return regs_.rsp;
-	case RegisterId::SS:
-		return regs_.ss;
-	case RegisterId::FS_BASE:
-		return regs_.fs_base;
-	case RegisterId::GS_BASE:
-		return regs_.gs_base;
-	case RegisterId::DS:
-		return regs_.ds;
-	case RegisterId::ES:
-		return regs_.es;
-	case RegisterId::FS:
-		return regs_.fs;
-	case RegisterId::GS:
-		return regs_.gs;
-#endif
-	default:
-		std::printf("Unknown Register: %d\n", static_cast<int>(reg));
-		std::abort();
+
+	if (is_64_bit_) {
+		return register_ref_64(reg);
+	} else {
+		return register_ref_32(reg);
 	}
 }

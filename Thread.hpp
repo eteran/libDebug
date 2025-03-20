@@ -64,12 +64,14 @@ private:
 	void set_segment_bases(const Context *ctx) const;
 	uint64_t get_segment_base(Context *ctx, RegisterId reg) const;
 	void set_segment_base(const Context *ctx, RegisterId reg, uint64_t base);
+	bool detect_64_bit() const;
 
 private:
-	pid_t pid_   = 0;
-	pid_t tid_   = 0;
-	int wstatus_ = 0;
-	State state_ = State::Running;
+	pid_t pid_      = 0;
+	pid_t tid_      = 0;
+	int wstatus_    = 0;
+	State state_    = State::Running;
+	bool is_64_bit_ = false;
 };
 
 #endif

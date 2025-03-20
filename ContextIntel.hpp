@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 enum class RegisterId {
 
@@ -105,6 +106,7 @@ enum class RegisterId {
 #endif
 };
 
+// Reflects user_regs_struct in sys/user.h.
 struct Context_x86_32 {
 	uint32_t ebx;
 	uint32_t ecx;
@@ -126,7 +128,26 @@ struct Context_x86_32 {
 };
 
 static_assert(sizeof(Context_x86_32) == 68, "Context_x86_32 is messed up!");
+static_assert(std::is_standard_layout<Context_x86_32>::value, "Not standard layout");
 
+// Reflects user_fpxregs_struct in sys/user.h
+struct Context_x86_32_xstate {
+	uint16_t cwd;
+	uint16_t swd;
+	uint16_t twd;
+	uint16_t fop;
+	uint32_t fip;
+	uint32_t fcs;
+	uint32_t foo;
+	uint32_t fos;
+	uint32_t mxcsr;
+	uint32_t reserved;
+	uint32_t st_space[32];
+	uint32_t xmm_space[32];
+	uint32_t padding[56];
+};
+
+// Reflects user_regs_struct in sys/user.h.
 struct Context_x86_64 {
 	uint64_t r15;
 	uint64_t r14;
@@ -158,34 +179,55 @@ struct Context_x86_64 {
 };
 
 static_assert(sizeof(Context_x86_64) == 216, "Context_x86_64 is messed up!");
+static_assert(std::is_standard_layout<Context_x86_64>::value, "Not standard layout");
+
+// Reflects user_fpregs_struct in sys/user.h
+struct Context_x86_64_xstate {
+	uint16_t cwd;
+	uint16_t swd;
+	uint16_t ftw;
+	uint16_t fop;
+	uint64_t rip;
+	uint64_t rdp;
+	uint32_t mxcsr;
+	uint32_t mxcr_mask;
+	uint32_t st_space[32];
+	uint32_t xmm_space[64];
+	uint32_t padding[24];
+};
 
 class Context {
+	friend class Thread;
+
 public:
 	static constexpr size_t BufferAlign = std::max(alignof(Context_x86_64), alignof(Context_x86_32));
 	static constexpr size_t BufferSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
 
 public:
 	[[nodiscard]] uint64_t &register_ref(RegisterId reg);
-	[[nodiscard]] size_t type() const { return type_; }
-
-public:
-	void fill_from(const void *buffer, size_t n);
-	void store_to(void *buffer, size_t n) const;
-
-
+	[[nodiscard]] bool is_64_bit() const { return is_64_bit_; }
+	[[nodiscard]] bool is_set() const { return is_set_; }
 
 private:
-	void store_to_x86_32(Context_x86_32 *ctx) const;
-	void store_to_x86_64(Context_x86_64 *ctx) const;
-	void fill_from_x86_32(const Context_x86_32 *ctx);
-	void fill_from_x86_64(const Context_x86_64 *ctx);
+	[[nodiscard]] uint64_t &register_ref_64(RegisterId reg);
+	[[nodiscard]] uint64_t &register_ref_32(RegisterId reg);
 
 public:
 	// TODO(eteran): make these private
 	// NOTE(eteran): normalizing on x86-64 for simplicity
-	Context_x86_64 regs_    = {};
+	union {
+		Context_x86_64 regs_64_;
+		Context_x86_32 regs_32_;
+	};
+
+	union {
+		Context_x86_64_xstate xstate_64_;
+		Context_x86_32_xstate xstate_32_;
+	};
+
 	uint64_t debug_regs_[8] = {};
-	size_t type_            = sizeof(Context_x86_64);
+	bool is_64_bit_         = false;
+	bool is_set_            = false;
 };
 
 #endif

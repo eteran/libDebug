@@ -45,6 +45,16 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	}
 
 	ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
+
+	// determine if this thread is 64-bit or 32-bit
+	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
+	struct iovec iov = {buffer, sizeof(buffer)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
+	}
+
+	is_64_bit_ = detect_64_bit();
 }
 
 /**
@@ -52,6 +62,26 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
  */
 Thread::~Thread() {
 	detach();
+}
+
+/**
+ * @brief Detects if the thread is 64-bit or 32-bit.
+ *
+ * @return true if the thread is 64-bit, false otherwise.
+ */
+bool Thread::detect_64_bit() const {
+
+	assert(state_ == State::Stopped);
+
+	// determine if this thread is 64-bit or 32-bit
+	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
+	struct iovec iov = {buffer, sizeof(buffer)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
+	}
+
+	return iov.iov_len == sizeof(Context_x86_64);
 }
 
 /**
@@ -213,13 +243,21 @@ int Thread::stop_status() const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_registers(Context *ctx) const {
-	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
-	struct iovec iov = {buffer, sizeof(buffer)};
+
+	struct iovec iov;
+	if (is_64_bit_) {
+		iov.iov_base = &ctx->regs_64_;
+		iov.iov_len  = sizeof(ctx->regs_64_);
+
+	} else {
+		iov.iov_base = &ctx->regs_32_;
+		iov.iov_len  = sizeof(ctx->regs_32_);
+	}
+
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
 	}
-	ctx->fill_from(buffer, iov.iov_len);
 }
 
 /**
@@ -236,7 +274,7 @@ void Thread::get_xstate(Context *ctx) const {
 
 	alignas(256) char xstate[4096];
 	struct iovec iov = {&xstate, sizeof(xstate)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRFPREG, &iov) == -1) {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
 	}
@@ -261,7 +299,9 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @return The segment base.
  */
 uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
-
+	(void)ctx;
+	(void)reg;
+#if 0
 	// TODO(eteran): this is too arch specific, move to ContextIntel
 	uint64_t segment = ctx->register_ref(reg);
 	if (segment == 0) {
@@ -274,13 +314,14 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 		return 0;
 	}
 
-	struct user_desc desc = {};
+
 	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, segment / LDT_ENTRY_SIZE, &desc) == -1) {
 		std::perror("ptrace(PTRACE_GET_THREAD_AREA)");
 		std::exit(0);
 	}
+#endif
 
-	return desc.base_addr;
+	return 0;
 }
 
 /**
@@ -291,7 +332,7 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 void Thread::get_segment_bases(Context *ctx) const {
 
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	ctx->register_ref(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
+	// ctx->register_ref(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
 	ctx->register_ref(RegisterId::FS_BASE) = get_segment_base(ctx, RegisterId::FS);
 }
 
@@ -303,6 +344,9 @@ void Thread::get_segment_bases(Context *ctx) const {
 void Thread::get_context(Context *ctx) const {
 
 	assert(state_ == State::Stopped);
+
+	ctx->is_64_bit_ = is_64_bit_;
+	ctx->is_set_    = true;
 
 	get_registers(ctx);
 	get_xstate(ctx);
@@ -316,9 +360,17 @@ void Thread::get_context(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_registers(const Context *ctx) const {
-	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
-	ctx->store_to(buffer, sizeof(buffer));
-	struct iovec iov = {buffer, ctx->type()};
+
+	struct iovec iov;
+	if (is_64_bit_) {
+		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->regs_64_);
+		iov.iov_len  = sizeof(ctx->regs_64_);
+
+	} else {
+		iov.iov_base = const_cast<Context_x86_32 *>(&ctx->regs_32_);
+		iov.iov_len  = sizeof(ctx->regs_32_);
+	}
+
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		std::perror("ptrace(PTRACE_SETREGSET)");
 		std::exit(0);
