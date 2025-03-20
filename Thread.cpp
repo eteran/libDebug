@@ -28,9 +28,9 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	: pid_(pid), tid_(tid) {
 
 	if (f & Thread::Attach) {
-		if (::ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
-			::perror("ptrace(PTRACE_ATTACH)");
-			::exit(0);
+		if (ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
+			std::perror("ptrace(PTRACE_ATTACH)");
+			std::exit(0);
 		}
 	}
 
@@ -41,7 +41,7 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 		options |= PTRACE_O_EXITKILL;
 	}
 
-	::ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
+	ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
 }
 
 /**
@@ -60,9 +60,9 @@ void Thread::wait() {
 
 	assert(state_ == State::Running);
 
-	if (::waitpid(tid_, &wstatus_, __WALL) == -1) {
-		::perror("waitpid(Thread::wait)");
-		::exit(0);
+	if (waitpid(tid_, &wstatus_, __WALL) == -1) {
+		std::perror("waitpid(Thread::wait)");
+		std::exit(0);
 	}
 
 	state_ = State::Stopped;
@@ -75,7 +75,7 @@ void Thread::wait() {
  */
 void Thread::detach() {
 	if (tid_ != -1) {
-		::ptrace(PTRACE_DETACH, tid_, 0L, 0L);
+		ptrace(PTRACE_DETACH, tid_, 0L, 0L);
 		tid_ = -1;
 	}
 }
@@ -89,9 +89,9 @@ void Thread::step() {
 
 	assert(state_ == State::Stopped);
 
-	if (::ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L) == -1) {
-		::perror("ptrace(PTRACE_SINGLESTEP)");
-		::exit(0);
+	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L) == -1) {
+		std::perror("ptrace(PTRACE_SINGLESTEP)");
+		std::exit(0);
 	}
 
 	state_ = State::Running;
@@ -105,9 +105,9 @@ void Thread::resume() {
 
 	assert(state_ == State::Stopped);
 
-	if (::ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
-		::perror("ptrace(PTRACE_CONT)");
-		::exit(0);
+	if (ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
+		std::perror("ptrace(PTRACE_CONT)");
+		std::exit(0);
 	}
 
 	state_ = State::Running;
@@ -122,9 +122,9 @@ void Thread::stop() const {
 
 	assert(state_ == State::Running);
 
-	if (::tgkill(pid_, tid_, SIGSTOP) == -1) {
-		::perror("tgkill");
-		::exit(0);
+	if (tgkill(pid_, tid_, SIGSTOP) == -1) {
+		std::perror("tgkill");
+		std::exit(0);
 	}
 }
 
@@ -135,9 +135,9 @@ void Thread::stop() const {
 void Thread::kill() const {
 	assert(state_ == State::Running);
 
-	if (::tgkill(pid_, tid_, SIGKILL) == -1) {
-		::perror("tgkill");
-		::exit(0);
+	if (tgkill(pid_, tid_, SIGKILL) == -1) {
+		std::perror("tgkill");
+		std::exit(0);
 	}
 }
 
@@ -225,9 +225,9 @@ void Thread::get_context(Context *ctx) const {
 	alignas(MaxAlign) char buffer[MaxSize];
 
 	struct iovec iov = {buffer, sizeof(buffer)};
-	if (::ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		::perror("ptrace(PTRACE_GETREGSET)");
-		::exit(0);
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
 	}
 
 	ctx->fill_from(buffer, iov.iov_len);
@@ -254,8 +254,8 @@ void Thread::set_context(const Context *ctx) const {
 	struct iovec iov = {buffer, ctx->type()};
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		::perror("ptrace(PTRACE_SETREGSET)");
-		::exit(0);
+		std::perror("ptrace(PTRACE_SETREGSET)");
+		std::exit(0);
 	}
 
 	// TODO(eteran): FPU

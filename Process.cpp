@@ -47,10 +47,10 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	const struct timespec ts = duration_to_timespec(timeout);
 	siginfo_t info;
 	sigset_t mask;
-	::sigemptyset(&mask);
-	::sigaddset(&mask, SIGCHLD);
-	::sigprocmask(SIG_BLOCK, &mask, nullptr);
-	return ::sigtimedwait(&mask, &info, &ts) == SIGCHLD;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &mask, nullptr);
+	return sigtimedwait(&mask, &info, &ts) == SIGCHLD;
 }
 
 /**
@@ -139,8 +139,8 @@ Process::Process(pid_t pid, Flag flags)
 	}
 
 	char path[PATH_MAX];
-	::snprintf(path, sizeof(path), "/proc/%d/mem", pid_);
-	memfd_ = ::open(path, O_RDWR);
+	std::snprintf(path, sizeof(path), "/proc/%d/mem", pid_);
+	memfd_ = open(path, O_RDWR);
 
 	report();
 }
@@ -189,7 +189,7 @@ Process::~Process() {
 	detach();
 
 	if (memfd_ != -1) {
-		::close(memfd_);
+		close(memfd_);
 	}
 }
 
@@ -228,7 +228,7 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 0
-	const int64_t ret = ::pread(memfd_, buffer, n, static_cast<off_t>(address));
+	const int64_t ret = std::pread(memfd_, buffer, n, static_cast<off_t>(address));
 #else
 	const int64_t ret = read_memory_ptrace(address, buffer, n);
 #endif
@@ -253,7 +253,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 
 	while (n > 0) {
 		errno          = 0;
-		const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
+		const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
 		if (ret == -1 && errno != 0) {
 			// we just ignore ESRCH because it means the process
 			// was terminated while we were trying to read
@@ -264,7 +264,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 		}
 
 		const size_t count = std::min(n, sizeof(ret));
-		::memcpy(ptr, &ret, count);
+		std::memcpy(ptr, &ret, count);
 
 		address += count;
 		ptr += count;
@@ -285,7 +285,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
 #if 0
-	return ::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
+	return std::pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 #else
 	return write_memory_ptrace(address, buffer, n);
 #endif
@@ -307,33 +307,33 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 		const size_t count = std::min(n, sizeof(long));
 
 		alignas(long) uint8_t data[sizeof(long)] = {};
-		::memcpy(data, ptr, count);
+		std::memcpy(data, ptr, count);
 
 		if (count < sizeof(long)) {
 			errno          = 0;
-			const long ret = ::ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
+			const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
 			if (ret == -1 && errno != 0) {
 				// we just ignore ESRCH because it means the process
 				// was terminated while we were trying to read
 				if (errno == ESRCH) {
 					return 0;
 				}
-				::perror("ptrace(PTRACE_PEEKDATA)");
-				::abort();
+				std::perror("ptrace(PTRACE_PEEKDATA)");
+				std::abort();
 			}
 
-			::memcpy(
+			std::memcpy(
 				data + count,
 				reinterpret_cast<const uint8_t *>(&ret) + count,
 				sizeof(long) - count);
 		}
 
 		long data_value;
-		::memcpy(&data_value, data, sizeof(long));
+		std::memcpy(&data_value, data, sizeof(long));
 
-		if (::ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
-			::perror("ptrace(PTRACE_POKEDATA)");
-			::abort();
+		if (ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
+			std::perror("ptrace(PTRACE_POKEDATA)");
+			std::abort();
 		}
 
 		address += count;
@@ -403,9 +403,9 @@ void Process::stop() {
  * @brief Terminates the attached process
  */
 void Process::kill() const {
-	if (::ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
-		::perror("ptrace(PTRACE_KILL)");
-		::exit(0);
+	if (ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
+		std::perror("ptrace(PTRACE_KILL)");
+		std::exit(0);
 	}
 }
 
@@ -441,10 +441,10 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 	while (true) {
 		int wstatus     = 0;
-		const pid_t tid = ::waitpid(-1, &wstatus, __WALL | WNOHANG);
+		const pid_t tid = waitpid(-1, &wstatus, __WALL | WNOHANG);
 
 		if (tid == -1) {
-			::perror("waitpid");
+			std::perror("waitpid");
 			break;
 		}
 
@@ -515,15 +515,15 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			if (is_trap_event(wstatus)) {
 
-				if (::ptrace(PTRACE_GETSIGINFO, tid, 0L, &e.siginfo) == -1) {
-					::perror("ptrace(PTRACE_GETSIGINFO)");
+				if (ptrace(PTRACE_GETSIGINFO, tid, 0L, &e.siginfo) == -1) {
+					std::perror("ptrace(PTRACE_GETSIGINFO)");
 				}
 
 				if (is_exit_trace_event(wstatus)) {
 					// Thread is about to exit, beyond that, this is a normal trap event
 				} else if (is_clone_event(wstatus)) {
 					unsigned long message;
-					if (::ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
+					if (ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
 
 						auto new_tid    = static_cast<pid_t>(message);
 						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);

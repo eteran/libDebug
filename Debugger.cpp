@@ -39,7 +39,7 @@ defer_type<F> make_defer(F &&f) {
 #define CONCAT2(a, b) CONCAT(a, b)
 
 #define SCOPE_EXIT(...) \
-	auto CONCAT2(scope_exit_, __LINE__) = ::make_defer([&] __VA_ARGS__)
+	auto CONCAT2(scope_exit_, __LINE__) = make_defer([&] __VA_ARGS__)
 
 /**
  * @brief Construct a new Debugger object
@@ -48,9 +48,9 @@ defer_type<F> make_defer(F &&f) {
 Debugger::Debugger() {
 
 	sigset_t mask;
-	::sigemptyset(&mask);
-	::sigaddset(&mask, SIGCHLD);
-	::sigprocmask(SIG_BLOCK, &mask, &prev_mask_);
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &mask, &prev_mask_);
 }
 
 /**
@@ -58,7 +58,7 @@ Debugger::Debugger() {
  *
  */
 Debugger::~Debugger() {
-	::sigprocmask(SIG_SETMASK, &prev_mask_, nullptr);
+	sigprocmask(SIG_SETMASK, &prev_mask_, nullptr);
 }
 
 /**
@@ -119,54 +119,54 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 	constexpr std::size_t SharedMemSize = 4096;
 
-	void *ptr       = ::mmap(nullptr, SharedMemSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	void *ptr       = mmap(nullptr, SharedMemSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	auto shared_mem = static_cast<char *>(ptr);
-	::memset(ptr, 0, SharedMemSize);
+	std::memset(ptr, 0, SharedMemSize);
 
-	switch (const pid_t cpid = ::fork()) {
+	switch (const pid_t cpid = fork()) {
 	case 0:
 
 		if (disableLazyBinding_) {
-			if (::setenv("LD_BIND_NOW", "1", true) == -1) {
-				::snprintf(shared_mem, SharedMemSize, "Failed to disable lazy binding: %s", strerror(errno));
-				::abort();
+			if (setenv("LD_BIND_NOW", "1", true) == -1) {
+				std::snprintf(shared_mem, SharedMemSize, "Failed to disable lazy binding: %s", strerror(errno));
+				std::abort();
 			}
 		}
 
 		if (disableASLR_) {
-			const int current = ::personality(UINT32_MAX);
+			const int current = personality(UINT32_MAX);
 			// This shouldn't fail, but let's at least perror if it does anyway
 			if (current == -1) {
-				::snprintf(shared_mem, SharedMemSize, "Failed to get current personality: %s", strerror(errno));
-				::abort();
-			} else if (::personality(static_cast<uint32_t>(current | ADDR_NO_RANDOMIZE)) == -1) {
-				::snprintf(shared_mem, SharedMemSize, "Failed to disable ASLR: %s", strerror(errno));
-				::abort();
+				std::snprintf(shared_mem, SharedMemSize, "Failed to get current personality: %s", strerror(errno));
+				std::abort();
+			} else if (personality(static_cast<uint32_t>(current | ADDR_NO_RANDOMIZE)) == -1) {
+				std::snprintf(shared_mem, SharedMemSize, "Failed to disable ASLR: %s", strerror(errno));
+				std::abort();
 			}
 		}
 
-		if (::ptrace(PTRACE_TRACEME, 0L, 0L, 0L) == -1) {
-			::snprintf(shared_mem, SharedMemSize, "Failed to enable tracing: %s", strerror(errno));
-			::abort();
+		if (ptrace(PTRACE_TRACEME, 0L, 0L, 0L) == -1) {
+			std::snprintf(shared_mem, SharedMemSize, "Failed to enable tracing: %s", strerror(errno));
+			std::abort();
 		}
 
 		if (cwd) {
-			if (::chdir(cwd) == -1) {
-				::snprintf(shared_mem, SharedMemSize, "Failed to change working directory: %s", strerror(errno));
-				::abort();
+			if (chdir(cwd) == -1) {
+				std::snprintf(shared_mem, SharedMemSize, "Failed to change working directory: %s", strerror(errno));
+				std::abort();
 			}
 		}
 
 		if (envp) {
 			// TODO(eteran): work out the interaction between disableLazyBinding and envp
-			::execve(argv[0], const_cast<char **>(argv), const_cast<char **>(envp));
+			execve(argv[0], const_cast<char **>(argv), const_cast<char **>(envp));
 		} else {
-			::execv(argv[0], const_cast<char **>(argv));
+			execv(argv[0], const_cast<char **>(argv));
 		}
 
 		// NOTE(eteran): we only get here if execve failed, so no need to explicitly check the return value
-		::snprintf(shared_mem, SharedMemSize, "Failed to execv: %s", strerror(errno));
-		::abort();
+		std::snprintf(shared_mem, SharedMemSize, "Failed to execv: %s", strerror(errno));
+		std::abort();
 	case -1:
 		return nullptr;
 	default:
@@ -175,7 +175,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
 
 		SCOPE_EXIT({
-			::munmap(ptr, SharedMemSize);
+			munmap(ptr, SharedMemSize);
 		});
 
 		auto thread = process_->find_thread(cpid);

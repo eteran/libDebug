@@ -171,7 +171,9 @@ public:
 
 private:
 	void store_to_x86_32(Context_x86_32 *ctx) const;
+	void store_to_x86_64(Context_x86_64 *ctx) const;
 	void fill_from_x86_32(const Context_x86_32 *ctx);
+	void fill_from_x86_64(const Context_x86_64 *ctx);
 
 private:
 	// NOTE(eteran): normalizing on x86-64 for simplicity

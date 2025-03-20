@@ -58,6 +58,23 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 	regs_.gs       = ctx->gs;
 	regs_.orig_rax = ctx->orig_eax;
 }
+
+/**
+ * @brief store the given context into the given x86_64 context
+ *
+ * @param ctx the x86_64 context to store the given context into
+ */
+void Context::store_to_x86_64(Context_x86_64 *ctx) const {
+	std::memcpy(ctx, &regs_, sizeof(Context_x86_64));
+}
+/**
+ * @brief fill the given context with the given x86_64 context
+ *
+ * @param ctx the x86_64 context to fill the given context with
+ */
+void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
+	std::memcpy(&regs_, ctx, sizeof(Context_x86_64));
+}
 #endif
 
 /**
@@ -70,15 +87,14 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 void Context::fill_from(const void *buffer, size_t n) {
 	switch (n) {
 #ifdef __x86_64__
-	case sizeof(Context_x86_64):
-		::memcpy(&regs_, buffer, sizeof(Context_x86_64));
+	case sizeof(Context_x86_64): {
+		auto ptr = std::launder(reinterpret_cast<const Context_x86_64 *>(buffer));
+		fill_from_x86_64(ptr);
 		type_ = sizeof(Context_x86_64);
 		break;
+	}
 	case sizeof(Context_x86_32): {
-		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
-		// but this will do for now
-		__asm__("" ::"r"(buffer) : "memory");
-		auto ptr = static_cast<const Context_x86_32 *>(buffer);
+		auto ptr = std::launder(reinterpret_cast<const Context_x86_32 *>(buffer));
 		fill_from_x86_32(ptr);
 		type_ = sizeof(Context_x86_32);
 		break;
@@ -99,16 +115,15 @@ void Context::fill_from(const void *buffer, size_t n) {
 void Context::store_to(void *buffer, size_t n) const {
 	switch (type_) {
 #ifdef __x86_64__
-	case sizeof(Context_x86_64):
+	case sizeof(Context_x86_64): {
 		assert(n >= sizeof(Context_x86_64));
-		::memcpy(buffer, &regs_, sizeof(Context_x86_64));
+		auto ptr = std::launder(reinterpret_cast<Context_x86_64 *>(buffer));
+		store_to_x86_64(ptr);
 		break;
+	}
 	case sizeof(Context_x86_32): {
 		assert(n >= sizeof(Context_x86_32));
-		// NOTE(eteran): I'd really prefer to use C++23's std::start_lifetime_as here
-		// but this will do for now
-		__asm__("" ::"r"(buffer) : "memory");
-		auto ptr = static_cast<Context_x86_32 *>(buffer);
+		auto ptr = std::launder(reinterpret_cast<Context_x86_32 *>(buffer));
 		store_to_x86_32(ptr);
 		break;
 	}
@@ -185,6 +200,6 @@ uint64_t &Context::register_ref(RegisterId reg) {
 #endif
 	default:
 		printf("Unknown Register: %d\n", static_cast<int>(reg));
-		::abort();
+		std::abort();
 	}
 }

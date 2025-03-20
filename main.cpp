@@ -52,7 +52,7 @@ void tracer(pid_t cpid) {
 				return EventStatus::Stop;
 			})) {
 			printf("Timeout!\n");
-			::exit(0);
+			std::exit(0);
 		}
 	}
 }
@@ -86,17 +86,17 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 
 		const size_t line_end = std::min(StepSize, last - first);
 
-		::printf("%016lx: ", first);
+		std::printf("%016lx: ", first);
 		for (size_t i = 0; i < line_end; ++i) {
-			::printf("%02x ", buffer[buffer_index + i]);
+			std::printf("%02x ", buffer[buffer_index + i]);
 		}
 
 		for (size_t i = 0; i < line_end; ++i) {
 			const uint8_t ch = buffer[buffer_index + i];
-			::printf("%c", ::isprint(ch) ? ch : '.');
+			std::printf("%c", std::isprint(ch) ? ch : '.');
 		}
 
-		::printf("\n");
+		std::printf("\n");
 
 		buffer_index += StepSize;
 		first += StepSize;
@@ -117,8 +117,8 @@ int main() {
 		tracee();
 		break;
 	case -1:
-		::perror("fork");
-		::exit(1);
+		std::perror("fork");
+		std::exit(1);
 	default:
 		tracer(cpid);
 		break;
@@ -164,7 +164,7 @@ int main() {
 				return EventStatus::Stop;
 			})) {
 			printf("Timeout!\n");
-			::exit(0);
+			std::exit(0);
 		}
 	}
 

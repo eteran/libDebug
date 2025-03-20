@@ -35,50 +35,50 @@ Breakpoint::Breakpoint(const Process *process, uint64_t address, TypeId type)
 	case TypeId::Automatic:
 	case TypeId::INT3:
 		size_ = sizeof(BreakpointInstructionINT3);
-		::memcpy(new_bytes_, BreakpointInstructionINT3, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionINT3, size_);
 		break;
 	case TypeId::INT1:
 		size_ = sizeof(BreakpointInstructionINT1);
-		::memcpy(new_bytes_, BreakpointInstructionINT1, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionINT1, size_);
 		break;
 	case TypeId::HLT:
 		size_ = sizeof(BreakpointInstructionHLT);
-		::memcpy(new_bytes_, BreakpointInstructionHLT, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionHLT, size_);
 		break;
 	case TypeId::CLI:
 		size_ = sizeof(BreakpointInstructionCLI);
-		::memcpy(new_bytes_, BreakpointInstructionCLI, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionCLI, size_);
 		break;
 	case TypeId::STI:
 		size_ = sizeof(BreakpointInstructionSTI);
-		::memcpy(new_bytes_, BreakpointInstructionSTI, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionSTI, size_);
 		break;
 	case TypeId::INSB:
 		size_ = sizeof(BreakpointInstructionINSB);
-		::memcpy(new_bytes_, BreakpointInstructionINSB, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionINSB, size_);
 		break;
 	case TypeId::INSD:
 		size_ = sizeof(BreakpointInstructionINSD);
-		::memcpy(new_bytes_, BreakpointInstructionINSD, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionINSD, size_);
 		break;
 	case TypeId::OUTSB:
 		size_ = sizeof(BreakpointInstructionOUTSB);
-		::memcpy(new_bytes_, BreakpointInstructionOUTSB, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionOUTSB, size_);
 		break;
 	case TypeId::OUTSD:
 		size_ = sizeof(BreakpointInstructionOUTSD);
-		::memcpy(new_bytes_, BreakpointInstructionOUTSD, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionOUTSD, size_);
 		break;
 	case TypeId::UD2:
 		size_ = sizeof(BreakpointInstructionUD2);
-		::memcpy(new_bytes_, BreakpointInstructionUD2, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionUD2, size_);
 		break;
 	case TypeId::UD0:
 		size_ = sizeof(BreakpointInstructionUD0);
-		::memcpy(new_bytes_, BreakpointInstructionUD0, size_);
+		std::memcpy(new_bytes_, BreakpointInstructionUD0, size_);
 		break;
 	default:
-		::abort();
+		__builtin_unreachable();
 	}
 
 	enable();
@@ -100,14 +100,14 @@ Breakpoint::~Breakpoint() {
 void Breakpoint::enable() {
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
 	if (r == -1) {
-		::perror("read_memory");
-		::abort();
+		std::perror("read_memory");
+		std::abort();
 	}
 
 	const int64_t w = process_->write_memory(address_, new_bytes_, size_);
 	if (w == -1) {
-		::perror("write_memory");
-		::abort();
+		std::perror("write_memory");
+		std::abort();
 	}
 }
 
@@ -118,8 +118,8 @@ void Breakpoint::enable() {
 void Breakpoint::disable() {
 	const int64_t w = process_->write_memory(address_, old_bytes_, size_);
 	if (w == -1) {
-		::perror("write_memory");
-		::abort();
+		std::perror("write_memory");
+		std::abort();
 	}
 }
 

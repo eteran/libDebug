@@ -44,10 +44,10 @@ private:
  */
 template <class Callback>
 void proc_enumerator(const char *path, Callback callback) {
-	DIR *const dir = ::opendir(path);
+	DIR *const dir = opendir(path);
 	if (!dir) {
-		::perror("opendir");
-		::exit(0);
+		std::perror("opendir");
+		std::exit(0);
 	}
 
 	while (struct dirent *entry = readdir(dir)) {
@@ -58,7 +58,7 @@ void proc_enumerator(const char *path, Callback callback) {
 
 		errno          = 0;
 		char *end_ptr  = nullptr;
-		const long num = ::strtol(entry->d_name, &end_ptr, 10);
+		const long num = std::strtol(entry->d_name, &end_ptr, 10);
 
 		if (errno == 0 && *end_ptr == '\0') {
 			if (!callback(static_cast<pid_t>(num))) {
@@ -67,9 +67,9 @@ void proc_enumerator(const char *path, Callback callback) {
 		}
 	}
 
-	if (::closedir(dir) == -1) {
-		::perror("closedir");
-		::exit(0);
+	if (closedir(dir) == -1) {
+		std::perror("closedir");
+		std::exit(0);
 	}
 }
 
@@ -85,7 +85,7 @@ std::vector<pid_t> enumerate_threads(pid_t pid) {
 	std::vector<pid_t> threads;
 
 	char path[PATH_MAX];
-	::snprintf(path, sizeof(path), "/proc/%d/task/", pid);
+	std::snprintf(path, sizeof(path), "/proc/%d/task/", pid);
 
 	proc_enumerator(path, [&threads](pid_t tid) {
 		threads.push_back(tid);
@@ -122,16 +122,16 @@ uint64_t hash_regions(pid_t pid) {
 	hasher h;
 
 	char path[PATH_MAX];
-	::snprintf(path, sizeof(path), "/proc/%d/maps", pid);
+	std::snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 
-	const int fd = ::open(path, O_RDONLY);
+	const int fd = open(path, O_RDONLY);
 	if (fd == -1) {
 		return 0;
 	}
 
 	char buffer[4096];
 	ssize_t n;
-	while ((n = ::read(fd, buffer, sizeof(buffer))) > 0) {
+	while ((n = read(fd, buffer, sizeof(buffer))) > 0) {
 		h.update(buffer, static_cast<size_t>(n));
 	}
 
@@ -150,15 +150,15 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 	std::vector<Region> regions;
 
 	char path[PATH_MAX];
-	::snprintf(path, sizeof(path), "/proc/%d/maps", pid);
+	std::snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 
-	FILE *fp = ::fopen(path, "r");
+	FILE *fp = std::fopen(path, "r");
 	if (!fp) {
 		return regions;
 	}
 
 	char line[PATH_MAX];
-	while (::fgets(line, sizeof(line), fp)) {
+	while (std::fgets(line, sizeof(line), fp)) {
 
 		uint64_t start       = 0;
 		uint64_t end         = 0;
@@ -173,19 +173,19 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		// address           perms offset  dev   inode       pathname
 		// 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
 
-		if (::sscanf(line, "%lx-%lx %s %lx %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
+		if (std::sscanf(line, "%lx-%lx %s %lx %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
 #if 0
-			if (::strchr(name, 'r')) permissions |= Region::Read;
-			if (::strchr(name, 'w')) permissions |= Region::Write;
-			if (::strchr(name, 'x')) permissions |= Region::Execute;
-			if (::strchr(name, 'p')) permissions |= Region::Private;
-			if (::strchr(name, 's')) permissions |= Region::Shared;
+			if (std::strchr(name, 'r')) permissions |= Region::Read;
+			if (std::strchr(name, 'w')) permissions |= Region::Write;
+			if (std::strchr(name, 'x')) permissions |= Region::Execute;
+			if (std::strchr(name, 'p')) permissions |= Region::Private;
+			if (std::strchr(name, 's')) permissions |= Region::Shared;
 #else
-			permissions |= (!!::strchr(name, 'r') * Region::Read);
-			permissions |= (!!::strchr(name, 'w') * Region::Write);
-			permissions |= (!!::strchr(name, 'x') * Region::Execute);
-			permissions |= (!!::strchr(name, 'p') * Region::Private);
-			permissions |= (!!::strchr(name, 's') * Region::Shared);
+			permissions |= (!!std::strchr(name, 'r') * Region::Read);
+			permissions |= (!!std::strchr(name, 'w') * Region::Write);
+			permissions |= (!!std::strchr(name, 'x') * Region::Execute);
+			permissions |= (!!std::strchr(name, 'p') * Region::Private);
+			permissions |= (!!std::strchr(name, 's') * Region::Shared);
 #endif
 			regions.emplace_back(start, end, offset, permissions, name);
 		}
