@@ -20,9 +20,10 @@ constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEEXIT;
 
 /**
- * @brief Construct a new Thread object
+ * @brief Construct a new Thread object.
  *
- * @param tid
+ * @param tid The thread id to attach to.
+ * @param f Controls the attach behavior of this constructor.
  */
 Thread::Thread(pid_t pid, pid_t tid, Flag f)
 	: pid_(pid), tid_(tid) {
@@ -45,16 +46,14 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 }
 
 /**
- * @brief Destroy the Thread object
- *
+ * @brief Destroy the Thread object.
  */
 Thread::~Thread() {
 	detach();
 }
 
 /**
- * @brief waits for an event on this thread
- *
+ * @brief Waits for an event on this thread.
  */
 void Thread::wait() {
 
@@ -69,9 +68,8 @@ void Thread::wait() {
 }
 
 /**
- * @brief detaches from the associated thread, if any
+ * @brief Detaches from the associated thread, if any.
  * no-op if already detached
- *
  */
 void Thread::detach() {
 	if (tid_ != -1) {
@@ -81,9 +79,8 @@ void Thread::detach() {
 }
 
 /**
- * @brief causes the thread to step one instruction. This will be
+ * @brief Causes the thread to step one instruction. This will be
  * eventually followed by a debug event when it stops again
- *
  */
 void Thread::step() {
 
@@ -98,8 +95,7 @@ void Thread::step() {
 }
 
 /**
- * @brief causes the thread to resume execution
- *
+ * @brief Causes the thread to resume execution.
  */
 void Thread::resume() {
 
@@ -114,9 +110,8 @@ void Thread::resume() {
 }
 
 /**
- * @brief causes a running thread the stop execution. This will be
+ * @brief Causes a running thread the stop execution. This will be
  * eventually followed by a debug event when it actually stops
- *
  */
 void Thread::stop() const {
 
@@ -129,8 +124,7 @@ void Thread::stop() const {
 }
 
 /**
- * @brief terminates this thread
- *
+ * @brief Terminates this thread.
  */
 void Thread::kill() const {
 	assert(state_ == State::Running);
@@ -142,9 +136,9 @@ void Thread::kill() const {
 }
 
 /**
- * @brief
+ * @brief Checks if the thread status is exited.
  *
- * @return bool
+ * @return true if the thread status is exited, false otherwise.
  */
 bool Thread::is_exited() const {
 	assert(state_ == State::Stopped);
@@ -152,9 +146,9 @@ bool Thread::is_exited() const {
 }
 
 /**
- * @brief
+ * @brief Checks if the thread status is signaled.
  *
- * @return bool
+ * @return true if the thread status is signaled, false otherwise.
  */
 bool Thread::is_signaled() const {
 	assert(state_ == State::Stopped);
@@ -162,9 +156,9 @@ bool Thread::is_signaled() const {
 }
 
 /**
- * @brief
+ * @brief Checks if the thread status is stopped.
  *
- * @return bool
+ * @return true if the thread status is stopped, false otherwise.
  */
 bool Thread::is_stopped() const {
 	assert(state_ == State::Stopped);
@@ -172,9 +166,9 @@ bool Thread::is_stopped() const {
 }
 
 /**
- * @brief
+ * @brief Checks if the thread status is continued.
  *
- * @return bool
+ * @return true if the thread status is continued, false otherwise.
  */
 bool Thread::is_continued() const {
 	assert(state_ == State::Stopped);
@@ -182,9 +176,9 @@ bool Thread::is_continued() const {
 }
 
 /**
- * @brief
+ * @brief Retrieves the exit status of the thread.
  *
- * @return int
+ * @return The exit status of the thread.
  */
 int Thread::exit_status() const {
 	assert(state_ == State::Stopped);
@@ -192,9 +186,9 @@ int Thread::exit_status() const {
 }
 
 /**
- * @brief
+ * @brief Retrieves the signal status of the thread.
  *
- * @return int
+ * @return The signal status of the thread.
  */
 int Thread::signal_status() const {
 	assert(state_ == State::Stopped);
@@ -202,9 +196,9 @@ int Thread::signal_status() const {
 }
 
 /**
- * @brief
+ * @brief Retrieves the stop status of the thread.
  *
- * @return int
+ * @return The stop status of the thread.
  */
 int Thread::stop_status() const {
 	assert(state_ == State::Stopped);
@@ -212,17 +206,15 @@ int Thread::stop_status() const {
 }
 
 /**
- * @brief retrieves the thread context
+ * @brief Retrieves the thread context.
  *
- * @param ctx a pointer to the context object
+ * @param ctx A pointer to the context object.
  */
 void Thread::get_context(Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	constexpr size_t MaxAlign = std::max(alignof(Context_x86_64), alignof(Context_x86_32));
-	constexpr size_t MaxSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
-	alignas(MaxAlign) char buffer[MaxSize];
+	alignas(Context::BufferAlign) char buffer[Context::BufferAlign];
 
 	struct iovec iov = {buffer, sizeof(buffer)};
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
@@ -237,17 +229,15 @@ void Thread::get_context(Context *ctx) const {
 }
 
 /**
- * @brief sets the thread context
+ * @brief Sets the thread context.
  *
- * @param ctx a pointer to the context object
+ * @param ctx A pointer to the context object.
  */
 void Thread::set_context(const Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	constexpr size_t MaxAlign = std::max(alignof(Context_x86_64), alignof(Context_x86_32));
-	constexpr size_t MaxSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
-	alignas(MaxAlign) char buffer[MaxSize];
+	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
 
 	ctx->store_to(buffer, sizeof(buffer));
 

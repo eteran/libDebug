@@ -22,11 +22,11 @@ constexpr uint8_t BreakpointInstructionUD0[]   = {0x0f, 0xff};
 }
 
 /**
- * @brief Construct a new Breakpoint object, and then enable it
+ * @brief Construct a new Breakpoint object, and then enable it.
  *
- * @param process
- * @param address
- * @param type
+ * @param process The process to set the breakpoint in.
+ * @param address The address to set the breakpoint at.
+ * @param type The type of breakpoint to set.
  */
 Breakpoint::Breakpoint(const Process *process, uint64_t address, TypeId type)
 	: process_(process), address_(address), type_(type) {
@@ -85,17 +85,15 @@ Breakpoint::Breakpoint(const Process *process, uint64_t address, TypeId type)
 }
 
 /**
- * @brief disable and then destroy the Breakpoint object
- *
+ * @brief Disable and then destroy the Breakpoint object.
  */
 Breakpoint::~Breakpoint() {
 	disable();
 }
 
 /**
- * @brief enables the breakpoint by backing up the bytes at the target address as needed
- * and then replacing them with bytes representing a breakpoint
- *
+ * @brief Enables the breakpoint by backing up the bytes at the target address as needed.
+ * and then replacing them with bytes representing a breakpoint.
  */
 void Breakpoint::enable() {
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
@@ -112,8 +110,7 @@ void Breakpoint::enable() {
 }
 
 /**
- * @brief disables the breakpoint by restoring the backed up bytes at the target address
- *
+ * @brief Disables the breakpoint by restoring the backed up bytes at the target address.
  */
 void Breakpoint::disable() {
 	const int64_t w = process_->write_memory(address_, old_bytes_, size_);
@@ -124,8 +121,7 @@ void Breakpoint::disable() {
 }
 
 /**
- * @brief increments the hit count for the breakpoint
- *
+ * @brief Increments the hit count for the breakpoint.
  */
 void Breakpoint::hit() {
 	hit_count_++;

@@ -15,8 +15,7 @@ public:
 
 public:
 	std::shared_ptr<Process> attach(pid_t pid);
-	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[], const char *envp[]);
-	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[]);
+	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[], const char *envp[] = nullptr);
 
 public:
 	[[nodiscard]] std::shared_ptr<Process> process() const { return process_; }

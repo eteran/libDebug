@@ -58,11 +58,11 @@ void tracer(pid_t cpid) {
 }
 
 /**
- * @brief dumps the memory of a given process
+ * @brief Dumps the memory of a given process.
  *
- * @param process the process to dump memory from
- * @param address the address to start dumping from
- * @param n the number of bytes to dump
+ * @param process The process to dump memory from
+ * @param address The address to start dumping from
+ * @param n The number of bytes to dump
  */
 void dump_memory(Process *process, uint64_t address, size_t n) {
 
@@ -105,9 +105,9 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 }
 
 /**
- * @brief main function
+ * @brief Main function.
  *
- * @return int
+ * @return 0 on success, non-zero on failure.
  */
 int main() {
 

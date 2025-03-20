@@ -24,10 +24,10 @@
 namespace {
 
 /**
- * @brief converts a `std::chrono::miliseconds` value into a `timespec` struct
+ * @brief Converts a `std::chrono::miliseconds` value into a `timespec` struct.
  *
- * @param msecs
- * @return struct timespec
+ * @param msecs The value to convert.
+ * @return The converted value.
  */
 struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 	struct timespec ts;
@@ -37,10 +37,10 @@ struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 }
 
 /**
- * @brief waits for `timeout` milliseconds for a SIGCHLD signal.
+ * @brief Waits for `timeout` milliseconds for a SIGCHLD signal.
  *
- * @param timeout how long to wait for the SIGCHLD signal in milliseconds
- * @return bool true if a SIGCHLD was encountered, false if a timeout occurred.
+ * @param timeout How long to wait for the SIGCHLD signal in milliseconds
+ * @return true if a SIGCHLD was encountered, false if a timeout occurred.
  */
 bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 
@@ -54,30 +54,30 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 }
 
 /**
- * @brief
+ * @brief Checks if the given status is a clone event.
  *
- * @param status
- * @return bool
+ * @param status The status to check.
+ * @return true if the status is a clone event, false otherwise.
  */
 constexpr bool is_clone_event(int status) {
 	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_CLONE << 8)));
 }
 
 /**
- * @brief
+ * @brief Checks if the given status is a trace event.
  *
- * @param status
- * @return bool
+ * @param status The status to check.
+ * @return true if the status is a trace event, false otherwise.
  */
 constexpr bool is_exit_trace_event(int status) {
 	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_EXIT << 8)));
 }
 
 /**
- * @brief
+ * @brief Checks if the given status is a trap event.
  *
- * @param status
- * @return bool
+ * @param status The status to check.
+ * @return true if the status is a trap event, false otherwise.
  */
 constexpr bool is_trap_event(int status) {
 	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
@@ -98,11 +98,11 @@ void dump_context(Context *ctx) {
 }
 
 /**
- * @brief Construct a new Process object and attaches the debugger
+ * @brief Construct a new Process object and attaches the debugger.
  * to the process identified by `pid`
  *
- * @param pid The process to attach to
- * @param flags Controls the attach behavior of this constructor
+ * @param pid The process to attach to.
+ * @param flags Controls the attach behavior of this constructor.
  */
 Process::Process(pid_t pid, Flag flags)
 	: pid_(pid) {
@@ -147,7 +147,6 @@ Process::Process(pid_t pid, Flag flags)
 
 /**
  * @brief
- *
  */
 void Process::report() const {
 
@@ -182,7 +181,7 @@ void Process::report() const {
 }
 
 /**
- * @brief Destroy the Process object and detaches the debugger from the associated process
+ * @brief Destroy the Process object and detaches the debugger from the associated process.
  */
 Process::~Process() {
 
@@ -194,12 +193,12 @@ Process::~Process() {
 }
 
 /**
- * @brief given a buffer of memory, filters out any bytes that are part of a breakpoint
+ * @brief Given a buffer of memory, filters out any bytes that are part of a breakpoint.
  * and replaces them with the original bytes that were at that address before the breakpoint
  *
- * @param address the base address that was used to fill the buffer
- * @param buffer the buffer to filter
- * @param n the amount of bytes read into the buffer
+ * @param address The base address that was used to fill the buffer
+ * @param buffer The buffer to filter
+ * @param n The amount of bytes read into the buffer
  */
 void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const {
 	for (auto &&[bp_address, bp] : breakpoints_) {
@@ -219,12 +218,12 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
 }
 
 /**
- * @brief reads bytes from the attached process
+ * @brief Reads bytes from the attached process.
  *
- * @param address the address in the attached process to read from
- * @param buffer where to store the bytes, must be at least `n` bytes big
- * @param n how many bytes to read
- * @return int64_t how many bytes actually read
+ * @param address The address in the attached process to read from.
+ * @param buffer Where to store the bytes, must be at least `n` bytes big.
+ * @param n How many bytes to read.
+ * @return how many bytes actually read.
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 #if 0
@@ -240,12 +239,12 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 }
 
 /**
- * @brief reads bytes from the attached process using the `ptrace` syscall
+ * @brief Reads bytes from the attached process using the `ptrace` syscall.
  *
- * @param address the address in the attached process to read from
- * @param buffer where to store the bytes, must be at least `n` bytes big
- * @param n how many bytes to read
- * @return int64_t how many bytes actually read
+ * @param address The address in the attached process to read from.
+ * @param buffer Where to store the bytes, must be at least `n` bytes big.
+ * @param n How many bytes to read.
+ * @return how many bytes actually read.
  */
 int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) const {
 	auto ptr      = static_cast<uint8_t *>(buffer);
@@ -276,12 +275,12 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
 }
 
 /**
- * @brief writes bytes to the attached process
+ * @brief Writes bytes to the attached process.
  *
- * @param address the address in the attached process to write to
- * @param buffer a buffer containing the bytes to write must be at least `n` bytes big
- * @param n how many bytes to write
- * @return int64_t how many bytes actually written
+ * @param address The address in the attached process to write to.
+ * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
+ * @param n How many bytes to write.
+ * @return how many bytes actually written.
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
 #if 0
@@ -292,12 +291,12 @@ int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) co
 }
 
 /**
- * @brief writes bytes to the attached process using the `ptrace` syscall
+ * @brief Writes bytes to the attached process using the `ptrace` syscall.
  *
- * @param address the address in the attached process to write to
- * @param buffer a buffer containing the bytes to write must be at least `n` bytes big
- * @param n how many bytes to write
- * @return int64_t how many bytes actually written
+ * @param address The address in the attached process to write to.
+ * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
+ * @param n How many bytes to write.
+ * @return how many bytes actually written.
  */
 int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const {
 	auto ptr      = static_cast<const uint8_t *>(buffer);
@@ -346,7 +345,7 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 }
 
 /**
- * @brief steps the current active thread (and ONLY the active thread) one instruction.
+ * @brief Steps the current active thread (and ONLY the active thread) one instruction.
  * If there is no current active thread, one is selected at random to become the active thread
  * from the set of currently attached, stopped threads
  */
@@ -368,7 +367,7 @@ void Process::step() {
 }
 
 /**
- * @brief resumes all attached, currently stopped threads
+ * @brief Resumes all attached, currently stopped threads.
  */
 void Process::resume() {
 	for (auto [tid, thread] : threads_) {
@@ -379,7 +378,7 @@ void Process::resume() {
 }
 
 /**
- * @brief stops the current active thread. If there is no current active thread,
+ * @brief Stops the current active thread. If there is no current active thread,
  * one is selected at random to become the active thread from the set of currently
  * attached, running threads. NOTE: this is enough to stop the whole process if
  * desired because the event handler will stop all other threads if in "all-stop"
@@ -400,7 +399,7 @@ void Process::stop() {
 }
 
 /**
- * @brief Terminates the attached process
+ * @brief Terminates the attached process.
  */
 void Process::kill() const {
 	if (ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
@@ -410,7 +409,7 @@ void Process::kill() const {
 }
 
 /**
- * @brief detaches the debugger from the attached process
+ * @brief Detaches the debugger from the attached process.
  */
 void Process::detach() {
 	breakpoints_.clear();
@@ -418,15 +417,15 @@ void Process::detach() {
 }
 
 /**
- * @brief waits for `timeout` milliseconds for the next debug event to occur.
+ * @brief Waits for `timeout` milliseconds for the next debug event to occur.
  * If there was a debug event, and we are in "all-stop" mode, then it will also
  * stop all other running threads. Events will be reported by calling `callback`.
  * Note that it is possible for a single call to this function can result in
  * multiple events to be reported.
  *
- * @param timeout the amount of milliseconds to wait for the next event
- * @param callback the function to call when an event occurs
- * @return bool true if a debug event occurred withing `timeout` milliseconds, otherwise false
+ * @param timeout The amount of milliseconds to wait for the next event.
+ * @param callback The function to call when an event occurs.
+ * @return true if a debug event occurred withing `timeout` milliseconds, otherwise false.
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
 
@@ -578,9 +577,9 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 }
 
 /**
- * @brief
+ * @brief Adds a breakpoint to the process.
  *
- * @param address
+ * @param address The address to add the breakpoint at
  */
 void Process::add_breakpoint(uint64_t address) {
 	auto bp = std::make_shared<Breakpoint>(this, address);
@@ -588,19 +587,19 @@ void Process::add_breakpoint(uint64_t address) {
 }
 
 /**
- * @brief
+ * @brief Removes a breakpoint from the process.
  *
- * @param address
+ * @param address The address to remove the breakpoint from
  */
 void Process::remove_breakpoint(uint64_t address) {
 	breakpoints_.erase(address);
 }
 
 /**
- * @brief
+ * @brief Finds a thread by its thread id.
  *
- * @param tid
- * @return std::shared_ptr<Thread>
+ * @param tid The thread id to find.
+ * @return The thread if found, otherwise nullptr.
  */
 std::shared_ptr<Thread> Process::find_thread(pid_t tid) const {
 	auto it = threads_.find(tid);
@@ -612,10 +611,10 @@ std::shared_ptr<Thread> Process::find_thread(pid_t tid) const {
 }
 
 /**
- * @brief
+ * @brief Finds a breakpoint by its address.
  *
- * @param address
- * @return std::shared_ptr<Breakpoint>
+ * @param address The address to find the breakpoint at.
+ * @return The breakpoint if found, otherwise nullptr.
  */
 std::shared_ptr<Breakpoint> Process::find_breakpoint(uint64_t address) const {
 	auto it = breakpoints_.find(address);

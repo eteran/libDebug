@@ -42,8 +42,7 @@ defer_type<F> make_defer(F &&f) {
 	auto CONCAT2(scope_exit_, __LINE__) = make_defer([&] __VA_ARGS__)
 
 /**
- * @brief Construct a new Debugger object
- *
+ * @brief Construct a new Debugger object.
  */
 Debugger::Debugger() {
 
@@ -54,36 +53,36 @@ Debugger::Debugger() {
 }
 
 /**
- * @brief Destroy the Debugger object
- *
+ * @brief Destroy the Debugger object.
  */
 Debugger::~Debugger() {
 	sigprocmask(SIG_SETMASK, &prev_mask_, nullptr);
 }
 
 /**
- * @brief enables or disables lazy binding for newly spawned processes
+ * @brief Enables or disables lazy binding for newly spawned processes.
  *
- * @param value
+ * @param value true to disable lazy binding, false to enable it.
  */
 void Debugger::set_disable_lazy_binding(bool value) {
 	disableLazyBinding_ = value;
 }
 
 /**
- * @brief enables or disables address space layout randomization for newly spawned processes
+ * @brief Enables or disables address space layout randomization for newly spawned processes.
  *
- * @param value
+ * @param value true to disable ASLR, false to enable it.
  */
 void Debugger::set_disable_aslr(bool value) {
 	disableASLR_ = value;
 }
 
 /**
- * @brief attaches to the process identified by <pid>
+ * @brief Attaches to the process identified by <pid>.
  *
- * @param pid
- * @return std::shared_ptr<Process>
+ * @param pid The process to attach to.
+ * @return The process object.
+ * @throws DebuggerError if the process could not be attached.
  */
 std::shared_ptr<Process> Debugger::attach(pid_t pid) {
 	process_ = std::make_unique<Process>(pid, Process::Attach);
@@ -91,29 +90,16 @@ std::shared_ptr<Process> Debugger::attach(pid_t pid) {
 }
 
 /**
- * @brief spawns a process and attaches to it
+ * @brief Spawns a process and attaches to it.
  *
- * @param cwd the working directory to change to before executing the process
- * @param argv the arguments to pass to the process
+ * @param cwd The working directory to change to before executing the process
+ * @param argv The arguments to pass to the process
+ * @param envp The environment variables to pass to the process (if nullptr, the current environment is used)
+ *
+ * @return The process object.
  * @note the first argument in `argv` must be the path to the executable
- * @return std::shared_ptr<Process>
- */
-std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[]) {
-	return spawn(cwd, argv, nullptr);
-}
-
-/**
- * @brief spawns a process and attaches to it
- *
- * @param cwd the working directory to change to before executing the process
- * @param argv the arguments to pass to the process
- * @param envp the environment variables to pass to the process
- *
- * @note the first argument in `argv` must be the path to the executable
- * @throws DebuggerError if any errors occur during the process creation
  * @note the environment variables are passed as a null-terminated array of strings, where each string is of the form "KEY=VALUE"
- *
- * @return std::shared_ptr<Process>
+ * @throws DebuggerError if any errors occur during the process creation
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], const char *envp[]) {
 

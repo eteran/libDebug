@@ -34,12 +34,12 @@ private:
 };
 
 /**
- * @brief enumerates all numeric directories in the given path
+ * @brief Enumerates all numeric directories in the given path.
  *
  *
  * @tparam Callback
- * @param path where to enumerate, typically either `/proc/` or `/proc/<pid>/task/`
- * @param callback the function to call for each numeric directory,
+ * @param path Where to enumerate, typically either `/proc/` or `/proc/<pid>/task/`
+ * @param callback The function to call for each numeric directory,
  * it should return false if it wants to abort enumeration
  */
 template <class Callback>
@@ -76,10 +76,10 @@ void proc_enumerator(const char *path, Callback callback) {
 }
 
 /**
- * @brief enumerates all the threads of a given pid
+ * @brief Enumerates all the threads of a given pid.
  *
- * @param pid
- * @return std::vector<pid_t>
+ * @param pid The process to enumerate the threads of.
+ * @return A vector of thread ids.
  */
 std::vector<pid_t> enumerate_threads(pid_t pid) {
 	std::vector<pid_t> threads;
@@ -96,9 +96,9 @@ std::vector<pid_t> enumerate_threads(pid_t pid) {
 }
 
 /**
- * @brief enumerates all running processes in the system
+ * @brief Enumerates all running processes in the system.
  *
- * @return std::vector<pid_t>
+ * @return A vector of process ids.
  */
 std::vector<pid_t> enumerate_processes() {
 
@@ -113,10 +113,10 @@ std::vector<pid_t> enumerate_processes() {
 }
 
 /**
- * @brief hashes the memory map of a given process
+ * @brief Hashes the memory map of a given process.
  *
- * @param pid
- * @return uint64_t
+ * @param pid The process to hash the memory map of.
+ * @return The hash of the memory map.
  */
 uint64_t hash_regions(pid_t pid) {
 	hasher h;
@@ -141,10 +141,10 @@ uint64_t hash_regions(pid_t pid) {
 }
 
 /**
- * @brief
+ * @brief Enumerates all the memory regions of a given process.
  *
- * @param pid
- * @return std::vector<Region>
+ * @param pid The process to enumerate the memory regions of.
+ * @return A vector of memory regions.
  */
 std::vector<Region> enumerate_regions(pid_t pid) {
 	std::vector<Region> regions;

@@ -10,9 +10,9 @@
 
 #ifdef __x86_64__
 /**
- * @brief store the given context into the given x86_32 context
+ * @brief Store the given context into the given x86_32 context.
  *
- * @param ctx the x86_32 context to store the given context into
+ * @param ctx The x86_32 context to store the given context into.
  */
 void Context::store_to_x86_32(Context_x86_32 *ctx) const {
 	ctx->eax      = static_cast<uint32_t>(regs_.rax);
@@ -35,9 +35,9 @@ void Context::store_to_x86_32(Context_x86_32 *ctx) const {
 }
 
 /**
- * @brief fill the given context with the given x86_32 context
+ * @brief Fill the given context with the given x86_32 context.
  *
- * @param ctx the x86_32 context to fill the given context with
+ * @param ctx The x86_32 context to fill the given context with.
  */
 void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 	regs_.rax      = ctx->eax;
@@ -60,17 +60,17 @@ void Context::fill_from_x86_32(const Context_x86_32 *ctx) {
 }
 
 /**
- * @brief store the given context into the given x86_64 context
+ * @brief Store the given context into the given x86_64 context.
  *
- * @param ctx the x86_64 context to store the given context into
+ * @param ctx The x86_64 context to store the given context into
  */
 void Context::store_to_x86_64(Context_x86_64 *ctx) const {
 	std::memcpy(ctx, &regs_, sizeof(Context_x86_64));
 }
 /**
- * @brief fill the given context with the given x86_64 context
+ * @brief Fill the given context with the given x86_64 context.
  *
- * @param ctx the x86_64 context to fill the given context with
+ * @param ctx The x86_64 context to fill the given context with
  */
 void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
 	std::memcpy(&regs_, ctx, sizeof(Context_x86_64));
@@ -78,10 +78,10 @@ void Context::fill_from_x86_64(const Context_x86_64 *ctx) {
 #endif
 
 /**
- * @brief fill the given context with the given buffer
+ * @brief Fill the given context with the given buffer.
  *
- * @param buffer the buffer to fill the context with
- * @param n the size of the buffer
+ * @param buffer The buffer to fill the context with
+ * @param n The size of the buffer
  */
 
 void Context::fill_from(const void *buffer, size_t n) {
@@ -107,10 +107,10 @@ void Context::fill_from(const void *buffer, size_t n) {
 }
 
 /**
- * @brief store the context into the given buffer
+ * @brief Store the context into the given buffer.
  *
- * @param buffer the buffer to store the context into
- * @param n the size of the buffer
+ * @param buffer The buffer to store the context into
+ * @param n The size of the buffer
  */
 void Context::store_to(void *buffer, size_t n) const {
 	switch (type_) {
@@ -135,10 +135,10 @@ void Context::store_to(void *buffer, size_t n) const {
 }
 
 /**
- * @brief returns a reference to the given register
+ * @brief Returns a reference to the given register.
  *
- * @param reg
- * @return uint64_t&
+ * @param reg The register to return a reference to.
+ * @return A reference to the given register.
  */
 uint64_t &Context::register_ref(RegisterId reg) {
 	switch (reg) {
