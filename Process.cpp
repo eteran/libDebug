@@ -93,6 +93,10 @@ void dump_context(Context *ctx) {
 	std::printf("RDX: %016lx R13: %016lx\n", ctx->register_ref(RegisterId::RDX), ctx->register_ref(RegisterId::R13));
 	std::printf("RSI: %016lx R14: %016lx\n", ctx->register_ref(RegisterId::RSI), ctx->register_ref(RegisterId::R14));
 	std::printf("RDI: %016lx R15: %016lx\n", ctx->register_ref(RegisterId::RDI), ctx->register_ref(RegisterId::R15));
+	std::printf("CS: %016lx SS : %016lx\n", ctx->register_ref(RegisterId::CS), ctx->register_ref(RegisterId::SS));
+	std::printf("DS: %016lx ES : %016lx\n", ctx->register_ref(RegisterId::DS), ctx->register_ref(RegisterId::ES));
+	std::printf("FS: %016lx GS : %016lx\n", ctx->register_ref(RegisterId::FS), ctx->register_ref(RegisterId::GS));
+	std::printf("FS_BASE: %016lx GS_BASE: %016lx\n", ctx->register_ref(RegisterId::FS_BASE), ctx->register_ref(RegisterId::GS_BASE));
 }
 
 }

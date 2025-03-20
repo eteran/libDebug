@@ -7,7 +7,9 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <asm/ldt.h>
 #include <elf.h>
+#include <sys/procfs.h>
 #include <sys/ptrace.h>
 #include <sys/uio.h>
 #include <sys/user.h>
@@ -206,6 +208,94 @@ int Thread::stop_status() const {
 }
 
 /**
+ * @brief Retrieves the thread GP registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_registers(Context *ctx) const {
+	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
+	struct iovec iov = {buffer, sizeof(buffer)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
+	}
+	ctx->fill_from(buffer, iov.iov_len);
+}
+
+/**
+ * @brief Retrieves the thread xstate.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_xstate(Context *ctx) const {
+
+	(void)ctx;
+
+	// x86-64: 2688 bytes
+	// x86-32: ?
+
+	alignas(256) char xstate[4096];
+	struct iovec iov = {&xstate, sizeof(xstate)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
+	}
+}
+
+/**
+ * @brief Retrieves the thread hardware debug registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_debug_registers(Context *ctx) const {
+	for (int n = 0; n < 8; ++n) {
+		ctx->debug_regs_[n] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[n]), 0L));
+	}
+}
+
+/**
+ * @brief Get a specific segment base for a given segment register.
+ *
+ * @param ctx A pointer to the context object.
+ * @param reg The register to get the segment base for.
+ * @return The segment base.
+ */
+uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
+
+	// TODO(eteran): this is too arch specific, move to ContextIntel
+	uint64_t segment = ctx->register_ref(reg);
+	if (segment == 0) {
+		return 0;
+	}
+
+	// otherwise the selector picks descriptor from LDT
+	const bool from_gdt = !(segment & 0x04);
+	if (!from_gdt) {
+		return 0;
+	}
+
+	struct user_desc desc = {};
+	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, segment / LDT_ENTRY_SIZE, &desc) == -1) {
+		std::perror("ptrace(PTRACE_GET_THREAD_AREA)");
+		std::exit(0);
+	}
+
+	return desc.base_addr;
+}
+
+/**
+ * @brief Get the segment bases
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_segment_bases(Context *ctx) const {
+
+	// TODO(eteran): this is too arch specific, move to ContextIntel
+	ctx->register_ref(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
+	ctx->register_ref(RegisterId::FS_BASE) = get_segment_base(ctx, RegisterId::FS);
+}
+
+/**
  * @brief Retrieves the thread context.
  *
  * @param ctx A pointer to the context object.
@@ -214,19 +304,69 @@ void Thread::get_context(Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	alignas(Context::BufferAlign) char buffer[Context::BufferAlign];
+	get_registers(ctx);
+	get_xstate(ctx);
+	get_debug_registers(ctx);
+	get_segment_bases(ctx);
+}
 
-	struct iovec iov = {buffer, sizeof(buffer)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
+/**
+ * @brief Sets the thread GP registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_registers(const Context *ctx) const {
+	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
+	ctx->store_to(buffer, sizeof(buffer));
+	struct iovec iov = {buffer, ctx->type()};
+	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		std::perror("ptrace(PTRACE_SETREGSET)");
 		std::exit(0);
 	}
+}
 
-	ctx->fill_from(buffer, iov.iov_len);
+/**
+ * @brief Sets the thread hardware debug registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_debug_registers(const Context *ctx) const {
+	// TODO(eteran): implement
+	(void)ctx;
+}
 
-	// TODO(eteran): FPU
-	// TODO(eteran): Debug registers
-	// TODO(eteran): SSE/SSE2/etc...
+/**
+ * @brief Sets the thread xstate.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_xstate(const Context *ctx) const {
+	// TODO(eteran): implement
+	(void)ctx;
+}
+
+/**
+ * @brief Set the segment bases
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_segment_bases(const Context *ctx) const {
+	// TODO(eteran): implement
+	(void)ctx;
+}
+
+/**
+ * @brief Set a specific segment base for a given segment register.
+ *
+ * @param ctx A pointer to the context object.
+ * @param reg The register to set the segment base for.
+ * @param base The segment base.
+ */
+void Thread::set_segment_base(const Context *ctx, RegisterId reg, uint64_t base) {
+	// TODO(eteran): implement
+	(void)ctx;
+	(void)reg;
+	(void)base;
 }
 
 /**
@@ -238,17 +378,8 @@ void Thread::set_context(const Context *ctx) const {
 
 	assert(state_ == State::Stopped);
 
-	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
-
-	ctx->store_to(buffer, sizeof(buffer));
-
-	struct iovec iov = {buffer, ctx->type()};
-	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_SETREGSET)");
-		std::exit(0);
-	}
-
-	// TODO(eteran): FPU
-	// TODO(eteran): Debug registers
-	// TODO(eteran): SSE/SSE2/etc...
+	set_registers(ctx);
+	set_xstate(ctx);
+	set_debug_registers(ctx);
+	set_segment_bases(ctx);
 }

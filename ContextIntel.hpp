@@ -172,16 +172,20 @@ public:
 	void fill_from(const void *buffer, size_t n);
 	void store_to(void *buffer, size_t n) const;
 
+
+
 private:
 	void store_to_x86_32(Context_x86_32 *ctx) const;
 	void store_to_x86_64(Context_x86_64 *ctx) const;
 	void fill_from_x86_32(const Context_x86_32 *ctx);
 	void fill_from_x86_64(const Context_x86_64 *ctx);
 
-private:
+public:
+	// TODO(eteran): make these private
 	// NOTE(eteran): normalizing on x86-64 for simplicity
-	Context_x86_64 regs_;
-	size_t type_ = sizeof(Context_x86_64);
+	Context_x86_64 regs_    = {};
+	uint64_t debug_regs_[8] = {};
+	size_t type_            = sizeof(Context_x86_64);
 };
 
 #endif

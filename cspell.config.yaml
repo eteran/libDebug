@@ -11,10 +11,12 @@ words:
   - OUTSB
   - OUTSD
   - PTRACE_PEEKDATA
+  - PTRACE_PEEKUSER
   - PTRACE_POKEDATA
   - PTRACE_TRACEME
   - tgkill
   - tracee
   - vdso
+  - xstate
 ignoreWords: []
 import: []

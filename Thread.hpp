@@ -54,6 +54,18 @@ public:
 	void wait();
 
 private:
+	void get_registers(Context *ctx) const;
+	void set_registers(const Context *ctx) const;
+	void get_xstate(Context *ctx) const;
+	void set_xstate(const Context *ctx) const;
+	void get_debug_registers(Context *ctx) const;
+	void set_debug_registers(const Context *ctx) const;
+	void get_segment_bases(Context *ctx) const;
+	void set_segment_bases(const Context *ctx) const;
+	uint64_t get_segment_base(Context *ctx, RegisterId reg) const;
+	void set_segment_base(const Context *ctx, RegisterId reg, uint64_t base);
+
+private:
 	pid_t pid_   = 0;
 	pid_t tid_   = 0;
 	int wstatus_ = 0;
