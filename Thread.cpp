@@ -75,10 +75,8 @@ bool Thread::detect_64_bit() const {
 
 	switch (iov.iov_len) {
 	case sizeof(Context_x86_32):
-		printf("Is 32-bit\n");
 		return false;
 	case sizeof(Context_x86_64):
-		printf("Is 64-bit\n");
 		return true;
 	default:
 		std::printf("Unknown iov_len: %zu\n", iov.iov_len);

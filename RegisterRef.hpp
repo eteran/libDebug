@@ -25,6 +25,8 @@ public:
 	[[nodiscard]] bool is_valid() const { return ptr_ != nullptr; }
 	[[nodiscard]] size_t size() const { return size_; }
 	[[nodiscard]] const void *data() const { return ptr_; }
+
+public:
 	[[nodiscard]] bool operator==(const RegisterRef &rhs) const { return size_ == rhs.size_ && std::memcmp(ptr_, rhs.ptr_, size_) == 0; }
 	[[nodiscard]] bool operator!=(const RegisterRef &rhs) const { return size_ != rhs.size_ || std::memcmp(ptr_, rhs.ptr_, size_) != 0; }
 
@@ -32,6 +34,8 @@ public:
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	Integer as() const {
 		Integer value;
+		// NOTE(eteran): effectively zero-extend the value to the size of the integer being read into
+		std::memset(&value, 0, sizeof(Integer));
 		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
 		return value;
 	}
@@ -53,6 +57,12 @@ private:
 template <class T>
 RegisterRef make_register(T &var) {
 	return RegisterRef(&var, sizeof(T));
+}
+
+template <class T>
+RegisterRef make_register(T &var, size_t size) {
+	assert(size <= sizeof(T));
+	return RegisterRef(&var, size);
 }
 
 #endif

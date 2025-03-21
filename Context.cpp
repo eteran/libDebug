@@ -10,7 +10,26 @@
  */
 RegisterRef Context::get_64(RegisterId reg) {
 	switch (reg) {
-	// 64-bit registers
+
+	// Segment Registers
+	case RegisterId::CS:
+		return make_register(regs_64_.cs);
+	case RegisterId::DS:
+		return make_register(regs_64_.ds);
+	case RegisterId::ES:
+		return make_register(regs_64_.es);
+	case RegisterId::FS:
+		return make_register(regs_64_.fs);
+	case RegisterId::GS:
+		return make_register(regs_64_.gs);
+	case RegisterId::SS:
+		return make_register(regs_64_.ss);
+	case RegisterId::FS_BASE:
+		return make_register(regs_64_.fs_base);
+	case RegisterId::GS_BASE:
+		return make_register(regs_64_.gs_base);
+
+	// 64-bit GP registers
 	case RegisterId::R15:
 		return make_register(regs_64_.r15);
 	case RegisterId::R14:
@@ -45,48 +64,32 @@ RegisterRef Context::get_64(RegisterId reg) {
 		return make_register(regs_64_.orig_rax);
 	case RegisterId::RIP:
 		return make_register(regs_64_.rip);
-	case RegisterId::CS:
-		return make_register(regs_64_.cs);
 	case RegisterId::EFLAGS:
 		return make_register(regs_64_.eflags);
 	case RegisterId::RSP:
 		return make_register(regs_64_.rsp);
-	case RegisterId::SS:
-		return make_register(regs_64_.ss);
-	case RegisterId::FS_BASE:
-		return make_register(regs_64_.fs_base);
-	case RegisterId::GS_BASE:
-		return make_register(regs_64_.gs_base);
-	case RegisterId::DS:
-		return make_register(regs_64_.ds);
-	case RegisterId::ES:
-		return make_register(regs_64_.es);
-	case RegisterId::FS:
-		return make_register(regs_64_.fs);
-	case RegisterId::GS:
-		return make_register(regs_64_.gs);
 
-	// 32-bit registers
+	// 32-bit GP registers
 	case RegisterId::EAX:
-		return make_register(regs_64_.rax);
+		return make_register(regs_64_.rax, sizeof(uint32_t));
 	case RegisterId::EBX:
-		return make_register(regs_64_.rbx);
+		return make_register(regs_64_.rbx, sizeof(uint32_t));
 	case RegisterId::ECX:
-		return make_register(regs_64_.rcx);
+		return make_register(regs_64_.rcx, sizeof(uint32_t));
 	case RegisterId::EDX:
-		return make_register(regs_64_.rdx);
+		return make_register(regs_64_.rdx, sizeof(uint32_t));
 	case RegisterId::ESI:
-		return make_register(regs_64_.rsi);
+		return make_register(regs_64_.rsi, sizeof(uint32_t));
 	case RegisterId::EDI:
-		return make_register(regs_64_.rdi);
+		return make_register(regs_64_.rdi, sizeof(uint32_t));
 	case RegisterId::ORIG_EAX:
-		return make_register(regs_64_.orig_rax);
+		return make_register(regs_64_.orig_rax, sizeof(uint32_t));
 	case RegisterId::EIP:
-		return make_register(regs_64_.rip);
+		return make_register(regs_64_.rip, sizeof(uint32_t));
 	case RegisterId::ESP:
-		return make_register(regs_64_.rsp);
+		return make_register(regs_64_.rsp, sizeof(uint32_t));
 	case RegisterId::EBP:
-		return make_register(regs_64_.rbp);
+		return make_register(regs_64_.rbp, sizeof(uint32_t));
 	default:
 		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
 		return RegisterRef();

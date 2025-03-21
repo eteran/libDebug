@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(Debug CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(TARGET_ARCH "-m64")
 
 option(ENABLE_ASAN "Enable address sanitizer")
 option(ENABLE_MSAN "Enable memory sanitizer")
@@ -64,8 +65,11 @@ add_library(
 )
 
 set_target_properties(
-    Debug PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS OFF # COMPILE_OPTIONS "-m32"
-                     # LINK_FLAGS "-m32"
+    Debug
+    PROPERTIES CXX_STANDARD 17
+               CXX_EXTENSIONS OFF
+               COMPILE_OPTIONS ${TARGET_ARCH}
+               LINK_FLAGS ${TARGET_ARCH}
 )
 
 target_compile_options(
@@ -92,8 +96,10 @@ target_link_libraries(Debugger PUBLIC Debug)
 
 set_target_properties(
     Debugger
-    PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS OFF # COMPILE_OPTIONS "-m32"
-               # LINK_FLAGS "-m32"
+    PROPERTIES CXX_STANDARD 17
+               CXX_EXTENSIONS OFF
+               COMPILE_OPTIONS ${TARGET_ARCH}
+               LINK_FLAGS ${TARGET_ARCH}
 )
 
 target_compile_options(
