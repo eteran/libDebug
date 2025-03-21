@@ -1,5 +1,6 @@
 // NOTE(eteran): Makes it possible for 32-bit builds to debug 64-bit processes
 #define _FILE_OFFSET_BITS 64
+#define _TIME_BITS        64
 
 #include "Process.hpp"
 #include "Breakpoint.hpp"
@@ -34,7 +35,7 @@ namespace {
  */
 struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 	struct timespec ts;
-	ts.tv_sec  = static_cast<time_t>(msecs.count() / 1000);
+	ts.tv_sec  = msecs.count() / 1000;
 	ts.tv_nsec = static_cast<long>((msecs.count() % 1000) * 1000000);
 	return ts;
 }
