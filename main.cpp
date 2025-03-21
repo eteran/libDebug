@@ -59,6 +59,17 @@ void tracer(pid_t cpid) {
 }
 
 /**
+ * @brief Dumps the regions of a given process.
+ *
+ * @param regions The regions to dump.
+ */
+void dump_regions(const std::vector<Region> &regions) {
+	for (const auto &region : regions) {
+		std::printf("Region: %016" PRIx64 " - %016" PRIx64 ": %s\n", region.start(), region.end(), region.name().c_str());
+	}
+}
+
+/**
  * @brief Dumps the memory of a given process.
  *
  * @param process The process to dump memory from.
@@ -128,26 +139,25 @@ int main() {
 	auto debugger = std::make_unique<Debugger>();
 
 	const char *argv[] = {
-		"/usr/bin/sleep",
-		"999",
+		"./TestApp",
 		nullptr,
 	};
 
 	std::shared_ptr<Process> process;
 
 	try {
-		process = debugger->spawn("/etc/", argv);
+		process = debugger->spawn(nullptr, argv);
 	} catch (const DebuggerError &e) {
 		std::printf("Debugger Error: %s\n", e.what());
 		return 1;
 	}
 
-	process->add_breakpoint(0x00007ffff7fe4540);
+	process->add_breakpoint(0x56556090); // main of TestApp on my machine
+
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
 	auto regions                  = enumerate_regions(process->pid());
-	for (const auto &region : regions) {
-		std::printf("Region: %016" PRIx64 " - %016" PRIx64 ": %s\n", region.start(), region.end(), region.name().c_str());
-	}
+
+	dump_regions(regions);
 	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
 	process->resume();
 
@@ -161,6 +171,8 @@ int main() {
 					regions              = enumerate_regions(process->pid());
 					std::printf("Memory Map Changed!\n");
 				}
+
+				process->report();
 
 				return EventStatus::Stop;
 			})) {

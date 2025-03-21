@@ -3,6 +3,7 @@
 #include "Context.hpp"
 
 #include <cassert>
+#include <cinttypes>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -244,6 +245,13 @@ int Thread::stop_status() const {
  */
 void Thread::get_registers(Context *ctx) const {
 
+#if defined(__x86_64__)
+	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
+	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->regs_64_) == -1) {
+		std::perror("ptrace(PTRACE_GETREGS)");
+		std::exit(0);
+	}
+#else
 	struct iovec iov;
 	if (is_64_bit_) {
 		iov.iov_base = &ctx->regs_64_;
@@ -258,6 +266,7 @@ void Thread::get_registers(Context *ctx) const {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
 	}
+#endif
 }
 
 /**
@@ -286,6 +295,7 @@ void Thread::get_xstate(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers(Context *ctx) const {
+#ifdef __x86_64__
 	ctx->debug_regs_[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->debug_regs_[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->debug_regs_[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -294,6 +304,16 @@ void Thread::get_debug_registers(Context *ctx) const {
 	ctx->debug_regs_[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
 	ctx->debug_regs_[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
 	ctx->debug_regs_[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+#elif defined(__i386__)
+	ctx->debug_regs_[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+	ctx->debug_regs_[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+	ctx->debug_regs_[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+	ctx->debug_regs_[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+	ctx->debug_regs_[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+	ctx->debug_regs_[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+	ctx->debug_regs_[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+	ctx->debug_regs_[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+#endif
 }
 
 /**
@@ -304,11 +324,9 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @return The segment base.
  */
 uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
-	(void)ctx;
-	(void)reg;
-#if 0
+
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	uint64_t segment = ctx->get(reg);
+	uint64_t segment = ctx->get(reg).as<uint16_t>();
 	if (segment == 0) {
 		return 0;
 	}
@@ -319,14 +337,13 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 		return 0;
 	}
 
-
+	struct user_desc desc;
 	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, segment / LDT_ENTRY_SIZE, &desc) == -1) {
 		std::perror("ptrace(PTRACE_GET_THREAD_AREA)");
-		std::exit(0);
+		return 0;
 	}
-#endif
 
-	return 0;
+	return desc.base_addr;
 }
 
 /**
@@ -335,10 +352,12 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_segment_bases(Context *ctx) const {
-
+	(void)ctx;
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	// ctx->get(RegisterId::GS_BASE) = get_segment_base(ctx, RegisterId::GS);
-	ctx->get(RegisterId::FS_BASE) = get_segment_base(ctx, RegisterId::FS);
+#if 1
+	get_segment_base(ctx, RegisterId::GS);
+	get_segment_base(ctx, RegisterId::FS);
+#endif
 }
 
 /**
@@ -366,6 +385,12 @@ void Thread::get_context(Context *ctx) const {
  */
 void Thread::set_registers(const Context *ctx) const {
 
+#if defined(__x86_64__)
+	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->regs_64_) == -1) {
+		std::perror("ptrace(PTRACE_SETREGS)");
+		std::exit(0);
+	}
+#else
 	struct iovec iov;
 	if (is_64_bit_) {
 		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->regs_64_);
@@ -380,6 +405,7 @@ void Thread::set_registers(const Context *ctx) const {
 		std::perror("ptrace(PTRACE_SETREGSET)");
 		std::exit(0);
 	}
+#endif
 }
 
 /**

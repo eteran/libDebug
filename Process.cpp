@@ -127,6 +127,7 @@ void dump_context(Context *ctx) {
 		std::printf("FS: %04x GS : %04x\n", ctx->get(RegisterId::FS).as<uint16_t>(), ctx->get(RegisterId::GS).as<uint16_t>());
 	}
 }
+
 }
 
 /**

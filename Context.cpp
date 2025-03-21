@@ -9,6 +9,9 @@
  * @return A reference to the given register.
  */
 RegisterRef Context::get_64(RegisterId reg) {
+
+	using T = std::underlying_type_t<RegisterId>;
+
 	switch (reg) {
 
 	// Segment Registers
@@ -65,7 +68,7 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::RIP:
 		return make_register(regs_64_.rip);
 	case RegisterId::EFLAGS:
-		return make_register(regs_64_.eflags);
+		return make_register(regs_64_.rflags);
 	case RegisterId::RSP:
 		return make_register(regs_64_.rsp);
 
@@ -90,8 +93,19 @@ RegisterRef Context::get_64(RegisterId reg) {
 		return make_register(regs_64_.rsp, sizeof(uint32_t));
 	case RegisterId::EBP:
 		return make_register(regs_64_.rbp, sizeof(uint32_t));
+
+	// Debug Registers
+	case RegisterId::DR0:
+	case RegisterId::DR1:
+	case RegisterId::DR2:
+	case RegisterId::DR3:
+	case RegisterId::DR4:
+	case RegisterId::DR5:
+	case RegisterId::DR6:
+	case RegisterId::DR7:
+		return make_register(debug_regs_[static_cast<T>(reg) - static_cast<T>(RegisterId::DR0)]);
 	default:
-		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
+		std::printf("Unknown Register [64]: %d\n", static_cast<T>(reg));
 		return RegisterRef();
 	}
 }
@@ -103,6 +117,9 @@ RegisterRef Context::get_64(RegisterId reg) {
  * @return A reference to the given register.
  */
 RegisterRef Context::get_32(RegisterId reg) {
+
+	using T = std::underlying_type_t<RegisterId>;
+
 	switch (reg) {
 	case RegisterId::EAX:
 		return make_register(regs_32_.eax);
@@ -138,12 +155,23 @@ RegisterRef Context::get_32(RegisterId reg) {
 		return make_register(regs_32_.fs);
 	case RegisterId::GS:
 		return make_register(regs_32_.gs);
-#if 0
+
 	case RegisterId::FS_BASE:
-		return make_register(regs_32_.fs_base);
+		return RegisterRef();
 	case RegisterId::GS_BASE:
-		return make_register(regs_32_.gs_base);
-#endif
+		return RegisterRef();
+
+	// Debug Registers
+	case RegisterId::DR0:
+	case RegisterId::DR1:
+	case RegisterId::DR2:
+	case RegisterId::DR3:
+	case RegisterId::DR4:
+	case RegisterId::DR5:
+	case RegisterId::DR6:
+	case RegisterId::DR7:
+		return make_register(debug_regs_[static_cast<T>(reg) - static_cast<T>(RegisterId::DR0)]);
+
 	default:
 		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
 		return RegisterRef();
@@ -158,9 +186,13 @@ RegisterRef Context::get_32(RegisterId reg) {
  */
 RegisterRef Context::get(RegisterId reg) {
 
+#if defined(__x86_64__)
+	return get_64(reg);
+#elif defined(__i386__)
 	if (is_64_bit_) {
 		return get_64(reg);
 	} else {
 		return get_32(reg);
 	}
+#endif
 }

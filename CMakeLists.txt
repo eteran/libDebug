@@ -119,3 +119,12 @@ target_compile_options(
            -Wsign-conversion
            -Wunused
 )
+
+add_executable(TestApp test_app.cpp)
+set_target_properties(
+    TestApp
+    PROPERTIES CXX_STANDARD 17
+               CXX_EXTENSIONS OFF
+               COMPILE_OPTIONS "-m32"
+               LINK_FLAGS "-m32"
+)

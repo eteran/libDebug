@@ -27,6 +27,8 @@ enum class RegisterId {
 	DR1,
 	DR2,
 	DR3,
+	DR4,
+	DR5,
 	DR6,
 	DR7,
 
@@ -168,7 +170,7 @@ struct Context_x86_64 {
 	uint64_t orig_rax;
 	uint64_t rip;
 	uint64_t cs;
-	uint64_t eflags;
+	uint64_t rflags;
 	uint64_t rsp;
 	uint64_t ss;
 	uint64_t fs_base;
@@ -226,9 +228,10 @@ public:
 		Context_x86_32_xstate xstate_32_;
 	};
 
-	uint64_t debug_regs_[8] = {};
-	bool is_64_bit_         = false;
-	bool is_set_            = false;
+	uint64_t debug_regs_[8];
+
+	bool is_64_bit_ = false;
+	bool is_set_    = false;
 };
 
 #endif
