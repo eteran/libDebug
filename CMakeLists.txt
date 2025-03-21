@@ -120,9 +120,18 @@ target_compile_options(
            -Wunused
 )
 
-add_executable(TestApp test_app.cpp)
+add_executable(TestApp64 test_app.cpp)
 set_target_properties(
-    TestApp
+    TestApp64
+    PROPERTIES CXX_STANDARD 17
+               CXX_EXTENSIONS OFF
+               COMPILE_OPTIONS "-m64"
+               LINK_FLAGS "-m64"
+)
+
+add_executable(TestApp32 test_app.cpp)
+set_target_properties(
+    TestApp32
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
                COMPILE_OPTIONS "-m32"

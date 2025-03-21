@@ -139,7 +139,7 @@ int main() {
 	auto debugger = std::make_unique<Debugger>();
 
 	const char *argv[] = {
-		"./TestApp",
+		"./TestApp32",
 		nullptr,
 	};
 
@@ -152,7 +152,11 @@ int main() {
 		return 1;
 	}
 
-	process->add_breakpoint(0x56556090); // main of TestApp on my machine
+#if 1
+	process->add_breakpoint(0x56556090); // main of TestApp on my machine (32-bit)
+#else
+	process->add_breakpoint(0x00005555555551a9); // main of TestApp on my machine (64-bit)
+#endif
 
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
 	auto regions                  = enumerate_regions(process->pid());
@@ -182,7 +186,6 @@ int main() {
 	}
 
 	std::printf("Done Stepping\n");
-	process->detach();
-
+	process->kill();
 #endif
 }

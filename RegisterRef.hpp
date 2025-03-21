@@ -7,12 +7,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 class RegisterRef {
 public:
-	explicit RegisterRef(void *ptr, size_t size)
-		: ptr_(ptr), size_(size) {}
+	explicit RegisterRef(std::string_view name, void *ptr, size_t size)
+		: name_(name), ptr_(ptr), size_(size) {}
 
 	RegisterRef()                               = default;
 	RegisterRef(const RegisterRef &)            = default;
@@ -22,6 +23,7 @@ public:
 	~RegisterRef()                              = default;
 
 public:
+	[[nodiscard]] const std::string &name() const { return name_; }
 	[[nodiscard]] bool is_valid() const { return ptr_ != nullptr; }
 	[[nodiscard]] size_t size() const { return size_; }
 	[[nodiscard]] const void *data() const { return ptr_; }
@@ -42,27 +44,28 @@ public:
 
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	RegisterRef &operator=(Integer value) {
-		assert(size_ >= sizeof(Integer));
+
 		// NOTE(eteran): effectively zero-extend the value to the size of the register
 		std::memset(ptr_, 0, size_);
-		std::memcpy(ptr_, &value, sizeof(Integer));
+		std::memcpy(ptr_, &value, std::min(size_, sizeof(Integer)));
 		return *this;
 	}
 
 private:
+	std::string name_;
 	void *ptr_   = nullptr;
 	size_t size_ = 0;
 };
 
 template <class T>
-RegisterRef make_register(T &var) {
-	return RegisterRef(&var, sizeof(T));
+RegisterRef make_register(std::string_view name, T &var) {
+	return RegisterRef(name, &var, sizeof(T));
 }
 
 template <class T>
-RegisterRef make_register(T &var, size_t size) {
+RegisterRef make_register(std::string_view name, T &var, size_t size) {
 	assert(size <= sizeof(T));
-	return RegisterRef(&var, size);
+	return RegisterRef(name, &var, size);
 }
 
 #endif

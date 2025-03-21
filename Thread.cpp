@@ -247,19 +247,19 @@ void Thread::get_registers(Context *ctx) const {
 
 #if defined(__x86_64__)
 	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
-	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->regs_64_) == -1) {
+	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		std::perror("ptrace(PTRACE_GETREGS)");
 		std::exit(0);
 	}
 #else
 	struct iovec iov;
 	if (is_64_bit_) {
-		iov.iov_base = &ctx->regs_64_;
-		iov.iov_len  = sizeof(ctx->regs_64_);
+		iov.iov_base = &ctx->ctx_64_.regs;
+		iov.iov_len  = sizeof(ctx->ctx_64_.regs);
 
 	} else {
-		iov.iov_base = &ctx->regs_32_;
-		iov.iov_len  = sizeof(ctx->regs_32_);
+		iov.iov_base = &ctx->ctx_32_.regs;
+		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
 	}
 
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
@@ -296,23 +296,34 @@ void Thread::get_xstate(Context *ctx) const {
  */
 void Thread::get_debug_registers(Context *ctx) const {
 #ifdef __x86_64__
-	ctx->debug_regs_[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-	ctx->debug_regs_[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-	ctx->debug_regs_[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-	ctx->debug_regs_[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-	ctx->debug_regs_[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-	ctx->debug_regs_[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-	ctx->debug_regs_[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-	ctx->debug_regs_[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+	ctx->ctx_64_.debug_regs[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+	ctx->ctx_64_.debug_regs[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+	ctx->ctx_64_.debug_regs[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+	ctx->ctx_64_.debug_regs[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+	ctx->ctx_64_.debug_regs[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
 #elif defined(__i386__)
-	ctx->debug_regs_[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-	ctx->debug_regs_[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-	ctx->debug_regs_[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-	ctx->debug_regs_[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-	ctx->debug_regs_[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-	ctx->debug_regs_[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-	ctx->debug_regs_[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-	ctx->debug_regs_[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+	if (ctx->is_64_bit()) {
+		ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+		ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+		ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+		ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+		ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+		ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+		ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+		ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+	} else {
+		ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+		ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+		ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+		ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+		ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+		ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+		ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+		ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+	}
 #endif
 }
 
@@ -323,10 +334,10 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @param reg The register to get the segment base for.
  * @return The segment base.
  */
-uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
+uint32_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-	uint64_t segment = ctx->get(reg).as<uint16_t>();
+	uint16_t segment = ctx->get(reg).as<uint16_t>();
 	if (segment == 0) {
 		return 0;
 	}
@@ -351,12 +362,19 @@ uint64_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
  *
  * @param ctx A pointer to the context object.
  */
-void Thread::get_segment_bases(Context *ctx) const {
-	(void)ctx;
+void Thread::get_segment_bases([[maybe_unused]] Context *ctx) const {
+
+	// NOTE(eteran): on x86-64, FS and GS are already populated as part of the context
+	// so we don't need to do anything here.
+#ifndef __x86_64__
 	// TODO(eteran): this is too arch specific, move to ContextIntel
-#if 1
-	get_segment_base(ctx, RegisterId::GS);
-	get_segment_base(ctx, RegisterId::FS);
+	if (!ctx->is_64_bit()) {
+		uint32_t gs_base = get_segment_base(ctx, RegisterId::GS);
+		uint32_t fs_base = get_segment_base(ctx, RegisterId::FS);
+
+		ctx->ctx_32_.gs_base = gs_base;
+		ctx->ctx_32_.fs_base = fs_base;
+	}
 #endif
 }
 
@@ -386,19 +404,19 @@ void Thread::get_context(Context *ctx) const {
 void Thread::set_registers(const Context *ctx) const {
 
 #if defined(__x86_64__)
-	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->regs_64_) == -1) {
+	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		std::perror("ptrace(PTRACE_SETREGS)");
 		std::exit(0);
 	}
 #else
 	struct iovec iov;
 	if (is_64_bit_) {
-		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->regs_64_);
-		iov.iov_len  = sizeof(ctx->regs_64_);
+		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->ctx_64_.regs);
+		iov.iov_len  = sizeof(ctx->ctx_64_.regs);
 
 	} else {
-		iov.iov_base = const_cast<Context_x86_32 *>(&ctx->regs_32_);
-		iov.iov_len  = sizeof(ctx->regs_32_);
+		iov.iov_base = const_cast<Context_x86_32 *>(&ctx->ctx_32_.regs);
+		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
 	}
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
@@ -445,7 +463,7 @@ void Thread::set_segment_bases(const Context *ctx) const {
  * @param reg The register to set the segment base for.
  * @param base The segment base.
  */
-void Thread::set_segment_base(const Context *ctx, RegisterId reg, uint64_t base) {
+void Thread::set_segment_base(const Context *ctx, RegisterId reg, uint32_t base) {
 	// TODO(eteran): implement
 	(void)ctx;
 	(void)reg;

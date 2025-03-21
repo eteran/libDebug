@@ -62,8 +62,8 @@ private:
 	void set_debug_registers(const Context *ctx) const;
 	void get_segment_bases(Context *ctx) const;
 	void set_segment_bases(const Context *ctx) const;
-	uint64_t get_segment_base(Context *ctx, RegisterId reg) const;
-	void set_segment_base(const Context *ctx, RegisterId reg, uint64_t base);
+	uint32_t get_segment_base(Context *ctx, RegisterId reg) const;
+	void set_segment_base(const Context *ctx, RegisterId reg, uint32_t base);
 	bool detect_64_bit() const;
 
 private:

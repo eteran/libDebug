@@ -215,20 +215,29 @@ private:
 	[[nodiscard]] RegisterRef get_64(RegisterId reg);
 	[[nodiscard]] RegisterRef get_32(RegisterId reg);
 
-public:
-	// TODO(eteran): make these private
-	// NOTE(eteran): normalizing on x86-64 for simplicity
-	union {
-		Context_x86_64 regs_64_;
-		Context_x86_32 regs_32_;
+private:
+	struct Context64 {
+		Context_x86_64 regs;
+		Context_x86_64_xstate xstate;
+		uint64_t debug_regs[8];
 	};
 
-	union {
-		Context_x86_64_xstate xstate_64_;
-		Context_x86_32_xstate xstate_32_;
+	static_assert(std::is_standard_layout_v<Context64>, "Context64 is not standard layout");
+
+	struct Context32 {
+		Context_x86_32 regs;
+		Context_x86_32_xstate xstate;
+		uint32_t debug_regs[8];
+		uint32_t fs_base;
+		uint32_t gs_base;
 	};
 
-	uint64_t debug_regs_[8];
+	static_assert(std::is_standard_layout_v<Context32>, "Context32 is not standard layout");
+
+	union {
+		Context64 ctx_64_ = {};
+		Context32 ctx_32_;
+	};
 
 	bool is_64_bit_ = false;
 	bool is_set_    = false;
