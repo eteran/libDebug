@@ -244,14 +244,32 @@ int Thread::stop_status() const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_registers(Context *ctx) const {
-
 #if defined(__x86_64__)
+	get_registers64(ctx);
+#else
+	get_registers32(ctx);
+#endif
+}
+
+/**
+ * @brief Retrieves the thread GP registers (64-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_registers64(Context *ctx) const {
 	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
 	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		std::perror("ptrace(PTRACE_GETREGS)");
 		std::exit(0);
 	}
-#else
+}
+
+/**
+ * @brief Retrieves the thread GP registers (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_registers32(Context *ctx) const {
 	struct iovec iov;
 	if (is_64_bit_) {
 		iov.iov_base = &ctx->ctx_64_.regs;
@@ -266,7 +284,6 @@ void Thread::get_registers(Context *ctx) const {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
 	}
-#endif
 }
 
 /**
@@ -275,9 +292,42 @@ void Thread::get_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_xstate(Context *ctx) const {
+#if defined(__x86_64__)
+	get_xstate64(ctx);
+#else
+	get_xstate32(ctx);
+#endif
+}
 
+/**
+ * @brief Retrieves the thread xstate (64-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_xstate64(Context *ctx) const {
 	(void)ctx;
 
+	// TODO(eteran): implement
+	// x86-64: 2688 bytes
+	// x86-32: ?
+
+	alignas(256) char xstate[4096];
+	struct iovec iov = {&xstate, sizeof(xstate)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRFPREG, &iov) == -1) {
+		std::perror("ptrace(PTRACE_GETREGSET)");
+		std::exit(0);
+	}
+}
+
+/**
+ * @brief Retrieves the thread xstate (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_xstate32(Context *ctx) const {
+	(void)ctx;
+
+	// TODO(eteran): implement
 	// x86-64: 2688 bytes
 	// x86-32: ?
 
@@ -296,6 +346,18 @@ void Thread::get_xstate(Context *ctx) const {
  */
 void Thread::get_debug_registers(Context *ctx) const {
 #ifdef __x86_64__
+	get_debug_registers64(ctx);
+#elif defined(__i386__)
+	get_debug_registers32(ctx);
+#endif
+}
+
+/**
+ * @brief Retrieves the thread hardware debug registers (64-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_debug_registers64(Context *ctx) const {
 	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -304,16 +366,23 @@ void Thread::get_debug_registers(Context *ctx) const {
 	ctx->ctx_64_.debug_regs[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
 	ctx->ctx_64_.debug_regs[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
 	ctx->ctx_64_.debug_regs[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
-#elif defined(__i386__)
+}
+
+/**
+ * @brief Retrieves the thread hardware debug registers (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::get_debug_registers32(Context *ctx) const {
 	if (ctx->is_64_bit()) {
-		ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-		ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-		ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-		ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-		ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-		ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-		ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-		ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+		ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+		ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+		ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+		ctx->ctx_64_.debug_regs[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+		ctx->ctx_64_.debug_regs[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+		ctx->ctx_64_.debug_regs[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+		ctx->ctx_64_.debug_regs[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+		ctx->ctx_64_.debug_regs[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
 	} else {
 		ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 		ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
@@ -324,7 +393,6 @@ void Thread::get_debug_registers(Context *ctx) const {
 		ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
 		ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
 	}
-#endif
 }
 
 /**

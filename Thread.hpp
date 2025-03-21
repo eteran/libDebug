@@ -55,16 +55,26 @@ public:
 
 private:
 	void get_registers(Context *ctx) const;
-	void set_registers(const Context *ctx) const;
 	void get_xstate(Context *ctx) const;
-	void set_xstate(const Context *ctx) const;
 	void get_debug_registers(Context *ctx) const;
-	void set_debug_registers(const Context *ctx) const;
 	void get_segment_bases(Context *ctx) const;
+	void set_registers(const Context *ctx) const;
+	void set_xstate(const Context *ctx) const;
+	void set_debug_registers(const Context *ctx) const;
 	void set_segment_bases(const Context *ctx) const;
-	uint32_t get_segment_base(Context *ctx, RegisterId reg) const;
 	void set_segment_base(const Context *ctx, RegisterId reg, uint32_t base);
-	bool detect_64_bit() const;
+
+private:
+	void get_registers64(Context *ctx) const;
+	void get_registers32(Context *ctx) const;
+	void get_xstate64(Context *ctx) const;
+	void get_xstate32(Context *ctx) const;
+	void get_debug_registers64(Context *ctx) const;
+	void get_debug_registers32(Context *ctx) const;
+	uint32_t get_segment_base(Context *ctx, RegisterId reg) const;
+
+private:
+	[[nodiscard]] bool detect_64_bit() const;
 
 private:
 	pid_t pid_      = 0;

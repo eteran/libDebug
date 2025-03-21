@@ -111,6 +111,53 @@ RegisterRef Context::get_64(RegisterId reg) {
 		return make_register("dr6", ctx_64_.debug_regs[6]);
 	case RegisterId::DR7:
 		return make_register("dr7", ctx_64_.debug_regs[7]);
+
+
+	case RegisterId::AX: return RegisterRef();
+	case RegisterId::AH: return RegisterRef();
+	case RegisterId::AL: return RegisterRef();
+	case RegisterId::BX: return RegisterRef();
+	case RegisterId::BH: return RegisterRef();
+	case RegisterId::BL: return RegisterRef();
+	case RegisterId::CX: return RegisterRef();
+	case RegisterId::CH: return RegisterRef();
+	case RegisterId::CL: return RegisterRef();
+	case RegisterId::DX: return RegisterRef();
+	case RegisterId::DH: return RegisterRef();
+	case RegisterId::DL: return RegisterRef();
+	case RegisterId::DI: return RegisterRef();
+	case RegisterId::SI: return RegisterRef();;
+	case RegisterId::BP: return RegisterRef();;
+	case RegisterId::SP: return RegisterRef();
+	case RegisterId::SIL: return RegisterRef();
+	case RegisterId::DIL: return RegisterRef();
+	case RegisterId::BPL: return RegisterRef();
+	case RegisterId::SPL: return RegisterRef();
+	case RegisterId::R8D: return RegisterRef();
+	case RegisterId::R8W: return RegisterRef();
+	case RegisterId::R8B: return RegisterRef();
+	case RegisterId::R9D: return RegisterRef();
+	case RegisterId::R9W: return RegisterRef();
+	case RegisterId::R9B: return RegisterRef();
+	case RegisterId::R10D: return RegisterRef();
+	case RegisterId::R10W: return RegisterRef();
+	case RegisterId::R10B: return RegisterRef();
+	case RegisterId::R11D: return RegisterRef();
+	case RegisterId::R11W: return RegisterRef();
+	case RegisterId::R11B: return RegisterRef();
+	case RegisterId::R12D: return RegisterRef();
+	case RegisterId::R12W: return RegisterRef();
+	case RegisterId::R12B: return RegisterRef();
+	case RegisterId::R13D: return RegisterRef();
+	case RegisterId::R13W: return RegisterRef();
+	case RegisterId::R13B: return RegisterRef();
+	case RegisterId::R14D: return RegisterRef();
+	case RegisterId::R14W: return RegisterRef();
+	case RegisterId::R14B: return RegisterRef();
+	case RegisterId::R15D: return RegisterRef();
+	case RegisterId::R15W: return RegisterRef();
+	case RegisterId::R15B: return RegisterRef();
+
 	default:
 		std::printf("Unknown Register [64]: %d\n", static_cast<T>(reg));
 		return RegisterRef();

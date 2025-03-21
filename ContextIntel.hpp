@@ -106,7 +106,6 @@ enum class RegisterId {
 	R15D,
 	R15W,
 	R15B,
-
 };
 
 // Reflects user_regs_struct in sys/user.h.
