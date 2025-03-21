@@ -1,4 +1,5 @@
 // NOTE(eteran): Makes it possible for 32-bit builds to debug 64-bit processes
+#define _POSIX_C_SOURCE   200809L
 #define _FILE_OFFSET_BITS 64
 #define _TIME_BITS        64
 
