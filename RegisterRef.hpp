@@ -12,8 +12,8 @@
 
 class RegisterRef {
 public:
-	explicit RegisterRef(std::string_view name, void *ptr, size_t size)
-		: name_(name), ptr_(ptr), size_(size) {}
+	explicit RegisterRef(std::string_view name, void *ptr, size_t size, size_t offset)
+		: name_(name), ptr_(ptr), size_(size), offset_(offset) {}
 
 	RegisterRef()                               = default;
 	RegisterRef(const RegisterRef &)            = default;
@@ -53,19 +53,20 @@ public:
 
 private:
 	std::string name_;
-	void *ptr_   = nullptr;
-	size_t size_ = 0;
+	void *ptr_     = nullptr;
+	size_t size_   = 0;
+	size_t offset_ = 0;
 };
 
 template <class T>
-RegisterRef make_register(std::string_view name, T &var) {
-	return RegisterRef(name, &var, sizeof(T));
+RegisterRef make_register(std::string_view name, T &var, size_t offset) {
+	return RegisterRef(name, &var, sizeof(T), offset);
 }
 
 template <class T>
-RegisterRef make_register(std::string_view name, T &var, size_t size) {
+RegisterRef make_register(std::string_view name, T &var, size_t size, size_t offset) {
 	assert(size <= sizeof(T));
-	return RegisterRef(name, &var, size);
+	return RegisterRef(name, &var, size, offset);
 }
 
 #endif
