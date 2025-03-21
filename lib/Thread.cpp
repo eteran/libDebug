@@ -1,6 +1,6 @@
 
-#include "Thread.hpp"
-#include "Context.hpp"
+#include "Debug/Thread.hpp"
+#include "Debug/Context.hpp"
 
 #include <cassert>
 #include <cinttypes>

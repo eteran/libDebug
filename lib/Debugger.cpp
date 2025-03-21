@@ -1,8 +1,8 @@
 
-#include "Debugger.hpp"
-#include "DebuggerError.hpp"
-#include "Process.hpp"
-#include "Thread.hpp"
+#include "Debug/Debugger.hpp"
+#include "Debug/DebuggerError.hpp"
+#include "Debug/Process.hpp"
+#include "Debug/Thread.hpp"
 
 #include <cerrno>
 #include <climits>

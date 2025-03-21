@@ -33,6 +33,7 @@ enum class RegisterId {
 	DR7,
 
 	EFLAGS,
+	RFLAGS,
 
 	EAX,
 	AX,

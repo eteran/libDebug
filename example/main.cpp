@@ -1,10 +1,10 @@
 
-#include "Debugger.hpp"
-#include "DebuggerError.hpp"
-#include "Proc.hpp"
-#include "Process.hpp"
-#include "Region.hpp"
-#include "Thread.hpp"
+#include "Debug/Debugger.hpp"
+#include "Debug/DebuggerError.hpp"
+#include "Debug/Proc.hpp"
+#include "Debug/Process.hpp"
+#include "Debug/Region.hpp"
+#include "Debug/Thread.hpp"
 
 #include <cctype>
 #include <cinttypes>
@@ -139,7 +139,7 @@ int main() {
 	auto debugger = std::make_unique<Debugger>();
 
 	const char *argv[] = {
-		"./TestApp32",
+		"./TestApp64",
 		nullptr,
 	};
 
@@ -152,7 +152,7 @@ int main() {
 		return 1;
 	}
 
-#if 1
+#if 0
 	process->add_breakpoint(0x56556090); // main of TestApp on my machine (32-bit)
 #else
 	process->add_breakpoint(0x00005555555551a9); // main of TestApp on my machine (64-bit)

@@ -1,5 +1,5 @@
 
-#include "Breakpoint.hpp"
+#include "Debug/Breakpoint.hpp"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>

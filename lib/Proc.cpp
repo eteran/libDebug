@@ -1,6 +1,6 @@
 
-#include "Proc.hpp"
-#include "Region.hpp"
+#include "Debug/Proc.hpp"
+#include "Debug/Region.hpp"
 
 #include <cerrno>
 #include <cinttypes>

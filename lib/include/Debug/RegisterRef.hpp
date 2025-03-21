@@ -35,10 +35,10 @@ public:
 public:
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	Integer as() const {
-		Integer value;
 		// NOTE(eteran): effectively zero-extend the value to the size of the integer being read into
+		Integer value;
 		std::memset(&value, 0, sizeof(Integer));
-		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
+		std::memcpy(&value, static_cast<uint8_t *>(ptr_) + offset_, std::min(size_, sizeof(Integer)));
 		return value;
 	}
 
@@ -47,7 +47,7 @@ public:
 
 		// NOTE(eteran): effectively zero-extend the value to the size of the register
 		std::memset(ptr_, 0, size_);
-		std::memcpy(ptr_, &value, std::min(size_, sizeof(Integer)));
+		std::memcpy(static_cast<uint8_t *>(ptr_), &value, std::min(size_, sizeof(Integer)));
 		return *this;
 	}
 

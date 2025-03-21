@@ -3,11 +3,11 @@
 #define _FILE_OFFSET_BITS 64
 #define _TIME_BITS        64
 
-#include "Process.hpp"
-#include "Breakpoint.hpp"
-#include "Event.hpp"
-#include "Proc.hpp"
-#include "Thread.hpp"
+#include "Debug/Process.hpp"
+#include "Debug/Breakpoint.hpp"
+#include "Debug/Event.hpp"
+#include "Debug/Proc.hpp"
+#include "Debug/Thread.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -103,7 +103,7 @@ void dump_context(Context *ctx) {
 	*/
 
 	if (ctx->is_64_bit()) {
-		std::printf("RIP: %016" PRIx64 " RFL: %016" PRIx64 "\n", ctx->get(RegisterId::RIP).as<uint64_t>(), ctx->get(RegisterId::EFLAGS).as<uint64_t>());
+		std::printf("RIP: %016" PRIx64 " RFL: %016" PRIx64 "\n", ctx->get(RegisterId::RIP).as<uint64_t>(), ctx->get(RegisterId::RFLAGS).as<uint64_t>());
 		std::printf("RSP: %016" PRIx64 " R8 : %016" PRIx64 "\n", ctx->get(RegisterId::RSP).as<uint64_t>(), ctx->get(RegisterId::R8).as<uint64_t>());
 		std::printf("RBP: %016" PRIx64 " R9 : %016" PRIx64 "\n", ctx->get(RegisterId::RBP).as<uint64_t>(), ctx->get(RegisterId::R9).as<uint64_t>());
 		std::printf("RAX: %016" PRIx64 " R10: %016" PRIx64 "\n", ctx->get(RegisterId::RAX).as<uint64_t>(), ctx->get(RegisterId::R10).as<uint64_t>());
@@ -115,6 +115,11 @@ void dump_context(Context *ctx) {
 		std::printf("CS: %04x SS : %04x FS_BASE:  %016" PRIx64 "\n", ctx->get(RegisterId::CS).as<uint16_t>(), ctx->get(RegisterId::SS).as<uint16_t>(), ctx->get(RegisterId::FS_BASE).as<uint64_t>());
 		std::printf("DS: %04x ES : %04x GS_BASE:  %016" PRIx64 "\n", ctx->get(RegisterId::DS).as<uint16_t>(), ctx->get(RegisterId::ES).as<uint16_t>(), ctx->get(RegisterId::GS_BASE).as<uint64_t>());
 		std::printf("FS: %04x GS : %04x\n", ctx->get(RegisterId::FS).as<uint16_t>(), ctx->get(RegisterId::GS).as<uint16_t>());
+
+		std::printf("EBX: %08x\n", ctx->get(RegisterId::EBX).as<uint32_t>());
+		std::printf("BX: %04x\n", ctx->get(RegisterId::BX).as<uint16_t>());
+		std::printf("BL: %02x\n", ctx->get(RegisterId::BL).as<uint8_t>());
+		std::printf("BH: %02x\n", ctx->get(RegisterId::BH).as<uint8_t>());
 	} else {
 		std::printf("EIP: %08x EFL: %08x\n", ctx->get(RegisterId::EIP).as<uint32_t>(), ctx->get(RegisterId::EFLAGS).as<uint32_t>());
 		std::printf("ESP: %08x EBP: %08x\n", ctx->get(RegisterId::ESP).as<uint32_t>(), ctx->get(RegisterId::EBP).as<uint32_t>());
@@ -520,7 +525,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		current_thread->get_context(&ctx);
 
 		RegisterRef ip_ref = ctx.is_64_bit() ? ctx.get(RegisterId::RIP) : ctx.get(RegisterId::EIP);
-		uint64_t ip = ip_ref.as<uint64_t>();
+		uint64_t ip        = ip_ref.as<uint64_t>();
 
 		std::printf("Stopped at: %016" PRIx64 "\n", ip);
 
