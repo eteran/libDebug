@@ -3,10 +3,12 @@ ignorePaths: []
 dictionaryDefinitions: []
 dictionaries: []
 words:
+  - ASAN
   - ASLR
   - eteran
   - INSB
   - INSD
+  - MSAN
   - NT_PRSTATUS
   - OUTSB
   - OUTSD
@@ -16,6 +18,8 @@ words:
   - PTRACE_TRACEME
   - tgkill
   - tracee
+  - TSAN
+  - USAN
   - vdso
   - xstate
 ignoreWords: []
