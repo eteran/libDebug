@@ -10,6 +10,10 @@
 
 class Breakpoint {
 public:
+	static constexpr size_t minBreakpointSize = 1;
+	static constexpr size_t maxBreakpointSize = 2;
+
+public:
 	enum class TypeId : int {
 		Automatic = 0,
 		INT3,

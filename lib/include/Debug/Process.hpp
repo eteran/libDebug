@@ -60,6 +60,9 @@ public:
 	[[nodiscard]] std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
 
 public:
+	std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
+
+public:
 	void report() const;
 
 public:

@@ -458,6 +458,24 @@ void Process::detach() {
 }
 
 /**
+ * @brief Searches for an active breakpoint which when executed will END at the given address.
+ *
+ * @param address The address to search for.
+ * @return The breakpoint if found, otherwise nullptr.
+ */
+std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
+	for (uint64_t i = Breakpoint::minBreakpointSize; i <= Breakpoint::maxBreakpointSize; ++i) {
+		if (auto bp = find_breakpoint(address - i)) {
+			if (bp->size() == i) {
+				return bp;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+/**
  * @brief Waits for `timeout` milliseconds for the next debug event to occur.
  * If there was a debug event, and we are in "all-stop" mode, then it will also
  * stop all other running threads. Events will be reported by calling `callback`.
@@ -575,20 +593,19 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 						new_thread->resume();
 					}
 				} else {
-					// general trap event, likely one of: single step finished, processes stopped, or a breakpoint
-					for (uint64_t i = 1; i <= 2; ++i) {
-						if (auto bp = find_breakpoint(ip - i)) {
 
-							if (bp->size() == i) {
-								std::printf("Breakpoint!\n");
-								ip_ref -= i;
-								current_thread->set_context(&ctx);
+					// general trap event, likely one of:
+					// * single step finished
+					// * processes stopped
+					// * a breakpoint
+					if (auto bp = search_breakpoint(ip)) {
+						std::printf("Breakpoint!\n");
+						ip_ref -= bp->size();
+						current_thread->set_context(&ctx);
 
-								// BREAKPOINT!
-								// TODO(eteran): report as a trap event
-								break;
-							}
-						}
+						// BREAKPOINT!
+						// TODO(eteran): report as a trap event
+						break;
 					}
 				}
 			} else {
