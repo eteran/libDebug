@@ -581,7 +581,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 							if (bp->size() == i) {
 								std::printf("Breakpoint!\n");
-								ip_ref = ip - i;
+								ip_ref -= i;
 								current_thread->set_context(&ctx);
 
 								// BREAKPOINT!

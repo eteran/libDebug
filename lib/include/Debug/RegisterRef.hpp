@@ -12,8 +12,8 @@
 
 class RegisterRef {
 public:
-	explicit RegisterRef(std::string_view name, void *ptr, size_t size, size_t offset)
-		: name_(name), ptr_(ptr), size_(size), offset_(offset) {}
+	explicit RegisterRef(std::string_view name, void *ptr, size_t size)
+		: name_(name), ptr_(ptr), size_(size) {}
 
 	RegisterRef()                               = default;
 	RegisterRef(const RegisterRef &)            = default;
@@ -38,7 +38,7 @@ public:
 		// NOTE(eteran): effectively zero-extend the value to the size of the integer being read into
 		Integer value;
 		std::memset(&value, 0, sizeof(Integer));
-		std::memcpy(&value, static_cast<uint8_t *>(ptr_) + offset_, std::min(size_, sizeof(Integer)));
+		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
 		return value;
 	}
 
@@ -47,26 +47,106 @@ public:
 
 		// NOTE(eteran): effectively zero-extend the value to the size of the register
 		std::memset(ptr_, 0, size_);
-		std::memcpy(static_cast<uint8_t *>(ptr_), &value, std::min(size_, sizeof(Integer)));
+		std::memcpy(ptr_, &value, std::min(size_, sizeof(Integer)));
+		return *this;
+	}
+
+public:
+	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
+	RegisterRef &operator+=(Integer value) {
+
+		union {
+			uint8_t u8;
+			uint16_t u16;
+			uint32_t u32;
+			uint64_t u64;
+		};
+
+		switch (size_) {
+		case 1:
+			memcpy(&u8, ptr_, 1);
+			value += static_cast<uint8_t>(value);
+			memcpy(ptr_, &u8, 1);
+			break;
+		case 2:
+			memcpy(&u16, ptr_, 1);
+			value += static_cast<uint16_t>(value);
+			memcpy(ptr_, &u16, 1);
+			break;
+		case 4:
+			memcpy(&u32, ptr_, 1);
+			value += static_cast<uint32_t>(value);
+			memcpy(ptr_, &u32, 1);
+			break;
+		case 8:
+			memcpy(&u64, ptr_, 1);
+			value += static_cast<uint64_t>(value);
+			memcpy(ptr_, &u64, 1);
+			break;
+		default:
+			assert(false && "Invalid size");
+		}
+
+		return *this;
+	}
+
+	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
+	RegisterRef &operator-=(Integer value) {
+
+		union {
+			uint8_t u8;
+			uint16_t u16;
+			uint32_t u32;
+			uint64_t u64;
+		};
+
+		switch (size_) {
+		case 1:
+			memcpy(&u8, ptr_, 1);
+			value -= static_cast<uint8_t>(value);
+			memcpy(ptr_, &u8, 1);
+			break;
+		case 2:
+			memcpy(&u16, ptr_, 1);
+			value -= static_cast<uint16_t>(value);
+			memcpy(ptr_, &u16, 1);
+			break;
+		case 4:
+			memcpy(&u32, ptr_, 1);
+			value -= static_cast<uint32_t>(value);
+			memcpy(ptr_, &u32, 1);
+			break;
+		case 8:
+			memcpy(&u64, ptr_, 1);
+			value -= static_cast<uint64_t>(value);
+			memcpy(ptr_, &u64, 1);
+			break;
+		default:
+			assert(false && "Invalid size");
+		}
+
 		return *this;
 	}
 
 private:
 	std::string name_;
-	void *ptr_     = nullptr;
-	size_t size_   = 0;
-	size_t offset_ = 0;
+	void *ptr_   = nullptr;
+	size_t size_ = 0;
 };
 
 template <class T>
 RegisterRef make_register(std::string_view name, T &var, size_t offset) {
-	return RegisterRef(name, &var, sizeof(T), offset);
+	assert(offset < sizeof(T));
+	auto ptr = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(&var) + offset);
+	return RegisterRef(name, ptr, sizeof(T) - offset);
 }
 
 template <class T>
 RegisterRef make_register(std::string_view name, T &var, size_t size, size_t offset) {
-	assert(size <= sizeof(T));
-	return RegisterRef(name, &var, size, offset);
+	assert(offset < sizeof(T));
+	assert(size <= sizeof(T) - offset);
+	auto ptr = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(&var) + offset);
+	return RegisterRef(name, ptr, size);
 }
 
 #endif
