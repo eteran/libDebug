@@ -6,8 +6,7 @@
 
 #include <csignal>
 
-class Event {
-public:
+struct Event {
 	enum Type {
 		Exited,     // exited normally
 		Terminated, // terminated by event
@@ -15,7 +14,6 @@ public:
 		Unknown,
 	};
 
-public:
 	siginfo_t siginfo = {};
 	pid_t pid         = 0;
 	pid_t tid         = 0;

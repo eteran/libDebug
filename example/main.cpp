@@ -139,7 +139,7 @@ int main() {
 	auto debugger = std::make_unique<Debugger>();
 
 	const char *argv[] = {
-		"./TestApp64",
+		"./TestApp32",
 		nullptr,
 	};
 
@@ -152,8 +152,8 @@ int main() {
 		return 1;
 	}
 
-#if 0
-	process->add_breakpoint(0x56556090); // main of TestApp on my machine (32-bit)
+#if 1
+	process->add_breakpoint(0x565562ad); // main of TestApp on my machine (32-bit)
 #else
 	process->add_breakpoint(0x00005555555551a9); // main of TestApp on my machine (64-bit)
 #endif
@@ -162,7 +162,10 @@ int main() {
 	auto regions                  = enumerate_regions(process->pid());
 
 	dump_regions(regions);
-	dump_memory(process.get(), 0x00007ffff7fe4500, 256);
+	if (!regions.empty()) {
+		dump_memory(process.get(), regions[0].start(), 256);
+	}
+
 	process->resume();
 
 	for (int i = 0; i < 20; ++i) {

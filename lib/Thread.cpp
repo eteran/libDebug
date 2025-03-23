@@ -437,11 +437,8 @@ void Thread::get_segment_bases([[maybe_unused]] Context *ctx) const {
 #ifndef __x86_64__
 	// TODO(eteran): this is too arch specific, move to ContextIntel
 	if (!ctx->is_64_bit()) {
-		uint32_t gs_base = get_segment_base(ctx, RegisterId::GS);
-		uint32_t fs_base = get_segment_base(ctx, RegisterId::FS);
-
-		ctx->ctx_32_.gs_base = gs_base;
-		ctx->ctx_32_.fs_base = fs_base;
+		ctx->ctx_32_.gs_base = get_segment_base(ctx, RegisterId::GS);
+		ctx->ctx_32_.fs_base = get_segment_base(ctx, RegisterId::FS);
 	}
 #endif
 }

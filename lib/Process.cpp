@@ -563,11 +563,13 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				first_stop     = false;
 			}
 
-			Event e  = {};
-			e.pid    = pid_;
-			e.tid    = tid;
-			e.status = wstatus;
-			e.type   = Event::Type::Stopped;
+			Event e = {
+				pid_,
+				tid,
+				wstatus,
+				{},
+				Event::Type::Stopped,
+			};
 
 			std::printf("Stopped Status: %d\n", current_thread->stop_status());
 
@@ -605,7 +607,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 						// BREAKPOINT!
 						// TODO(eteran): report as a trap event
-						break;
 					}
 				}
 			} else {
@@ -621,7 +622,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			// TODO(eteran): the callback should dictate what to do next
 			callback(e);
 
-			// TODO(eteran_): conditionally resume
+			// TODO(eteran): conditionally resume
 			current_thread->resume();
 			continue;
 		}

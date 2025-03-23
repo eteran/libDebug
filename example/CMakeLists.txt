@@ -27,6 +27,8 @@ set_target_properties(
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+               COMPILE_OPTIONS ${TARGET_ARCH}
+               LINK_FLAGS ${TARGET_ARCH}
 )
 
 target_compile_options(

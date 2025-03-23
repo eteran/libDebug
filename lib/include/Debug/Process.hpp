@@ -60,7 +60,7 @@ public:
 	[[nodiscard]] std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
 
 public:
-	std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
+	[[nodiscard]] std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
 
 public:
 	void report() const;
@@ -68,7 +68,7 @@ public:
 public:
 	[[nodiscard]] std::shared_ptr<Thread> find_thread(pid_t tid) const;
 
-	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const {
+	[[nodiscard]] std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const {
 		return threads_;
 	}
 
@@ -87,7 +87,6 @@ private:
 	std::shared_ptr<Thread> active_thread_;
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
-	uint64_t prev_memory_map_hash_ = 0;
 };
 
 #endif
