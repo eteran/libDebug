@@ -207,6 +207,7 @@ public:
 	static constexpr size_t BufferSize  = std::max(sizeof(Context_x86_64), sizeof(Context_x86_32));
 
 public:
+	void dump();
 	[[nodiscard]] RegisterRef get(RegisterId reg);
 	[[nodiscard]] bool is_64_bit() const { return is_64_bit_; }
 	[[nodiscard]] bool is_set() const { return is_set_; }

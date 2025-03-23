@@ -1,6 +1,50 @@
 
 #include "Debug/Context.hpp"
+#include <cinttypes>
 #include <cstdio>
+
+/**
+ * @brief Dumps the context to stdout.
+ *
+ */
+void Context::dump() {
+	/*
+	RIP: 0033:0x7ffff7fe31e7
+	Code: c0 75 e0 e9 6e fe ff ff 66 2e 0f 1f 84 00 00 00 00 00 90 55 48 83 c7 08 49 89 f0 48 89 e5 41 55 41 54 53 48 81 ec 30 01 00 00 <48> 8b 47 f8 48 89 3d 86 98 01 00 89 05 88 98 01 00 48 98 48 8d 74
+	RSP: 002b:00007fffffffd728 EFLAGS: 00010206
+	RAX: 00007ffff7ffdab0 RBX: 00007ffff7fe5af0 RCX: 0000000000000024
+	RDX: 00007ffff7fc54f0 RSI: 00007fffffffd880 RDI: 00000000ffffd988
+	RBP: 00007fffffffd870 R08: 00007fffffffd880 R09: 00007ffff7ffcec8
+	R10: 0000000000036360 R11: 0000000000000000 R12: 00007fffffffd940
+	R13: 0000000000000000 R14: 00007ffff7fc5000 R15: 00007ffff7fc5590
+	FS:  0000000000000000 GS:  0000000000000000
+	*/
+
+	if (is_64_bit()) {
+		std::printf("RIP: %016" PRIx64 " RFL: %016" PRIx64 "\n", get(RegisterId::RIP).as<uint64_t>(), get(RegisterId::RFLAGS).as<uint64_t>());
+		std::printf("RSP: %016" PRIx64 " R8 : %016" PRIx64 "\n", get(RegisterId::RSP).as<uint64_t>(), get(RegisterId::R8).as<uint64_t>());
+		std::printf("RBP: %016" PRIx64 " R9 : %016" PRIx64 "\n", get(RegisterId::RBP).as<uint64_t>(), get(RegisterId::R9).as<uint64_t>());
+		std::printf("RAX: %016" PRIx64 " R10: %016" PRIx64 "\n", get(RegisterId::RAX).as<uint64_t>(), get(RegisterId::R10).as<uint64_t>());
+		std::printf("RBX: %016" PRIx64 " R11: %016" PRIx64 "\n", get(RegisterId::RBX).as<uint64_t>(), get(RegisterId::R11).as<uint64_t>());
+		std::printf("RCX: %016" PRIx64 " R12: %016" PRIx64 "\n", get(RegisterId::RCX).as<uint64_t>(), get(RegisterId::R12).as<uint64_t>());
+		std::printf("RDX: %016" PRIx64 " R13: %016" PRIx64 "\n", get(RegisterId::RDX).as<uint64_t>(), get(RegisterId::R13).as<uint64_t>());
+		std::printf("RSI: %016" PRIx64 " R14: %016" PRIx64 "\n", get(RegisterId::RSI).as<uint64_t>(), get(RegisterId::R14).as<uint64_t>());
+		std::printf("RDI: %016" PRIx64 " R15: %016" PRIx64 "\n", get(RegisterId::RDI).as<uint64_t>(), get(RegisterId::R15).as<uint64_t>());
+		std::printf("CS: %04x SS : %04x FS_BASE:  %016" PRIx64 "\n", get(RegisterId::CS).as<uint16_t>(), get(RegisterId::SS).as<uint16_t>(), get(RegisterId::FS_BASE).as<uint64_t>());
+		std::printf("DS: %04x ES : %04x GS_BASE:  %016" PRIx64 "\n", get(RegisterId::DS).as<uint16_t>(), get(RegisterId::ES).as<uint16_t>(), get(RegisterId::GS_BASE).as<uint64_t>());
+		std::printf("FS: %04x GS : %04x\n", get(RegisterId::FS).as<uint16_t>(), get(RegisterId::GS).as<uint16_t>());
+	} else {
+		std::printf("EIP: %08x EFL: %08x\n", get(RegisterId::EIP).as<uint32_t>(), get(RegisterId::EFLAGS).as<uint32_t>());
+		std::printf("ESP: %08x EBP: %08x\n", get(RegisterId::ESP).as<uint32_t>(), get(RegisterId::EBP).as<uint32_t>());
+		std::printf("EAX: %08x EBX: %08x\n", get(RegisterId::EAX).as<uint32_t>(), get(RegisterId::EBX).as<uint32_t>());
+		std::printf("ECX: %08x EDX: %08x\n", get(RegisterId::ECX).as<uint32_t>(), get(RegisterId::EDX).as<uint32_t>());
+		std::printf("ESI: %08x EDI: %08x\n", get(RegisterId::ESI).as<uint32_t>(), get(RegisterId::EDI).as<uint32_t>());
+
+		std::printf("CS: %04x SS : %04x FS_BASE:  %08x" "\n", get(RegisterId::CS).as<uint16_t>(), get(RegisterId::SS).as<uint16_t>(), get(RegisterId::FS_BASE).as<uint32_t>());
+		std::printf("DS: %04x ES : %04x GS_BASE:  %08x\n", get(RegisterId::DS).as<uint16_t>(), get(RegisterId::ES).as<uint16_t>(), get(RegisterId::GS_BASE).as<uint32_t>());
+		std::printf("FS: %04x GS : %04x\n", get(RegisterId::FS).as<uint16_t>(), get(RegisterId::GS).as<uint16_t>());
+	}
+}
 
 /**
  * @brief Returns a reference to the given register in a 64-bit context.

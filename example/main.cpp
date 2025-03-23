@@ -138,8 +138,14 @@ int main() {
 #else
 	auto debugger = std::make_unique<Debugger>();
 
+//#define TEST64
+
 	const char *argv[] = {
+#ifdef TEST64
+		"./TestApp64",
+#else
 		"./TestApp32",
+#endif
 		nullptr,
 	};
 
@@ -152,10 +158,10 @@ int main() {
 		return 1;
 	}
 
-#if 1
-	process->add_breakpoint(0x565562ad); // main of TestApp on my machine (32-bit)
+#ifdef TEST64
+	process->add_breakpoint(0x00000000004018b5); // main of TestApp on my machine (64-bit)
 #else
-	process->add_breakpoint(0x00005555555551a9); // main of TestApp on my machine (64-bit)
+	process->add_breakpoint(0x080498c5); // main of TestApp on my machine (32-bit)
 #endif
 
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
