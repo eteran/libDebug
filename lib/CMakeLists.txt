@@ -28,7 +28,7 @@ target_include_directories(
 
 set_target_properties(
     Debug
-    PROPERTIES CXX_STANDARD 17
+    PROPERTIES CXX_STANDARD 20
                CXX_EXTENSIONS OFF
                COMPILE_OPTIONS ${TARGET_ARCH}
                LINK_FLAGS ${TARGET_ARCH}

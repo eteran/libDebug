@@ -138,7 +138,7 @@ int main() {
 #else
 	auto debugger = std::make_unique<Debugger>();
 
-//#define TEST64
+#define TEST64
 
 	const char *argv[] = {
 #ifdef TEST64

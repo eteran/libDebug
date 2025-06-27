@@ -255,3 +255,14 @@ RegisterRef Context::get(RegisterId reg) {
 	}
 #endif
 }
+
+
+/**
+ * @brief Returns a reference to the given register.
+ *
+ * @param reg The register to return a reference to.
+ * @return A reference to the given register.
+ */
+RegisterRef Context::operator[](RegisterId reg) {
+	return get(reg);
+}

@@ -55,9 +55,10 @@ set_target_properties(
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
                COMPILE_OPTIONS "-m64"
-               LINK_FLAGS "-m64 -static"
+               LINK_FLAGS "-m64"
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+target_link_libraries(TestApp64 -static)
 
 add_executable(TestApp32 test_app.cpp)
 set_target_properties(
@@ -65,6 +66,7 @@ set_target_properties(
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
                COMPILE_OPTIONS "-m32"
-               LINK_FLAGS "-m32 -static"
+               LINK_FLAGS "-m32"
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+target_link_libraries(TestApp32 -static)

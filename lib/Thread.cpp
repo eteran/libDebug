@@ -305,17 +305,74 @@ void Thread::get_xstate(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_xstate64(Context *ctx) const {
-	(void)ctx;
 
-	// TODO(eteran): implement
-	// x86-64: 2688 bytes
-	// x86-32: ?
+	// The extended state feature bits
+	enum FeatureBit : uint64_t {
+		FEATURE_X87 = 1 << 0,
+		FEATURE_SSE = 1 << 1,
+		FEATURE_AVX = 1 << 2,
+		// MPX adds two feature bits
+		FEATURE_BNDREGS = 1 << 3,
+		FEATURE_BNDCFG  = 1 << 4,
+		FEATURE_MPX     = FEATURE_BNDREGS | FEATURE_BNDCFG,
+		// AVX-512 adds three feature bits
+		FEATURE_K      = 1 << 5,
+		FEATURE_ZMM_H  = 1 << 6,
+		FEATURE_ZMM    = 1 << 7,
+		FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
+	};
 
-	alignas(256) char xstate[4096];
-	struct iovec iov = {&xstate, sizeof(xstate)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRFPREG, &iov) == -1) {
+	// Possible sizes of X86_XSTATE
+	static constexpr size_t XSAVE_NONEXTENDED_SIZE = 576;
+	static constexpr size_t SSE_SIZE               = XSAVE_NONEXTENDED_SIZE;
+	static constexpr size_t AVX_SIZE               = 832;
+	static constexpr size_t BNDREGS_SIZE           = 1024;
+	static constexpr size_t BNDCFG_SIZE            = 1088;
+	static constexpr size_t AVX512_SIZE            = 2688;
+	static constexpr size_t MAX_SIZE               = 2688;
+
+	Context_x86_64_xstate xsave;
+	struct iovec iov = {&xsave, sizeof(xsave)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
+	}
+
+	bool x87_present = xsave.xstate_bv & FEATURE_X87;
+	bool sse_present = xsave.xstate_bv & FEATURE_SSE;
+	bool avx_present = xsave.xstate_bv & FEATURE_AVX;
+
+	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
+	// has not touched the corresponding registers yet. But once the registers are
+	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
+	// it looks as if the registers have always been zero. Thus we should provide the same
+	// illusion to the user.
+	if (x87_present) {
+		ctx->xstate_.x87.status_word = xsave.swd; // should be first for RIndexToSTIndex() to work
+
+		for (size_t n = 0; n < 8; ++n) {
+			std::memcpy(ctx->xstate_.x87.registers[n].data, xsave.st_space + 16 * xsave.st_space[n * 16], 16);
+		}
+
+		ctx->xstate_.x87.control_word      = xsave.cwd;
+		ctx->xstate_.x87.tag_word          = xsave.ftw;
+		ctx->xstate_.x87.inst_ptr_offset   = xsave.rip;
+		ctx->xstate_.x87.data_ptr_offset   = xsave.rdp;
+		ctx->xstate_.x87.inst_ptr_selector = 0;
+		ctx->xstate_.x87.data_ptr_selector = 0;
+		ctx->xstate_.x87.opcode            = xsave.fop;
+		ctx->xstate_.x87.filled            = true;
+	} else {
+		ctx->xstate_.x87              = {};
+		ctx->xstate_.x87.control_word = xsave.cwd; // this appears always present
+		ctx->xstate_.x87.tag_word     = 0xffff;
+		ctx->xstate_.x87.filled       = true;
+	}
+
+	if (sse_present) {
+	}
+
+	if (avx_present) {
 	}
 }
 
@@ -507,6 +564,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_xstate(const Context *ctx) const {
+
 	// TODO(eteran): implement
 	(void)ctx;
 }

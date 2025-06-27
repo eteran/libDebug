@@ -9,6 +9,7 @@ words:
   - INSB
   - INSD
   - MSAN
+  - NT_PRFPREG
   - NT_PRSTATUS
   - OUTSB
   - OUTSD
@@ -21,6 +22,7 @@ words:
   - TSAN
   - USAN
   - vdso
+  - xsave
   - xstate
 ignoreWords: []
 import: []

@@ -138,17 +138,20 @@ struct Context_x86_32_xstate {
 	uint16_t cwd;
 	uint16_t swd;
 	uint16_t twd;
-	uint16_t fop;
-	uint32_t fip;
-	uint32_t fcs;
-	uint32_t foo;
-	uint32_t fos;
+	uint16_t fop; // last instruction opcode
+	uint32_t fip; // last instruction EIP
+	uint32_t fcs; // last instruction CS
+	uint32_t foo; // last operand offset
+	uint32_t fos; // last operand selector in 32 bit mode
 	uint32_t mxcsr;
-	uint32_t reserved;
-	uint32_t st_space[32];
-	uint32_t xmm_space[32];
+	uint32_t mxcsr_mask;
+	uint32_t st_space[32];  // 8 16-byte fields
+	uint32_t xmm_space[32]; // 16 16-byte fields
 	uint32_t padding[56];
 };
+
+static_assert(sizeof(Context_x86_32_xstate) == 512, "Context_x86_32_xstate is messed up!");
+static_assert(std::is_standard_layout<Context_x86_32_xstate>::value, "Not standard layout");
 
 // Reflects user_regs_struct in sys/user.h.
 struct Context_x86_64 {
@@ -189,15 +192,72 @@ struct Context_x86_64_xstate {
 	uint16_t cwd;
 	uint16_t swd;
 	uint16_t ftw;
-	uint16_t fop;
-	uint64_t rip;
-	uint64_t rdp;
+	uint16_t fop; // last instruction opcode
+	uint64_t rip; // last instruction EIP
+	uint64_t rdp; // last operand offset
 	uint32_t mxcsr;
 	uint32_t mxcr_mask;
-	uint32_t st_space[32];
-	uint32_t xmm_space[64];
-	uint32_t padding[24];
+	uint8_t st_space[16 * 8];   // 8 16-byte fields
+	uint8_t xmm_space[16 * 16]; // 16 16-byte fields, regardless of XMM_REG_COUNT
+	uint8_t padding[48];
+
+	union {
+		uint64_t xcr0;
+		uint8_t sw_usable_bytes[48];
+	};
+
+	union {
+		uint64_t xstate_bv;
+		uint8_t xstate_hdr_bytes[64];
+	};
+
+	uint8_t buffer[2112];
+} __attribute__((packed, aligned(64)));
+
+struct FpuRegister {
+	uint8_t data[16];
 };
+
+struct AvxRegister {
+	uint8_t data[256];
+};
+
+struct Context_xstate {
+
+	struct {
+		FpuRegister registers[8];
+		uint64_t inst_ptr_offset   = 0;
+		uint64_t data_ptr_offset   = 0;
+		uint16_t inst_ptr_selector = 0;
+		uint16_t data_ptr_selector = 0;
+		uint16_t control_word      = 0;
+		uint16_t status_word       = 0;
+		uint16_t tag_word          = 0;
+		uint16_t opcode            = 0;
+		bool filled                = false;
+	} x87;
+
+	struct {
+		AvxRegister registers[16];
+		uint32_t mxcsr      = 0;
+		uint32_t mxcsr_mask = 0;
+		bool filled         = false;
+	} avx;
+
+	struct {
+		AvxRegister registers[8];
+		uint32_t mxcsr      = 0;
+		uint32_t mxcsr_mask = 0;
+		bool filled         = false;
+	} sse;
+};
+
+static_assert(offsetof(Context_x86_64_xstate, xstate_bv) == 512, "Context_x86_64_xstate is messed up!");
+static_assert(offsetof(Context_x86_64_xstate, st_space) == 32, "ST space should appear at offset 32");
+static_assert(offsetof(Context_x86_64_xstate, xmm_space) == 160, "XMM space should appear at offset 160");
+static_assert(offsetof(Context_x86_64_xstate, xcr0) == 464, "XCR0 should appear at offset 464");
+static_assert(sizeof(Context_x86_64_xstate) == 2688, "Context_x86_64_xstate is messed up!");
+static_assert(std::is_standard_layout<Context_x86_64_xstate>::value, "Not standard layout");
 
 class Context {
 	friend class Thread;
@@ -208,6 +268,7 @@ public:
 
 public:
 	void dump();
+	[[nodiscard]] RegisterRef operator[](RegisterId reg);
 	[[nodiscard]] RegisterRef get(RegisterId reg);
 	[[nodiscard]] bool is_64_bit() const { return is_64_bit_; }
 	[[nodiscard]] bool is_set() const { return is_set_; }
@@ -219,7 +280,6 @@ private:
 private:
 	struct Context64 {
 		Context_x86_64 regs;
-		Context_x86_64_xstate xstate;
 		uint64_t debug_regs[8];
 	};
 
@@ -227,7 +287,6 @@ private:
 
 	struct Context32 {
 		Context_x86_32 regs;
-		Context_x86_32_xstate xstate;
 		uint32_t debug_regs[8];
 		uint32_t fs_base;
 		uint32_t gs_base;
@@ -239,6 +298,8 @@ private:
 		Context64 ctx_64_ = {};
 		Context32 ctx_32_;
 	};
+
+	Context_xstate xstate_;
 
 	bool is_64_bit_ = false;
 	bool is_set_    = false;
