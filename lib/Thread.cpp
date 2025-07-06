@@ -321,15 +321,13 @@ void Thread::get_xstate64(Context *ctx) const {
 		FEATURE_ZMM    = 1 << 7,
 		FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
 	};
-
+#if 0
 	// Possible sizes of X86_XSTATE
-	static constexpr size_t XSAVE_NONEXTENDED_SIZE = 576;
-	static constexpr size_t SSE_SIZE               = XSAVE_NONEXTENDED_SIZE;
-	static constexpr size_t AVX_SIZE               = 832;
 	static constexpr size_t BNDREGS_SIZE           = 1024;
 	static constexpr size_t BNDCFG_SIZE            = 1088;
 	static constexpr size_t AVX512_SIZE            = 2688;
 	static constexpr size_t MAX_SIZE               = 2688;
+#endif
 
 	Context_x86_64_xstate xsave;
 	struct iovec iov = {&xsave, sizeof(xsave)};
@@ -347,11 +345,17 @@ void Thread::get_xstate64(Context *ctx) const {
 	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
 	// it looks as if the registers have always been zero. Thus we should provide the same
 	// illusion to the user.
+	constexpr size_t FpuRegisterCount = 8;
+	constexpr size_t FpuRegisterSize  = 16;
+	constexpr size_t SseRegisterCount = 16; // SSE structure has 16 registers (XMM0-XMM15)
+	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
+	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
+
 	if (x87_present) {
 		ctx->xstate_.x87.status_word = xsave.swd; // should be first for RIndexToSTIndex() to work
 
-		for (size_t n = 0; n < 8; ++n) {
-			std::memcpy(ctx->xstate_.x87.registers[n].data, xsave.st_space + 16 * xsave.st_space[n * 16], 16);
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			std::memcpy(ctx->xstate_.x87.registers[n].data, xsave.st_space + FpuRegisterSize * xsave.st_space[n * FpuRegisterSize], FpuRegisterSize);
 		}
 
 		ctx->xstate_.x87.control_word      = xsave.cwd;
@@ -363,6 +367,11 @@ void Thread::get_xstate64(Context *ctx) const {
 		ctx->xstate_.x87.opcode            = xsave.fop;
 		ctx->xstate_.x87.filled            = true;
 	} else {
+
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			std::memset(ctx->xstate_.x87.registers[n].data, 0, FpuRegisterSize);
+		}
+
 		ctx->xstate_.x87              = {};
 		ctx->xstate_.x87.control_word = xsave.cwd; // this appears always present
 		ctx->xstate_.x87.tag_word     = 0xffff;
@@ -370,9 +379,54 @@ void Thread::get_xstate64(Context *ctx) const {
 	}
 
 	if (sse_present) {
+		printf("SSE present\n");
+		ctx->xstate_.avx_sse.mxcsr      = xsave.mxcsr;
+		ctx->xstate_.avx_sse.mxcsr_mask = xsave.mxcr_mask;
+
+		for (size_t n = 0; n < SseRegisterCount; ++n) {
+			// Copy the 128-bit XMM register data to the first 16 bytes of the AvxRegister
+			std::memcpy(ctx->xstate_.avx_sse.registers[n].data,
+						xsave.xmm_space + SseRegisterSize * n,
+						SseRegisterSize);
+			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
+			std::memset(ctx->xstate_.avx_sse.registers[n].data + SseRegisterSize, 0,
+						sizeof(ctx->xstate_.avx_sse.registers[n].data) - SseRegisterSize);
+		}
+
+		ctx->xstate_.avx_sse.sse_filled = true;
+	} else {
+		// SSE not present, initialize with zeros
+		ctx->xstate_.avx_sse.mxcsr      = 0x1f80; // Default MXCSR value
+		ctx->xstate_.avx_sse.mxcsr_mask = 0;
+
+		for (size_t n = 0; n < SseRegisterCount; ++n) {
+			std::memset(ctx->xstate_.avx_sse.registers[n].data, 0,
+						sizeof(ctx->xstate_.avx_sse.registers[n].data));
+		}
+
+		ctx->xstate_.avx_sse.sse_filled = true;
 	}
 
 	if (avx_present) {
+		// AVX extends the XMM registers to YMM registers (256 bits)
+		// The lower 128 bits are already populated by SSE above
+		// We need to populate the upper 128 bits from the AVX extended state
+
+		// AVX state starts after the legacy area (576 bytes) in the xsave buffer
+		// Each YMM register's upper 128 bits are stored sequentially
+		constexpr size_t AvxStateOffset = 576;
+		constexpr size_t AvxUpperSize   = AvxRegisterSize - SseRegisterSize;
+
+		auto avx_upper_data = reinterpret_cast<const uint8_t *>(&xsave) + AvxStateOffset;
+
+		for (size_t n = 0; n < SseRegisterCount; ++n) {
+			// Copy the upper 128 bits (bytes 16-31) of each YMM register
+			std::memcpy(ctx->xstate_.avx_sse.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
+			// Clear the remaining 224 bytes (bytes 32-255)
+			std::memset(ctx->xstate_.avx_sse.registers[n].data + SseRegisterSize + AvxUpperSize, 0, sizeof(ctx->xstate_.avx_sse.registers[n].data) - SseRegisterSize - AvxUpperSize);
+		}
+
+		ctx->xstate_.avx_sse.avx_filled = true;
 	}
 }
 

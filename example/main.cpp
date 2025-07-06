@@ -137,6 +137,8 @@ int main() {
 	}
 #else
 	auto debugger = std::make_unique<Debugger>();
+	debugger->set_disable_aslr(true);
+	debugger->set_disable_lazy_binding(true);
 
 #define TEST64
 
@@ -159,9 +161,9 @@ int main() {
 	}
 
 #ifdef TEST64
-	process->add_breakpoint(0x00000000004018b5); // main of TestApp on my machine (64-bit)
+	process->add_breakpoint(0x00000000004018a5); // main of TestApp on my machine (64-bit)
 #else
-	process->add_breakpoint(0x080498c5); // main of TestApp on my machine (32-bit)
+	process->add_breakpoint(0x08049875); // main of TestApp on my machine (32-bit)
 #endif
 
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());

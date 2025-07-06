@@ -496,7 +496,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		Context ctx;
 		current_thread->get_context(&ctx);
 
-		RegisterRef ip_ref = ctx.is_64_bit() ? ctx[RegisterId::RIP] : ctx[RegisterId::EIP];
+		RegisterRef ip_ref = ctx[RegisterId::XIP];
 		uint64_t ip        = ip_ref.as<uint64_t>();
 
 		std::printf("Stopped at: %016" PRIx64 "\n", ip);

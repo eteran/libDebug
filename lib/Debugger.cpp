@@ -1,6 +1,7 @@
 
 #include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Defer.hpp"
 #include "Debug/Process.hpp"
 #include "Debug/Thread.hpp"
 
@@ -15,37 +16,13 @@
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 
-template <class F>
-class defer_type {
-public:
-	defer_type(F &&func)
-		: func_(std::forward<F>(func)) {
-	}
-
-	~defer_type() {
-		func_();
-	}
-
-private:
-	F func_;
-};
-
-template <class F>
-defer_type<F> make_defer(F &&f) {
-	return defer_type<F>{std::forward<F>(f)};
-}
-
-#define CONCAT(a, b)  a##b
-#define CONCAT2(a, b) CONCAT(a, b)
-
-#define SCOPE_EXIT(...) \
-	auto CONCAT2(scope_exit_, __LINE__) = make_defer([&] __VA_ARGS__)
-
 /**
  * @brief Construct a new Debugger object.
  */
 Debugger::Debugger() {
 
+	// we need to block SIGCHLD to make sure that we can control
+	// the waitpid calls.
 	sigset_t mask;
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);

@@ -107,6 +107,82 @@ enum class RegisterId {
 	R15D,
 	R15W,
 	R15B,
+
+	// FPU / SIMD
+	ST0,
+	ST1,
+	ST2,
+	ST3,
+	ST4,
+	ST5,
+	ST6,
+	ST7,
+	ST8,
+	ST9,
+	ST10,
+	ST11,
+	ST12,
+	ST13,
+	ST14,
+	ST15,
+	XMM0,
+	XMM1,
+	XMM2,
+	XMM3,
+	XMM4,
+	XMM5,
+	XMM6,
+	XMM7,
+	XMM8,
+	XMM9,
+	XMM10,
+	XMM11,
+	XMM12,
+	XMM13,
+	XMM14,
+	XMM15,
+	YMM0,
+	YMM1,
+	YMM2,
+	YMM3,
+	YMM4,
+	YMM5,
+	YMM6,
+	YMM7,
+	YMM8,
+	YMM9,
+	YMM10,
+	YMM11,
+	YMM12,
+	YMM13,
+	YMM14,
+	YMM15,
+	ZMM0,
+	ZMM1,
+	ZMM2,
+	ZMM3,
+	ZMM4,
+	ZMM5,
+	ZMM6,
+	ZMM7,
+	ZMM8,
+	ZMM9,
+	ZMM10,
+	ZMM11,
+	ZMM12,
+	ZMM13,
+	ZMM14,
+	ZMM15,
+
+	// Size generic registers
+	XAX,
+	XCX,
+	XDX,
+	XSI,
+	XDI,
+	XIP,
+	XSP,
+	XFLAGS,
 };
 
 // Reflects user_regs_struct in sys/user.h.
@@ -241,15 +317,9 @@ struct Context_xstate {
 		AvxRegister registers[16];
 		uint32_t mxcsr      = 0;
 		uint32_t mxcsr_mask = 0;
-		bool filled         = false;
-	} avx;
-
-	struct {
-		AvxRegister registers[8];
-		uint32_t mxcsr      = 0;
-		uint32_t mxcsr_mask = 0;
-		bool filled         = false;
-	} sse;
+		bool sse_filled     = false;
+		bool avx_filled     = false;
+	} avx_sse;
 };
 
 static_assert(offsetof(Context_x86_64_xstate, xstate_bv) == 512, "Context_x86_64_xstate is messed up!");

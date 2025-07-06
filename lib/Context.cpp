@@ -66,6 +66,16 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::FS_BASE:	return make_register("fs_base", ctx_64_.regs.fs_base, 0);
 	case RegisterId::GS_BASE:	return make_register("gs_base", ctx_64_.regs.gs_base, 0);
 
+	// Size generic registers
+	case RegisterId::XAX:		return make_register("rax", ctx_64_.regs.rax, 0);
+	case RegisterId::XCX:		return make_register("rcx", ctx_64_.regs.rcx, 0);
+	case RegisterId::XDX:		return make_register("rdx", ctx_64_.regs.rdx, 0);
+	case RegisterId::XSI:		return make_register("rsi", ctx_64_.regs.rsi, 0);
+	case RegisterId::XDI:		return make_register("rdi", ctx_64_.regs.rdi, 0);
+	case RegisterId::XIP:		return make_register("rip", ctx_64_.regs.rip, 0);
+	case RegisterId::XSP:		return make_register("rsp", ctx_64_.regs.rsp, 0);
+	case RegisterId::XFLAGS:	return make_register("rflags", ctx_64_.regs.rflags, 0);
+
 	// 64-bit GP registers
 	case RegisterId::R15:		return make_register("r15", ctx_64_.regs.r15, 0);
 	case RegisterId::R14:		return make_register("r14", ctx_64_.regs.r14, 0);
@@ -158,6 +168,24 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::DR6:		return make_register("dr6", ctx_64_.debug_regs[6], 0);
 	case RegisterId::DR7:		return make_register("dr7", ctx_64_.debug_regs[7], 0);
 
+	// SIMD Registers
+	case RegisterId::XMM0:		return make_register("xmm0",  xstate_.avx_sse.registers[0].data,  16, 0);
+	case RegisterId::XMM1:		return make_register("xmm1",  xstate_.avx_sse.registers[1].data,  16, 0);
+	case RegisterId::XMM2:		return make_register("xmm2",  xstate_.avx_sse.registers[2].data,  16, 0);
+	case RegisterId::XMM3:		return make_register("xmm3",  xstate_.avx_sse.registers[3].data,  16, 0);
+	case RegisterId::XMM4:		return make_register("xmm4",  xstate_.avx_sse.registers[4].data,  16, 0);
+	case RegisterId::XMM5:		return make_register("xmm5",  xstate_.avx_sse.registers[5].data,  16, 0);
+	case RegisterId::XMM6:		return make_register("xmm6",  xstate_.avx_sse.registers[6].data,  16, 0);
+	case RegisterId::XMM7:		return make_register("xmm7",  xstate_.avx_sse.registers[7].data,  16, 0);
+	case RegisterId::XMM8:		return make_register("xmm8",  xstate_.avx_sse.registers[8].data,  16, 0);
+	case RegisterId::XMM9:		return make_register("xmm9",  xstate_.avx_sse.registers[9].data,  16, 0);
+	case RegisterId::XMM10:		return make_register("xmm10", xstate_.avx_sse.registers[10].data, 16, 0);
+	case RegisterId::XMM11:		return make_register("xmm11", xstate_.avx_sse.registers[11].data, 16, 0);
+	case RegisterId::XMM12:		return make_register("xmm12", xstate_.avx_sse.registers[12].data, 16, 0);
+	case RegisterId::XMM13:		return make_register("xmm13", xstate_.avx_sse.registers[13].data, 16, 0);
+	case RegisterId::XMM14:		return make_register("xmm14", xstate_.avx_sse.registers[14].data, 16, 0);
+	case RegisterId::XMM15:		return make_register("xmm15", xstate_.avx_sse.registers[15].data, 16, 0);
+
 	default:
 		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
 		return RegisterRef();
@@ -173,68 +201,53 @@ RegisterRef Context::get_64(RegisterId reg) {
  */
 RegisterRef Context::get_32(RegisterId reg) {
 
+	// clang-format off
 	switch (reg) {
-	case RegisterId::EAX:
-		return make_register("eax", ctx_32_.regs.eax, 0);
-	case RegisterId::EBX:
-		return make_register("ebx", ctx_32_.regs.ebx, 0);
-	case RegisterId::ECX:
-		return make_register("ecx", ctx_32_.regs.ecx, 0);
-	case RegisterId::EDX:
-		return make_register("edx", ctx_32_.regs.edx, 0);
-	case RegisterId::ESI:
-		return make_register("esi", ctx_32_.regs.esi, 0);
-	case RegisterId::EDI:
-		return make_register("edi", ctx_32_.regs.edi, 0);
-	case RegisterId::ORIG_EAX:
-		return make_register("orig_eax", ctx_32_.regs.orig_eax, 0);
-	case RegisterId::EIP:
-		return make_register("eip", ctx_32_.regs.eip, 0);
-	case RegisterId::CS:
-		return make_register("cs", ctx_32_.regs.cs, 0);
-	case RegisterId::EFLAGS:
-		return make_register("eflags", ctx_32_.regs.eflags, 0);
-	case RegisterId::ESP:
-		return make_register("esp", ctx_32_.regs.esp, 0);
-	case RegisterId::EBP:
-		return make_register("ebp", ctx_32_.regs.ebp, 0);
-	case RegisterId::SS:
-		return make_register("ss", ctx_32_.regs.ss, 0);
-	case RegisterId::DS:
-		return make_register("ds", ctx_32_.regs.ds, 0);
-	case RegisterId::ES:
-		return make_register("es", ctx_32_.regs.es, 0);
-	case RegisterId::FS:
-		return make_register("fs", ctx_32_.regs.fs, 0);
-	case RegisterId::GS:
-		return make_register("gs", ctx_32_.regs.gs, 0);
+	case RegisterId::EAX:		return make_register("eax", ctx_32_.regs.eax, 0);
+	case RegisterId::EBX:		return make_register("ebx", ctx_32_.regs.ebx, 0);
+	case RegisterId::ECX:		return make_register("ecx", ctx_32_.regs.ecx, 0);
+	case RegisterId::EDX:		return make_register("edx", ctx_32_.regs.edx, 0);
+	case RegisterId::ESI:		return make_register("esi", ctx_32_.regs.esi, 0);
+	case RegisterId::EDI:		return make_register("edi", ctx_32_.regs.edi, 0);
+	case RegisterId::ORIG_EAX:	return make_register("orig_eax", ctx_32_.regs.orig_eax, 0);
+	case RegisterId::EIP:		return make_register("eip", ctx_32_.regs.eip, 0);
+	case RegisterId::CS:		return make_register("cs", ctx_32_.regs.cs, 0);
+	case RegisterId::EFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
+	case RegisterId::ESP:		return make_register("esp", ctx_32_.regs.esp, 0);
+	case RegisterId::EBP:		return make_register("ebp", ctx_32_.regs.ebp, 0);
+	case RegisterId::SS:		return make_register("ss", ctx_32_.regs.ss, 0);
+	case RegisterId::DS:		return make_register("ds", ctx_32_.regs.ds, 0);
+	case RegisterId::ES:		return make_register("es", ctx_32_.regs.es, 0);
+	case RegisterId::FS:		return make_register("fs", ctx_32_.regs.fs, 0);
+	case RegisterId::GS:		return make_register("gs", ctx_32_.regs.gs, 0);
 
-	case RegisterId::FS_BASE:
-		return make_register("fs_base", ctx_32_.fs_base, 0);
-	case RegisterId::GS_BASE:
-		return make_register("gs_base", ctx_32_.gs_base, 0);
+	case RegisterId::FS_BASE:	return make_register("fs_base", ctx_32_.fs_base, 0);
+	case RegisterId::GS_BASE:	return make_register("gs_base", ctx_32_.gs_base, 0);
 
 	// Debug Registers
-	case RegisterId::DR0:
-		return make_register("dr0", ctx_32_.debug_regs[0], 0);
-	case RegisterId::DR1:
-		return make_register("dr1", ctx_32_.debug_regs[1], 0);
-	case RegisterId::DR2:
-		return make_register("dr2", ctx_32_.debug_regs[2], 0);
-	case RegisterId::DR3:
-		return make_register("dr3", ctx_32_.debug_regs[3], 0);
-	case RegisterId::DR4:
-		return make_register("dr4", ctx_32_.debug_regs[4], 0);
-	case RegisterId::DR5:
-		return make_register("dr5", ctx_32_.debug_regs[5], 0);
-	case RegisterId::DR6:
-		return make_register("dr6", ctx_32_.debug_regs[6], 0);
-	case RegisterId::DR7:
-		return make_register("dr7", ctx_32_.debug_regs[7], 0);
+	case RegisterId::DR0:	return make_register("dr0", ctx_32_.debug_regs[0], 0);
+	case RegisterId::DR1:	return make_register("dr1", ctx_32_.debug_regs[1], 0);
+	case RegisterId::DR2:	return make_register("dr2", ctx_32_.debug_regs[2], 0);
+	case RegisterId::DR3:	return make_register("dr3", ctx_32_.debug_regs[3], 0);
+	case RegisterId::DR4:	return make_register("dr4", ctx_32_.debug_regs[4], 0);
+	case RegisterId::DR5:	return make_register("dr5", ctx_32_.debug_regs[5], 0);
+	case RegisterId::DR6:	return make_register("dr6", ctx_32_.debug_regs[6], 0);
+	case RegisterId::DR7:	return make_register("dr7", ctx_32_.debug_regs[7], 0);
+
+	// Size generic registers
+	case RegisterId::XAX:		return make_register("eax", ctx_32_.regs.eax, 0);
+	case RegisterId::XCX:		return make_register("ecx", ctx_32_.regs.ecx, 0);
+	case RegisterId::XDX:		return make_register("edx", ctx_32_.regs.edx, 0);
+	case RegisterId::XSI:		return make_register("esi", ctx_32_.regs.esi, 0);
+	case RegisterId::XDI:		return make_register("edi", ctx_32_.regs.edi, 0);
+	case RegisterId::XIP:		return make_register("eip", ctx_32_.regs.eip, 0);
+	case RegisterId::XSP:		return make_register("esp", ctx_32_.regs.esp, 0);
+	case RegisterId::XFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
 	default:
 		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
 		return RegisterRef();
 	}
+	// clang-format on
 }
 
 /**
