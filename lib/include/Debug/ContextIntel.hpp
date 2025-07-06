@@ -319,7 +319,7 @@ struct Context_xstate {
 		uint32_t mxcsr_mask = 0;
 		bool sse_filled     = false;
 		bool avx_filled     = false;
-	} avx_sse;
+	} xmm;
 };
 
 static_assert(offsetof(Context_x86_64_xstate, xstate_bv) == 512, "Context_x86_64_xstate is messed up!");
