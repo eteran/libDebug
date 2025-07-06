@@ -379,31 +379,31 @@ void Thread::get_xstate64(Context *ctx) const {
 	}
 
 	if (sse_present) {
-		ctx->xstate_.xmm.mxcsr      = xsave.mxcsr;
-		ctx->xstate_.xmm.mxcsr_mask = xsave.mxcr_mask;
+		ctx->xstate_.simd.mxcsr      = xsave.mxcsr;
+		ctx->xstate_.simd.mxcsr_mask = xsave.mxcr_mask;
 
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
 			// Copy the 128-bit XMM register data to the first 16 bytes of the AvxRegister
-			std::memcpy(ctx->xstate_.xmm.registers[n].data,
+			std::memcpy(ctx->xstate_.simd.registers[n].data,
 						xsave.xmm_space + SseRegisterSize * n,
 						SseRegisterSize);
 			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
-			std::memset(ctx->xstate_.xmm.registers[n].data + SseRegisterSize, 0,
-						sizeof(ctx->xstate_.xmm.registers[n].data) - SseRegisterSize);
+			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0,
+						sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
 		}
 
-		ctx->xstate_.xmm.sse_filled = true;
+		ctx->xstate_.simd.sse_filled = true;
 	} else {
 		// SSE not present, initialize with zeros
-		ctx->xstate_.xmm.mxcsr      = 0x1f80; // Default MXCSR value
-		ctx->xstate_.xmm.mxcsr_mask = 0;
+		ctx->xstate_.simd.mxcsr      = 0x1f80; // Default MXCSR value
+		ctx->xstate_.simd.mxcsr_mask = 0;
 
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
-			std::memset(ctx->xstate_.xmm.registers[n].data, 0,
-						sizeof(ctx->xstate_.xmm.registers[n].data));
+			std::memset(ctx->xstate_.simd.registers[n].data, 0,
+						sizeof(ctx->xstate_.simd.registers[n].data));
 		}
 
-		ctx->xstate_.xmm.sse_filled = true;
+		ctx->xstate_.simd.sse_filled = true;
 	}
 
 	if (avx_present) {
@@ -420,12 +420,12 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
 			// Copy the upper 128 bits (bytes 16-31) of each YMM register
-			std::memcpy(ctx->xstate_.xmm.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
+			std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
 			// Clear the remaining 224 bytes (bytes 32-255)
-			std::memset(ctx->xstate_.xmm.registers[n].data + SseRegisterSize + AvxUpperSize, 0, sizeof(ctx->xstate_.xmm.registers[n].data) - SseRegisterSize - AvxUpperSize);
+			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize + AvxUpperSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize - AvxUpperSize);
 		}
 
-		ctx->xstate_.xmm.avx_filled = true;
+		ctx->xstate_.simd.avx_filled = true;
 	}
 }
 
