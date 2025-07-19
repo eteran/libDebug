@@ -295,7 +295,7 @@ struct FpuRegister {
 };
 
 struct AvxRegister {
-	uint8_t data[256];
+	uint8_t data[64];
 };
 
 struct Context_xstate {
@@ -314,11 +314,12 @@ struct Context_xstate {
 	} x87;
 
 	struct {
-		AvxRegister registers[16];
+		AvxRegister registers[32]; // XMM0-XMM15, YMM0-YMM15, ZMM0-ZMM15
 		uint32_t mxcsr      = 0;
 		uint32_t mxcsr_mask = 0;
 		bool sse_filled     = false;
 		bool avx_filled     = false;
+		bool zmm_filled     = false;
 	} simd;
 };
 

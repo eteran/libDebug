@@ -331,6 +331,7 @@ void Thread::get_xstate64(Context *ctx) const {
 
 	Context_x86_64_xstate xsave;
 	struct iovec iov = {&xsave, sizeof(xsave)};
+
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
 		std::perror("ptrace(PTRACE_GETREGSET)");
 		std::exit(0);
@@ -339,6 +340,7 @@ void Thread::get_xstate64(Context *ctx) const {
 	bool x87_present = xsave.xstate_bv & FEATURE_X87;
 	bool sse_present = xsave.xstate_bv & FEATURE_SSE;
 	bool avx_present = xsave.xstate_bv & FEATURE_AVX;
+	bool zmm_present = (xsave.xstate_bv & FEATURE_AVX512) == FEATURE_AVX512;
 
 	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
 	// has not touched the corresponding registers yet. But once the registers are
@@ -347,9 +349,18 @@ void Thread::get_xstate64(Context *ctx) const {
 	// illusion to the user.
 	constexpr size_t FpuRegisterCount = 8;
 	constexpr size_t FpuRegisterSize  = 16;
-	constexpr size_t SseRegisterCount = 16; // SSE structure has 16 registers (XMM0-XMM15)
+	constexpr size_t SseRegisterCount = 32; // SIMD structure now has 32 registers (ZMM0-ZMM31)
 	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
 	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
+	constexpr size_t ZmmRegisterSize  = 64; // Each ZMM register is 512 bits = 64 bytes
+
+	std::printf("Thread::get_xstate64: size=%ld, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
+				iov.iov_len,
+				xsave.xstate_bv,
+				(int)x87_present,
+				(int)sse_present,
+				(int)avx_present,
+				(int)zmm_present);
 
 	if (x87_present) {
 		ctx->xstate_.x87.status_word = xsave.swd; // should be first for RIndexToSTIndex() to work
@@ -382,14 +393,17 @@ void Thread::get_xstate64(Context *ctx) const {
 		ctx->xstate_.simd.mxcsr      = xsave.mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave.mxcr_mask;
 
-		for (size_t n = 0; n < SseRegisterCount; ++n) {
+		// Only populate ZMM0-ZMM15 for SSE (XMM registers)
+		for (size_t n = 0; n < 16; ++n) {
 			// Copy the 128-bit XMM register data to the first 16 bytes of the AvxRegister
-			std::memcpy(ctx->xstate_.simd.registers[n].data,
-						xsave.xmm_space + SseRegisterSize * n,
-						SseRegisterSize);
+			std::memcpy(ctx->xstate_.simd.registers[n].data, xsave.xmm_space + SseRegisterSize * n, SseRegisterSize);
 			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
-			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0,
-						sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
+			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
+		}
+
+		// Initialize ZMM16-ZMM31 to zero for SSE
+		for (size_t n = 16; n < SseRegisterCount; ++n) {
+			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
 		}
 
 		ctx->xstate_.simd.sse_filled = true;
@@ -399,8 +413,7 @@ void Thread::get_xstate64(Context *ctx) const {
 		ctx->xstate_.simd.mxcsr_mask = 0;
 
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
-			std::memset(ctx->xstate_.simd.registers[n].data, 0,
-						sizeof(ctx->xstate_.simd.registers[n].data));
+			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
 		}
 
 		ctx->xstate_.simd.sse_filled = true;
@@ -418,7 +431,8 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		auto avx_upper_data = reinterpret_cast<const uint8_t *>(&xsave) + AvxStateOffset;
 
-		for (size_t n = 0; n < SseRegisterCount; ++n) {
+		// Only populate ZMM0-ZMM15 for AVX (YMM registers)
+		for (size_t n = 0; n < 16; ++n) {
 			// Copy the upper 128 bits (bytes 16-31) of each YMM register
 			std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
 			// Clear the remaining 224 bytes (bytes 32-255)
@@ -426,6 +440,72 @@ void Thread::get_xstate64(Context *ctx) const {
 		}
 
 		ctx->xstate_.simd.avx_filled = true;
+	}
+
+	if (zmm_present) {
+		// AVX-512 extends the YMM registers to ZMM registers (512 bits)
+		// The lower 256 bits are already populated by SSE and AVX above
+		// We need to populate the upper 256 bits from the AVX-512 extended state
+
+		// AVX-512 state layout in xsave buffer:
+		// - Opmask state (K0-K7) starts at offset 1088
+		// - ZMM_Hi256 state (upper 256 bits of ZMM0-ZMM15) starts at offset 1152
+		// - Hi16_ZMM state (ZMM16-ZMM31, full 512 bits) starts at offset 1664
+
+		constexpr size_t ZmmHi256StateOffset = 1152;                              // Upper 256 bits of ZMM0-ZMM15
+		constexpr size_t Hi16ZmmStateOffset  = 1664;                              // Full 512 bits of ZMM16-ZMM31
+		constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize; // 64 - 32 = 32 bytes
+
+		const uint8_t *xsave_data = reinterpret_cast<const uint8_t *>(&xsave);
+
+		// Handle ZMM0-ZMM15: populate upper 256 bits
+		const uint8_t *zmm_upper_data = xsave_data + ZmmHi256StateOffset;
+		for (size_t n = 0; n < 16; ++n) {
+			// Copy the upper 256 bits (bytes 32-63) of each ZMM register
+			std::memcpy(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, zmm_upper_data + ZmmUpperSize * n, ZmmUpperSize);
+		}
+
+		// Handle ZMM16-ZMM31: populate full 512 bits
+		const uint8_t *hi16_zmm_data = xsave_data + Hi16ZmmStateOffset;
+		for (size_t n = 16; n < 32; ++n) {
+			// Copy the full 512 bits (bytes 0-63) of each ZMM register
+			std::memcpy(ctx->xstate_.simd.registers[n].data, hi16_zmm_data + ZmmRegisterSize * (n - 16), ZmmRegisterSize);
+		}
+
+		ctx->xstate_.simd.zmm_filled = true;
+	}
+
+	if (ctx->xstate_.simd.sse_filled) {
+		std::printf("XSTATE SSE registers:\n");
+		for (size_t n = 0; n < 16; ++n) {
+			std::printf("XMM%02zu: ", n);
+			for (size_t b = 0; b < 16; ++b) {
+				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
+	if (ctx->xstate_.simd.avx_filled) {
+		std::printf("XSTATE AVX registers:\n");
+		for (size_t n = 0; n < 16; ++n) {
+			std::printf("YMM%02zu: ", n);
+			for (size_t b = 0; b < 32; ++b) {
+				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
+	if (ctx->xstate_.simd.zmm_filled) {
+		std::printf("XSTATE ZMM registers:\n");
+		for (size_t n = 0; n < 32; ++n) {
+			std::printf("ZMM%02zu: ", n);
+			for (size_t b = 0; b < 64; ++b) {
+				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
 	}
 }
 
