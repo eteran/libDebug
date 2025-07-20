@@ -161,7 +161,7 @@ int main() {
 	}
 
 #ifdef TEST64
-	process->add_breakpoint(0x40191a); // main of TestApp on my machine (64-bit)
+	process->add_breakpoint(0x40190c); // main of TestApp on my machine (64-bit)
 #else
 	process->add_breakpoint(0x08049875); // main of TestApp on my machine (32-bit)
 #endif

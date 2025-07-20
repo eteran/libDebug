@@ -556,6 +556,18 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					// * a breakpoint
 					if (auto bp = search_breakpoint(ip)) {
 						std::printf("Breakpoint!\n");
+
+						// As an experiment, copy YMM07 to YMM01
+#if 0
+						RegisterRef ymm1 = ctx[RegisterId::YMM1];
+						RegisterRef ymm7 = ctx[RegisterId::YMM7];
+						ymm1 = ymm7;
+#else
+						ctx[RegisterId::YMM1] = ctx[RegisterId::YMM7];
+						ctx[RegisterId::AH]  = ctx[RegisterId::YMM7];
+
+#endif
+
 						ip_ref -= bp->size();
 						current_thread->set_context(&ctx);
 

@@ -168,6 +168,35 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::DR6:		return make_register("dr6", ctx_64_.debug_regs[6], 0);
 	case RegisterId::DR7:		return make_register("dr7", ctx_64_.debug_regs[7], 0);
 
+	// FPU Registers
+	case RegisterId::ST0:		return make_register("st0", xstate_.x87.registers[0].data, 16, 0);
+	case RegisterId::ST1:		return make_register("st1", xstate_.x87.registers[1].data, 16, 0);
+	case RegisterId::ST2:		return make_register("st2", xstate_.x87.registers[2].data, 16, 0);
+	case RegisterId::ST3:		return make_register("st3", xstate_.x87.registers[3].data, 16, 0);
+	case RegisterId::ST4:		return make_register("st4", xstate_.x87.registers[4].data, 16, 0);
+	case RegisterId::ST5:		return make_register("st5", xstate_.x87.registers[5].data, 16, 0);
+	case RegisterId::ST6:		return make_register("st6", xstate_.x87.registers[6].data, 16, 0);
+	case RegisterId::ST7:		return make_register("st7", xstate_.x87.registers[7].data, 16, 0);
+
+	case RegisterId::CWD:		return make_register("cwd",  xstate_.x87.control_word, sizeof(xstate_.x87.control_word), 0);
+	case RegisterId::SWD:		return make_register("swd",  xstate_.x87.status_word, sizeof(xstate_.x87.status_word), 0);
+	case RegisterId::FTW:		return make_register("ftw",  xstate_.x87.tag_word, sizeof(xstate_.x87.tag_word), 0);
+	case RegisterId::FOP:		return make_register("fop",  xstate_.x87.opcode, sizeof(xstate_.x87.opcode), 0);
+	case RegisterId::FIP:		return make_register("fip",  xstate_.x87.inst_ptr_offset, sizeof(xstate_.x87.inst_ptr_offset), 0);
+	case RegisterId::FDP:		return make_register("fdp",  xstate_.x87.data_ptr_offset, sizeof(xstate_.x87.data_ptr_offset), 0);
+	case RegisterId::MXCSR:		return make_register("mxcsr", xstate_.simd.mxcsr, sizeof(xstate_.simd.mxcsr), 0);
+	case RegisterId::MXCSR_MASK:return make_register("mxcsr_mask", xstate_.simd.mxcsr_mask, sizeof(xstate_.simd.mxcsr_mask), 0);
+
+	// MMX Registers (alias of ST0-ST7)
+	case RegisterId::MM0:		return make_register("mm0", xstate_.x87.registers[0].data, 8, 0);
+	case RegisterId::MM1:		return make_register("mm1", xstate_.x87.registers[1].data, 8, 0);
+	case RegisterId::MM2:		return make_register("mm2", xstate_.x87.registers[2].data, 8, 0);
+	case RegisterId::MM3:		return make_register("mm3", xstate_.x87.registers[3].data, 8, 0);
+	case RegisterId::MM4:		return make_register("mm4", xstate_.x87.registers[4].data, 8, 0);
+	case RegisterId::MM5:		return make_register("mm5", xstate_.x87.registers[5].data, 8, 0);
+	case RegisterId::MM6:		return make_register("mm6", xstate_.x87.registers[6].data, 8, 0);
+	case RegisterId::MM7:		return make_register("mm7", xstate_.x87.registers[7].data, 8, 0);
+
 	// SIMD Registers
 	case RegisterId::XMM0:		return make_register("xmm0",  xstate_.simd.registers[0].data,  16, 0);
 	case RegisterId::XMM1:		return make_register("xmm1",  xstate_.simd.registers[1].data,  16, 0);

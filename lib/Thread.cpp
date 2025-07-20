@@ -16,8 +16,6 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 
-#define IGNORE(x) (void)x
-
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
 							  PTRACE_O_TRACEEXIT;
@@ -337,10 +335,18 @@ void Thread::get_xstate64(Context *ctx) const {
 		std::exit(0);
 	}
 
-	bool x87_present = xsave.xstate_bv & FEATURE_X87;
-	bool sse_present = xsave.xstate_bv & FEATURE_SSE;
-	bool avx_present = xsave.xstate_bv & FEATURE_AVX;
-	bool zmm_present = (xsave.xstate_bv & FEATURE_AVX512) == FEATURE_AVX512;
+	const bool x87_present = xsave.xstate_bv & FEATURE_X87;
+	const bool sse_present = xsave.xstate_bv & FEATURE_SSE;
+	const bool avx_present = xsave.xstate_bv & FEATURE_AVX;
+	const bool zmm_present = (xsave.xstate_bv & FEATURE_AVX512) == FEATURE_AVX512;
+
+	std::printf("Thread::get_xstate64: size=%ld, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
+				iov.iov_len,
+				xsave.xstate_bv,
+				static_cast<int>(x87_present),
+				static_cast<int>(sse_present),
+				static_cast<int>(avx_present),
+				static_cast<int>(zmm_present));
 
 	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
 	// has not touched the corresponding registers yet. But once the registers are
@@ -353,14 +359,6 @@ void Thread::get_xstate64(Context *ctx) const {
 	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
 	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
 	constexpr size_t ZmmRegisterSize  = 64; // Each ZMM register is 512 bits = 64 bytes
-
-	std::printf("Thread::get_xstate64: size=%ld, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
-				iov.iov_len,
-				xsave.xstate_bv,
-				(int)x87_present,
-				(int)sse_present,
-				(int)avx_present,
-				(int)zmm_present);
 
 	if (x87_present) {
 		ctx->xstate_.x87.status_word = xsave.swd; // should be first for RIndexToSTIndex() to work
@@ -389,6 +387,8 @@ void Thread::get_xstate64(Context *ctx) const {
 		ctx->xstate_.x87.filled       = true;
 	}
 
+	// NOTE(eteran): on 64-bit systems, SSE is always present, so we always populate it
+	// even if xsave.xstate_bv & FEATURE_SSE is false.
 	if (sse_present) {
 		ctx->xstate_.simd.mxcsr      = xsave.mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave.mxcr_mask;
@@ -652,18 +652,23 @@ void Thread::get_context(Context *ctx) const {
 }
 
 /**
- * @brief Sets the thread GP registers.
+ * @brief Sets the thread 64-bit registers.
  *
  * @param ctx A pointer to the context object.
  */
-void Thread::set_registers(const Context *ctx) const {
-
-#if defined(__x86_64__)
+void Thread::set_registers64(const Context *ctx) const {
 	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		std::perror("ptrace(PTRACE_SETREGS)");
 		std::exit(0);
 	}
-#else
+}
+
+/**
+ * @brief Sets the thread 32-bit registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_registers32(const Context *ctx) const {
 	struct iovec iov;
 	if (is_64_bit_) {
 		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->ctx_64_.regs);
@@ -678,6 +683,183 @@ void Thread::set_registers(const Context *ctx) const {
 		std::perror("ptrace(PTRACE_SETREGSET)");
 		std::exit(0);
 	}
+}
+
+/**
+ * @brief Sets the thread xstate (64-bit or 32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_xstate64(const Context *ctx) const {
+
+	// The extended state feature bits
+	enum FeatureBit : uint64_t {
+		FEATURE_X87 = 1 << 0,
+		FEATURE_SSE = 1 << 1,
+		FEATURE_AVX = 1 << 2,
+		// MPX adds two feature bits
+		FEATURE_BNDREGS = 1 << 3,
+		FEATURE_BNDCFG  = 1 << 4,
+		FEATURE_MPX     = FEATURE_BNDREGS | FEATURE_BNDCFG,
+		// AVX-512 adds three feature bits
+		FEATURE_K      = 1 << 5,
+		FEATURE_ZMM_H  = 1 << 6,
+		FEATURE_ZMM    = 1 << 7,
+		FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
+	};
+
+	// Prepare the xsave buffer structure
+	Context_x86_64_xstate xsave = {};
+
+	// Set up basic control/status fields from x87 state
+	if (ctx->xstate_.x87.filled) {
+		xsave.cwd = ctx->xstate_.x87.control_word;
+		xsave.swd = ctx->xstate_.x87.status_word;
+		xsave.ftw = ctx->xstate_.x87.tag_word;
+		xsave.fop = ctx->xstate_.x87.opcode;
+		xsave.rip = ctx->xstate_.x87.inst_ptr_offset;
+		xsave.rdp = ctx->xstate_.x87.data_ptr_offset;
+
+		// Copy x87 register data
+		constexpr size_t FpuRegisterCount = 8;
+		constexpr size_t FpuRegisterSize  = 16;
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			std::memcpy(xsave.st_space + FpuRegisterSize * n,
+						ctx->xstate_.x87.registers[n].data,
+						FpuRegisterSize);
+		}
+
+		xsave.xstate_bv |= FEATURE_X87;
+	}
+
+	// Set up SIMD state
+	if (ctx->xstate_.simd.sse_filled) {
+		xsave.mxcsr     = ctx->xstate_.simd.mxcsr;
+		xsave.mxcr_mask = ctx->xstate_.simd.mxcsr_mask;
+
+		// Copy XMM register data (lower 128 bits of ZMM0-ZMM15)
+		constexpr size_t SseRegisterSize = 16;
+		for (size_t n = 0; n < 16; ++n) {
+			std::memcpy(xsave.xmm_space + SseRegisterSize * n, ctx->xstate_.simd.registers[n].data, SseRegisterSize);
+		}
+
+		xsave.xstate_bv |= FEATURE_SSE;
+	}
+
+	// Set up AVX state (upper 128 bits of YMM0-YMM15)
+	if (ctx->xstate_.simd.avx_filled) {
+		constexpr size_t AvxStateOffset  = 576;
+		constexpr size_t AvxRegisterSize = 32;
+		constexpr size_t SseRegisterSize = 16;
+		constexpr size_t AvxUpperSize    = AvxRegisterSize - SseRegisterSize;
+
+		uint8_t *avx_upper_data = reinterpret_cast<uint8_t *>(&xsave) + AvxStateOffset;
+		for (size_t n = 0; n < 16; ++n) {
+			std::memcpy(avx_upper_data + AvxUpperSize * n, ctx->xstate_.simd.registers[n].data + SseRegisterSize, AvxUpperSize);
+		}
+
+		xsave.xstate_bv |= FEATURE_AVX;
+	}
+
+	// Set up AVX-512 state
+	if (ctx->xstate_.simd.zmm_filled) {
+		constexpr size_t ZmmHi256StateOffset = 1152; // Upper 256 bits of ZMM0-ZMM15
+		constexpr size_t Hi16ZmmStateOffset  = 1664; // Full 512 bits of ZMM16-ZMM31
+		constexpr size_t AvxRegisterSize     = 32;
+		constexpr size_t ZmmRegisterSize     = 64;
+		constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize;
+
+		uint8_t *xsave_data = reinterpret_cast<uint8_t *>(&xsave);
+
+		// Copy upper 256 bits of ZMM0-ZMM15
+		uint8_t *zmm_upper_data = xsave_data + ZmmHi256StateOffset;
+		for (size_t n = 0; n < 16; ++n) {
+			std::memcpy(zmm_upper_data + ZmmUpperSize * n, ctx->xstate_.simd.registers[n].data + AvxRegisterSize, ZmmUpperSize);
+		}
+
+		// Copy full 512 bits of ZMM16-ZMM31
+		uint8_t *hi16_zmm_data = xsave_data + Hi16ZmmStateOffset;
+		for (size_t n = 16; n < 32; ++n) {
+			std::memcpy(hi16_zmm_data + ZmmRegisterSize * (n - 16), ctx->xstate_.simd.registers[n].data, ZmmRegisterSize);
+		}
+
+		// Set AVX-512 feature bits
+		xsave.xstate_bv |= FEATURE_K;
+		xsave.xstate_bv |= FEATURE_ZMM_H;
+		xsave.xstate_bv |= FEATURE_ZMM;
+	}
+
+	// Write the xsave buffer back to the process
+	struct iovec iov = {&xsave, sizeof(xsave)};
+	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
+		std::perror("ptrace(PTRACE_SETREGSET)");
+		std::exit(0);
+	}
+}
+
+/**
+ * @brief Sets the thread xstate (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_xstate32(const Context *ctx) const {
+	// TODO(eteran): implement
+	(void)ctx;
+}
+
+/**
+ * @brief Sets the thread debug registers (64-bit or 32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_debug_registers64(const Context *ctx) const {
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_64_.debug_regs[0]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_64_.debug_regs[1]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_64_.debug_regs[2]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_64_.debug_regs[3]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_64_.debug_regs[4]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_64_.debug_regs[5]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_64_.debug_regs[6]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_64_.debug_regs[7]);
+}
+
+/**
+ * @brief Sets the thread debug registers (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_debug_registers32(const Context *ctx) const {
+	if (ctx->is_64_bit()) {
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_64_.debug_regs[0]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_64_.debug_regs[1]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_64_.debug_regs[2]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_64_.debug_regs[3]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_64_.debug_regs[4]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_64_.debug_regs[5]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_64_.debug_regs[6]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_64_.debug_regs[7]);
+	} else {
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_32_.debug_regs[0]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_32_.debug_regs[1]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_32_.debug_regs[2]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_32_.debug_regs[3]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_32_.debug_regs[4]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_32_.debug_regs[5]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_32_.debug_regs[6]);
+		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_32_.debug_regs[7]);
+	}
+}
+
+/**
+ * @brief Sets the thread GP registers.
+ *
+ * @param ctx A pointer to the context object.
+ */
+void Thread::set_registers(const Context *ctx) const {
+#if defined(__x86_64__)
+	set_registers64(ctx);
+#else
+	set_registers32(ctx);
 #endif
 }
 
@@ -687,8 +869,11 @@ void Thread::set_registers(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_debug_registers(const Context *ctx) const {
-	// TODO(eteran): implement
-	(void)ctx;
+#ifdef __x86_64__
+	set_debug_registers64(ctx);
+#elif defined(__i386__)
+	set_debug_registers32(ctx);
+#endif
 }
 
 /**
@@ -697,33 +882,11 @@ void Thread::set_debug_registers(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_xstate(const Context *ctx) const {
-
-	// TODO(eteran): implement
-	(void)ctx;
-}
-
-/**
- * @brief Set the segment bases
- *
- * @param ctx A pointer to the context object.
- */
-void Thread::set_segment_bases(const Context *ctx) const {
-	// TODO(eteran): implement
-	(void)ctx;
-}
-
-/**
- * @brief Set a specific segment base for a given segment register.
- *
- * @param ctx A pointer to the context object.
- * @param reg The register to set the segment base for.
- * @param base The segment base.
- */
-void Thread::set_segment_base(const Context *ctx, RegisterId reg, uint32_t base) {
-	// TODO(eteran): implement
-	(void)ctx;
-	(void)reg;
-	(void)base;
+#if defined(__x86_64__)
+	set_xstate64(ctx);
+#else
+	set_xstate32(ctx);
+#endif
 }
 
 /**
@@ -738,5 +901,4 @@ void Thread::set_context(const Context *ctx) const {
 	set_registers(ctx);
 	set_xstate(ctx);
 	set_debug_registers(ctx);
-	set_segment_bases(ctx);
 }

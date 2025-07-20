@@ -117,14 +117,25 @@ enum class RegisterId {
 	ST5,
 	ST6,
 	ST7,
-	ST8,
-	ST9,
-	ST10,
-	ST11,
-	ST12,
-	ST13,
-	ST14,
-	ST15,
+
+	CWD,        // Control Word
+	SWD,        // Status Word
+	FTW,        // Tag Word
+	FOP,        // Last Instruction Opcode
+	FIP,        // Last Instruction EIP
+	FDP,        // Last Operand Offset
+	MXCSR,      // SSE Control and Status Register
+	MXCSR_MASK, // SSE Control and Status Register Mask
+
+	MM0,
+	MM1,
+	MM2,
+	MM3,
+	MM4,
+	MM5,
+	MM6,
+	MM7,
+
 	XMM0,
 	XMM1,
 	XMM2,

@@ -15,22 +15,34 @@ public:
 	explicit RegisterRef(std::string_view name, void *ptr, size_t size)
 		: name_(name), ptr_(ptr), size_(size) {}
 
-	RegisterRef()                               = default;
-	RegisterRef(const RegisterRef &)            = default;
-	RegisterRef &operator=(const RegisterRef &) = default;
-	RegisterRef(RegisterRef &&)                 = default;
-	RegisterRef &operator=(RegisterRef &&)      = default;
-	~RegisterRef()                              = default;
+	RegisterRef()                    = default;
+	~RegisterRef()                   = default;
+	RegisterRef(const RegisterRef &) = delete; // Constructing a RegisterRef from another one is not allowed,
+											   // it doesn't make sense because we don't know some of the meta-data
+											   // needed to do it properly. For example, we don't know the name of
+											   // the register being referenced on the lhs.
 
 public:
 	[[nodiscard]] const std::string &name() const { return name_; }
 	[[nodiscard]] bool is_valid() const { return ptr_ != nullptr; }
 	[[nodiscard]] size_t size() const { return size_; }
 	[[nodiscard]] const void *data() const { return ptr_; }
+	[[nodiscard]] void *data() { return ptr_; }
 
 public:
 	[[nodiscard]] bool operator==(const RegisterRef &rhs) const { return size_ == rhs.size_ && std::memcmp(ptr_, rhs.ptr_, size_) == 0; }
 	[[nodiscard]] bool operator!=(const RegisterRef &rhs) const { return size_ != rhs.size_ || std::memcmp(ptr_, rhs.ptr_, size_) != 0; }
+
+public:
+	RegisterRef &operator=(const RegisterRef &rhs) {
+		assert(is_valid() && rhs.is_valid());
+		if (this != &rhs) {
+			std::memset(ptr_, 0, size_);
+			std::memcpy(ptr_, rhs.data(), std::min(size_, rhs.size()));
+			return *this;
+		}
+		return *this;
+	}
 
 public:
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>

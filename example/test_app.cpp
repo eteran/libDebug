@@ -17,16 +17,11 @@ int main() {
 		0x88888888,
 	};
 
-	/*
+	__asm__ __volatile__("vmovaps %0, %%ymm7" : : "m"(data));
 
-	__asm__ __volatile__(
-		"movaps %0, %%ymm0" // movaps: Move Aligned Packed Single-precision
-		:                   // No output operands
-		: "m"(data)      // Input operand: myFloat from memory
-	);
-	*/
-
+#if 0
 	volatile __m256 ymm0_data = _mm256_load_ps((const float *)data);
+#endif
 	float angle = 0.0f;
 
 	while (1) {
