@@ -1,6 +1,7 @@
 
 #include "Debug/Thread.hpp"
 #include "Debug/Context.hpp"
+#include "Debug/DebuggerError.hpp"
 
 #include <cassert>
 #include <cinttypes>
@@ -31,8 +32,7 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 
 	if (f & Thread::Attach) {
 		if (ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
-			std::perror("ptrace(PTRACE_ATTACH)");
-			std::exit(0);
+			throw DebuggerError("Failed to attach to thread %d: %s", tid, strerror(errno));
 		}
 	}
 
@@ -68,8 +68,7 @@ bool Thread::detect_64_bit() const {
 	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
 	struct iovec iov = {buffer, sizeof(buffer)};
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to get register set for thread %d: %s", tid_, strerror(errno));
 	}
 
 	switch (iov.iov_len) {
@@ -78,8 +77,7 @@ bool Thread::detect_64_bit() const {
 	case sizeof(Context_x86_64):
 		return true;
 	default:
-		std::printf("Unknown iov_len: %zu\n", iov.iov_len);
-		std::abort();
+		throw DebuggerError("Unknown iov_len: %zu", iov.iov_len);
 	}
 }
 
@@ -91,8 +89,7 @@ void Thread::wait() {
 	assert(state_ == State::Running);
 
 	if (waitpid(tid_, &wstatus_, __WALL) == -1) {
-		std::perror("waitpid(Thread::wait)");
-		std::exit(0);
+		throw DebuggerError("Failed to wait for thread %d: %s", tid_, strerror(errno));
 	}
 
 	state_ = State::Stopped;
@@ -118,8 +115,7 @@ void Thread::step() {
 	assert(state_ == State::Stopped);
 
 	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L) == -1) {
-		std::perror("ptrace(PTRACE_SINGLESTEP)");
-		std::exit(0);
+		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(errno));
 	}
 
 	state_ = State::Running;
@@ -133,8 +129,7 @@ void Thread::resume() {
 	assert(state_ == State::Stopped);
 
 	if (ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
-		std::perror("ptrace(PTRACE_CONT)");
-		std::exit(0);
+		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
 	}
 
 	state_ = State::Running;
@@ -145,12 +140,10 @@ void Thread::resume() {
  * eventually followed by a debug event when it actually stops.
  */
 void Thread::stop() const {
-
 	assert(state_ == State::Running);
 
 	if (tgkill(pid_, tid_, SIGSTOP) == -1) {
-		std::perror("tgkill");
-		std::exit(0);
+		throw DebuggerError("Failed to stop thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -161,8 +154,7 @@ void Thread::kill() const {
 	assert(state_ == State::Running);
 
 	if (tgkill(pid_, tid_, SIGKILL) == -1) {
-		std::perror("tgkill");
-		std::exit(0);
+		throw DebuggerError("Failed to kill thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -257,8 +249,7 @@ void Thread::get_registers(Context *ctx) const {
 void Thread::get_registers64(Context *ctx) const {
 	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
 	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
-		std::perror("ptrace(PTRACE_GETREGS)");
-		std::exit(0);
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -279,8 +270,7 @@ void Thread::get_registers32(Context *ctx) const {
 	}
 
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -331,8 +321,7 @@ void Thread::get_xstate64(Context *ctx) const {
 	struct iovec iov = {&xsave, sizeof(xsave)};
 
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
 	}
 
 	const bool x87_present = xsave.xstate_bv & FEATURE_X87;
@@ -524,8 +513,7 @@ void Thread::get_xstate32(Context *ctx) const {
 	alignas(256) char xstate[4096];
 	struct iovec iov = {&xstate, sizeof(xstate)};
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRFPREG, &iov) == -1) {
-		std::perror("ptrace(PTRACE_GETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -658,8 +646,7 @@ void Thread::get_context(Context *ctx) const {
  */
 void Thread::set_registers64(const Context *ctx) const {
 	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
-		std::perror("ptrace(PTRACE_SETREGS)");
-		std::exit(0);
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -680,8 +667,7 @@ void Thread::set_registers32(const Context *ctx) const {
 	}
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		std::perror("ptrace(PTRACE_SETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -792,8 +778,7 @@ void Thread::set_xstate64(const Context *ctx) const {
 	// Write the xsave buffer back to the process
 	struct iovec iov = {&xsave, sizeof(xsave)};
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		std::perror("ptrace(PTRACE_SETREGSET)");
-		std::exit(0);
+		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
 	}
 }
 

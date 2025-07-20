@@ -89,6 +89,8 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	auto shared_mem = static_cast<char *>(ptr);
 	std::memset(ptr, 0, SharedMemSize);
 
+	// NOTE(eteran): the use of std::abort() in the child is intentional, as it
+	// generates a SIGABRT that the parent can detect and report the error message.
 	switch (const pid_t cpid = fork()) {
 	case 0:
 
@@ -146,33 +148,23 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 		auto thread = process_->find_thread(cpid);
 		if (!thread) {
-			char buffer[1024];
-			snprintf(buffer, sizeof(buffer), "Failed to find thread for process %d", cpid);
-			throw DebuggerError(buffer);
+			throw DebuggerError("Failed to find thread for process %d", cpid);
 		}
 
 		if (thread->is_exited()) {
-			char buffer[1024];
-			snprintf(buffer, sizeof(buffer), "The child unexpectedly exited with code %d", thread->exit_status());
-			throw DebuggerError(buffer);
+			throw DebuggerError("The child unexpectedly exited with code %d", thread->exit_status());
 		}
 
 		if (thread->is_signaled()) {
-			char buffer[1024];
-			snprintf(buffer, sizeof(buffer), "The child was unexpectedly killed by signal %d", thread->signal_status());
-			throw DebuggerError(buffer);
+			throw DebuggerError("The child was unexpectedly killed by signal %d", thread->signal_status());
 		}
 
 		if (thread->is_stopped() && thread->stop_status() == SIGABRT) {
-			char buffer[1024];
-			snprintf(buffer, sizeof(buffer), "The child unexpectedly aborted: %s", shared_mem);
-			throw DebuggerError(buffer);
+			throw DebuggerError("The child unexpectedly aborted: %s", shared_mem);
 		}
 
 		if (!thread->is_stopped() || thread->stop_status() != SIGTRAP) {
-			char buffer[1024];
-			snprintf(buffer, sizeof(buffer), "The child was not stopped by SIGTRAP, but by %d", thread->stop_status());
-			throw DebuggerError(buffer);
+			throw DebuggerError("The child was not stopped by SIGTRAP, but by %d", thread->stop_status());
 		}
 
 		return process_;

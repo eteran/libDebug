@@ -1,5 +1,6 @@
 
 #include "Debug/Proc.hpp"
+#include "Debug/DebuggerError.hpp"
 #include "Debug/Region.hpp"
 
 #include <cerrno>
@@ -47,8 +48,7 @@ template <class Callback>
 void proc_enumerator(const char *path, Callback callback) {
 	DIR *const dir = opendir(path);
 	if (!dir) {
-		std::perror("opendir");
-		std::exit(0);
+		throw DebuggerError("Failed to open directory %s: %s", path, strerror(errno));
 	}
 
 	while (struct dirent *entry = readdir(dir)) {
@@ -69,8 +69,7 @@ void proc_enumerator(const char *path, Callback callback) {
 	}
 
 	if (closedir(dir) == -1) {
-		std::perror("closedir");
-		std::exit(0);
+		throw DebuggerError("Failed to close directory %s: %s", path, strerror(errno));
 	}
 }
 

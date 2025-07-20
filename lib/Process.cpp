@@ -5,6 +5,7 @@
 
 #include "Debug/Process.hpp"
 #include "Debug/Breakpoint.hpp"
+#include "Debug/DebuggerError.hpp"
 #include "Debug/Event.hpp"
 #include "Debug/Proc.hpp"
 #include "Debug/Thread.hpp"
@@ -311,8 +312,7 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 				if (errno == ESRCH) {
 					return 0;
 				}
-				std::perror("ptrace(PTRACE_PEEKDATA)");
-				std::abort();
+				throw DebuggerError("Failed to read memory for process %d: %s", pid_, strerror(errno));
 			}
 
 			std::memcpy(
@@ -325,8 +325,7 @@ int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_
 		std::memcpy(&data_value, data, sizeof(long));
 
 		if (ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
-			std::perror("ptrace(PTRACE_POKEDATA)");
-			std::abort();
+			throw DebuggerError("Failed to write memory for process %d: %s", pid_, strerror(errno));
 		}
 
 		address += count;
@@ -398,8 +397,7 @@ void Process::stop() {
  */
 void Process::kill() const {
 	if (ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
-		std::perror("ptrace(PTRACE_KILL)");
-		std::exit(0);
+		throw DebuggerError("Failed to kill process %d: %s", pid_, strerror(errno));
 	}
 }
 
@@ -564,7 +562,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 						ymm1 = ymm7;
 #else
 						ctx[RegisterId::YMM1] = ctx[RegisterId::YMM7];
-						ctx[RegisterId::AH]  = ctx[RegisterId::YMM7];
+						ctx[RegisterId::AH]   = ctx[RegisterId::YMM7];
 
 #endif
 
