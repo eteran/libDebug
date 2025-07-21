@@ -283,7 +283,11 @@ void Thread::get_xstate(Context *ctx) const {
 #if defined(__x86_64__)
 	get_xstate64(ctx);
 #else
-	get_xstate32(ctx);
+	if (is_64_bit_) {
+		get_xstate64(ctx);
+	} else {
+		get_xstate32(ctx);
+	}
 #endif
 }
 
@@ -329,7 +333,7 @@ void Thread::get_xstate64(Context *ctx) const {
 	const bool avx_present = xsave.xstate_bv & FEATURE_AVX;
 	const bool zmm_present = (xsave.xstate_bv & FEATURE_AVX512) == FEATURE_AVX512;
 
-	std::printf("Thread::get_xstate64: size=%ld, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
+	std::printf("Thread::get_xstate64: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
 				iov.iov_len,
 				xsave.xstate_bv,
 				static_cast<int>(x87_present),
@@ -504,16 +508,114 @@ void Thread::get_xstate64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_xstate32(Context *ctx) const {
-	(void)ctx;
 
-	// TODO(eteran): implement
-	// x86-64: 2688 bytes
-	// x86-32: ?
+	// The extended state feature bits for 32-bit (subset of 64-bit features)
+	enum FeatureBit : uint32_t {
+		FEATURE_X87 = 1 << 0,
+		FEATURE_SSE = 1 << 1,
+		FEATURE_AVX = 1 << 2,
+	};
 
-	alignas(256) char xstate[4096];
-	struct iovec iov = {&xstate, sizeof(xstate)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRFPREG, &iov) == -1) {
+	Context_x86_32_xstate xsave;
+
+	struct iovec iov = {&xsave, sizeof(xsave)};
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
 		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
+	}
+	std::printf("Thread::get_xstate32: size=%zu\n", iov.iov_len);
+
+	// For 32-bit, we need to determine what features are present
+	// Since the 32-bit xstate structure doesn't have xstate_bv, we infer from the data
+	bool x87_present = true;                           // x87 is always present on x86
+	bool sse_present = (iov.iov_len >= sizeof(xsave)); // SSE present if we got full structure
+
+	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
+	// has not touched the corresponding registers yet. But once the registers are
+	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
+	// it looks as if the registers have always been zero. Thus we should provide the same
+	// illusion to the user.
+	constexpr size_t FpuRegisterCount = 8;
+	constexpr size_t FpuRegisterSize  = 16;
+	constexpr size_t SseRegisterCount = 32; // SIMD structure now has 32 registers
+	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
+
+	if (x87_present) {
+		ctx->xstate_.x87.status_word = xsave.swd;
+
+		// Convert 32-bit st_space format to our format
+		// st_space in 32-bit format contains 8 registers of 16 bytes each, stored as uint32_t[32]
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			// Each register is 16 bytes = 4 uint32_t values
+			const uint32_t *reg_data = &xsave.st_space[n * 4];
+			std::memcpy(ctx->xstate_.x87.registers[n].data, reg_data, FpuRegisterSize);
+		}
+
+		ctx->xstate_.x87.control_word      = xsave.cwd;
+		ctx->xstate_.x87.tag_word          = xsave.twd;
+		ctx->xstate_.x87.inst_ptr_offset   = xsave.fip;
+		ctx->xstate_.x87.data_ptr_offset   = xsave.foo;
+		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(xsave.fcs);
+		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(xsave.fos);
+		ctx->xstate_.x87.opcode            = xsave.fop;
+		ctx->xstate_.x87.filled            = true;
+	} else {
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			std::memset(ctx->xstate_.x87.registers[n].data, 0, FpuRegisterSize);
+		}
+
+		ctx->xstate_.x87              = {};
+		ctx->xstate_.x87.control_word = xsave.cwd; // this appears always present
+		ctx->xstate_.x87.tag_word     = 0xffff;
+		ctx->xstate_.x87.filled       = true;
+	}
+
+	// NOTE(eteran): on 32-bit systems, SSE may or may not be present
+	if (sse_present) {
+		ctx->xstate_.simd.mxcsr      = xsave.mxcsr;
+		ctx->xstate_.simd.mxcsr_mask = xsave.mxcsr_mask;
+
+		// Only populate first 8 XMM registers for 32-bit (XMM0-XMM7)
+		// 32-bit x86 only has 8 XMM registers, not 16 like x86-64
+		for (size_t n = 0; n < 8; ++n) {
+			// Convert 32-bit xmm_space format to our format
+			// xmm_space contains 8 registers of 16 bytes each, stored as uint32_t[32]
+			const uint32_t *reg_data = &xsave.xmm_space[n * 4];
+			std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
+			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
+			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
+		}
+
+		// Initialize remaining registers (XMM8-XMM31) to zero since 32-bit doesn't have them
+		for (size_t n = 8; n < SseRegisterCount; ++n) {
+			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
+		}
+
+		ctx->xstate_.simd.sse_filled = true;
+	} else {
+		// SSE not present, initialize with zeros
+		ctx->xstate_.simd.mxcsr      = 0x1f80; // Default MXCSR value
+		ctx->xstate_.simd.mxcsr_mask = 0;
+
+		for (size_t n = 0; n < SseRegisterCount; ++n) {
+			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
+		}
+
+		ctx->xstate_.simd.sse_filled = true;
+	}
+
+	// 32-bit doesn't support AVX or AVX-512, so these remain unset
+	ctx->xstate_.simd.avx_filled = false;
+	ctx->xstate_.simd.zmm_filled = false;
+
+	if (ctx->xstate_.simd.sse_filled) {
+		std::printf("XSTATE 32-bit SSE registers:\n");
+		for (size_t n = 0; n < 8; ++n) { // Only show 8 registers for 32-bit
+			std::printf("XMM%zu: ", n);
+			for (size_t b = 0; b < 16; ++b) {
+				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
 	}
 }
 
@@ -526,7 +628,11 @@ void Thread::get_debug_registers(Context *ctx) const {
 #ifdef __x86_64__
 	get_debug_registers64(ctx);
 #elif defined(__i386__)
-	get_debug_registers32(ctx);
+	if (is_64_bit_) {
+		get_debug_registers64(ctx);
+	} else {
+		get_debug_registers32(ctx);
+	}
 #endif
 }
 
@@ -552,25 +658,14 @@ void Thread::get_debug_registers64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers32(Context *ctx) const {
-	if (ctx->is_64_bit()) {
-		ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-		ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-		ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-		ctx->ctx_64_.debug_regs[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-		ctx->ctx_64_.debug_regs[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-		ctx->ctx_64_.debug_regs[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-		ctx->ctx_64_.debug_regs[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-		ctx->ctx_64_.debug_regs[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
-	} else {
-		ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-		ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-		ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-		ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-		ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-		ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-		ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-		ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
-	}
+	ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
+	ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
+	ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
+	ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
+	ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
+	ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
+	ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
+	ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
 }
 
 /**
@@ -582,7 +677,6 @@ void Thread::get_debug_registers32(Context *ctx) const {
  */
 uint32_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 
-	// TODO(eteran): this is too arch specific, move to ContextIntel
 	uint16_t segment = ctx->get(reg).as<uint16_t>();
 	if (segment == 0) {
 		return 0;
@@ -613,7 +707,6 @@ void Thread::get_segment_bases([[maybe_unused]] Context *ctx) const {
 	// NOTE(eteran): on x86-64, FS and GS are already populated as part of the context
 	// so we don't need to do anything here.
 #ifndef __x86_64__
-	// TODO(eteran): this is too arch specific, move to ContextIntel
 	if (!ctx->is_64_bit()) {
 		ctx->ctx_32_.gs_base = get_segment_base(ctx, RegisterId::GS);
 		ctx->ctx_32_.fs_base = get_segment_base(ctx, RegisterId::FS);
@@ -788,8 +881,58 @@ void Thread::set_xstate64(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_xstate32(const Context *ctx) const {
-	// TODO(eteran): implement
-	(void)ctx;
+
+	// Prepare the xsave buffer structure for 32-bit
+	Context_x86_32_xstate xsave = {};
+
+	// Set up basic control/status fields from x87 state
+	if (ctx->xstate_.x87.filled) {
+		xsave.cwd = ctx->xstate_.x87.control_word;
+		xsave.swd = ctx->xstate_.x87.status_word;
+		xsave.twd = ctx->xstate_.x87.tag_word;
+		xsave.fop = ctx->xstate_.x87.opcode;
+		xsave.fip = static_cast<uint32_t>(ctx->xstate_.x87.inst_ptr_offset);
+		xsave.foo = static_cast<uint32_t>(ctx->xstate_.x87.data_ptr_offset);
+		xsave.fcs = ctx->xstate_.x87.inst_ptr_selector;
+		xsave.fos = ctx->xstate_.x87.data_ptr_selector;
+
+		// Copy x87 register data
+		constexpr size_t FpuRegisterCount = 8;
+		constexpr size_t FpuRegisterSize  = 16;
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			// Convert our format to 32-bit st_space format
+			// Each register is 16 bytes = 4 uint32_t values
+			uint32_t *reg_data = &xsave.st_space[n * 4];
+			std::memcpy(reg_data, ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
+		}
+	}
+
+	// Set up SIMD state (SSE only for 32-bit)
+	if (ctx->xstate_.simd.sse_filled) {
+		xsave.mxcsr      = ctx->xstate_.simd.mxcsr;
+		xsave.mxcsr_mask = ctx->xstate_.simd.mxcsr_mask;
+
+		// Copy first 8 XMM registers (32-bit x86 only has XMM0-XMM7)
+		constexpr size_t SseRegisterSize = 16;
+		for (size_t n = 0; n < 8; ++n) {
+			// Convert our format to 32-bit xmm_space format
+			// Each register is 16 bytes = 4 uint32_t values
+			uint32_t *reg_data = &xsave.xmm_space[n * 4];
+			std::memcpy(reg_data, ctx->xstate_.simd.registers[n].data, SseRegisterSize);
+		}
+	}
+
+#if 1
+	if (ptrace(PTRACE_SETFPXREGS, tid_, 0, &xsave) == -1) {
+		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
+	}
+#else
+	// Note: 32-bit doesn't support AVX or AVX-512, so we don't handle those states
+	struct iovec iov = {&xsave, sizeof(xsave)};
+	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
+		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
+	}
+#endif
 }
 
 /**

@@ -53,6 +53,7 @@ private:
 	uint8_t new_bytes_[2]   = {};
 	size_t size_            = 0;
 	TypeId type_            = TypeId::Automatic;
+	bool enabled_           = false;
 };
 
 #endif

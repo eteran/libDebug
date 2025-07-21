@@ -89,6 +89,18 @@ constexpr bool is_trap_event(int status) {
 	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
 }
 
+/**
+ * @brief Opens the /proc/<pid>/mem file descriptor for the given pid.
+ *
+ * @param pid The pid to open the memory file descriptor for.
+ * @return The file descriptor for the memory file, or -1 on error.
+ */
+int open_memfd(pid_t pid) {
+	char path[PATH_MAX];
+	std::snprintf(path, sizeof(path), "/proc/%d/mem", pid);
+	return open(path, O_RDWR);
+}
+
 }
 
 /**
@@ -132,10 +144,7 @@ Process::Process(pid_t pid, Flag flags)
 		threads_.emplace(pid, threads);
 	}
 
-	char path[PATH_MAX];
-	std::snprintf(path, sizeof(path), "/proc/%d/mem", pid_);
-	memfd_ = open(path, O_RDWR);
-
+	memfd_ = open_memfd(pid_);
 	assert(memfd_ != -1);
 
 	report();
@@ -555,16 +564,10 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					if (auto bp = search_breakpoint(ip)) {
 						std::printf("Breakpoint!\n");
 
-						// As an experiment, copy YMM07 to YMM01
-#if 0
-						RegisterRef ymm1 = ctx[RegisterId::YMM1];
-						RegisterRef ymm7 = ctx[RegisterId::YMM7];
-						ymm1 = ymm7;
-#else
-						ctx[RegisterId::YMM1] = ctx[RegisterId::YMM7];
-						ctx[RegisterId::AH]   = ctx[RegisterId::YMM7];
+						bp->hit();
 
-#endif
+						// EXPERIMENT: copy XMM7 to XMM0
+						ctx[RegisterId::XMM0] = ctx[RegisterId::XMM7];
 
 						ip_ref -= bp->size();
 						current_thread->set_context(&ctx);
@@ -576,9 +579,13 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			} else {
 				if (auto bp = find_breakpoint(ip)) {
 					std::printf("Alt-Breakpoint!\n");
+
+					bp->hit();
+
 					// NOTE(eteran): no need to rewind here because the instruction used for the BP
 					// didn't advance the instruction pointer
 
+					// ALT-BREAKPOINT!
 					// TODO(eteran): report as a trap event
 				}
 			}

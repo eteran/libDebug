@@ -98,6 +98,9 @@ Breakpoint::~Breakpoint() {
  * and then replacing them with bytes representing a breakpoint.
  */
 void Breakpoint::enable() {
+	if (enabled_) {
+		return;
+	}
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
 	if (r == -1) {
 		throw DebuggerError("Failed to read memory for process %d: %s", process_->pid(), strerror(errno));
@@ -107,16 +110,23 @@ void Breakpoint::enable() {
 	if (w == -1) {
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
+
+	enabled_ = true;
 }
 
 /**
  * @brief Disables the breakpoint by restoring the backed up bytes at the target address.
  */
 void Breakpoint::disable() {
+	if (!enabled_) {
+		return;
+	}
+
 	const int64_t w = process_->write_memory(address_, old_bytes_, size_);
 	if (w == -1) {
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
+	enabled_ = false;
 }
 
 /**
