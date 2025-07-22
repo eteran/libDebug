@@ -81,7 +81,7 @@ int main() {
 	debugger->set_disable_aslr(true);
 	debugger->set_disable_lazy_binding(true);
 
-#define TEST32
+#define TEST64
 
 	const char *argv[] = {
 #ifdef TEST64
@@ -141,7 +141,6 @@ int main() {
 				current->set_context(&ctx);
 
 				printf("Instruction Pointer: %016" PRIx64 "\n",  ctx.get(RegisterId::XIP).as<uint64_t>());
-				printf("Other Instruction Pointer: %016" PRIx64 "\n", current->get_instruction_pointer());
 
 				return EventStatus::Stop;
 			})) {
