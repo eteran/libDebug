@@ -522,12 +522,17 @@ void Thread::get_xstate32(Context *ctx) const {
 	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
 		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
 	}
-	std::printf("Thread::get_xstate32: size=%zu\n", iov.iov_len);
 
-	// For 32-bit, we need to determine what features are present
-	// Since the 32-bit xstate structure doesn't have xstate_bv, we infer from the data
-	bool x87_present = true;                           // x87 is always present on x86
-	bool sse_present = (iov.iov_len >= sizeof(xsave)); // SSE present if we got full structure
+	const bool x87_present = xsave.xstate_bv & FEATURE_X87;
+	const bool sse_present = xsave.xstate_bv & FEATURE_SSE;
+	const bool avx_present = xsave.xstate_bv & FEATURE_AVX;
+
+	std::printf("Thread::get_xstate32: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d)\n",
+				iov.iov_len,
+				xsave.xstate_bv,
+				static_cast<int>(x87_present),
+				static_cast<int>(sse_present),
+				static_cast<int>(avx_present));
 
 	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
 	// has not touched the corresponding registers yet. But once the registers are
@@ -538,6 +543,7 @@ void Thread::get_xstate32(Context *ctx) const {
 	constexpr size_t FpuRegisterSize  = 16;
 	constexpr size_t SseRegisterCount = 32; // SIMD structure now has 32 registers
 	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
+	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
 
 	if (x87_present) {
 		ctx->xstate_.x87.status_word = xsave.swd;
@@ -569,7 +575,6 @@ void Thread::get_xstate32(Context *ctx) const {
 		ctx->xstate_.x87.filled       = true;
 	}
 
-	// NOTE(eteran): on 32-bit systems, SSE may or may not be present
 	if (sse_present) {
 		ctx->xstate_.simd.mxcsr      = xsave.mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave.mxcsr_mask;
@@ -578,7 +583,7 @@ void Thread::get_xstate32(Context *ctx) const {
 		// 32-bit x86 only has 8 XMM registers, not 16 like x86-64
 		for (size_t n = 0; n < 8; ++n) {
 			// Convert 32-bit xmm_space format to our format
-			// xmm_space contains 8 registers of 16 bytes each, stored as uint32_t[32]
+			// xmm_space contains 8 registers of 16 bytes each, stored as uint32_t[16]
 			const uint32_t *reg_data = &xsave.xmm_space[n * 4];
 			std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
 			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
@@ -603,8 +608,31 @@ void Thread::get_xstate32(Context *ctx) const {
 		ctx->xstate_.simd.sse_filled = true;
 	}
 
-	// 32-bit doesn't support AVX or AVX-512, so these remain unset
-	ctx->xstate_.simd.avx_filled = false;
+	if (avx_present) {
+		// AVX extends the XMM registers to YMM registers (256 bits)
+		// The lower 128 bits are already populated by SSE above
+		// We need to populate the upper 128 bits from the AVX extended state
+
+		// AVX state starts in the buffer area for 32-bit
+		// The buffer contains the extended state areas
+		constexpr size_t AvxUpperSize = AvxRegisterSize - SseRegisterSize; // 32 - 16 = 16 bytes
+
+		// For 32-bit, AVX upper halves are stored in the buffer area
+		// They start at the beginning of the buffer (not offset by header bytes)
+		const uint8_t *avx_upper_data = xsave.buffer;
+
+		// Only populate first 8 YMM registers for 32-bit (YMM0-YMM7)
+		for (size_t n = 0; n < 8; ++n) {
+			// Copy the upper 128 bits (bytes 16-31) of each YMM register
+			std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
+			// Clear the remaining 224 bytes (bytes 32-255) since 32-bit AVX only uses 256 bits
+			std::memset(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - AvxRegisterSize);
+		}
+
+		ctx->xstate_.simd.avx_filled = true;
+	}
+
+	// 32-bit doesn't support AVX-512, so this remains unset
 	ctx->xstate_.simd.zmm_filled = false;
 
 	if (ctx->xstate_.simd.sse_filled) {
@@ -612,6 +640,17 @@ void Thread::get_xstate32(Context *ctx) const {
 		for (size_t n = 0; n < 8; ++n) { // Only show 8 registers for 32-bit
 			std::printf("XMM%zu: ", n);
 			for (size_t b = 0; b < 16; ++b) {
+				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
+	if (ctx->xstate_.simd.avx_filled) {
+		std::printf("XSTATE 32-bit AVX registers:\n");
+		for (size_t n = 0; n < 8; ++n) { // Only show 8 registers for 32-bit
+			std::printf("YMM%zu: ", n);
+			for (size_t b = 0; b < 32; ++b) {
 				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
 			}
 			std::printf("\n");
@@ -882,6 +921,12 @@ void Thread::set_xstate64(const Context *ctx) const {
  */
 void Thread::set_xstate32(const Context *ctx) const {
 
+	enum FeatureBit : uint32_t {
+		FEATURE_X87 = 1 << 0,
+		FEATURE_SSE = 1 << 1,
+		FEATURE_AVX = 1 << 2,
+	};
+
 	// Prepare the xsave buffer structure for 32-bit
 	Context_x86_32_xstate xsave = {};
 
@@ -905,9 +950,11 @@ void Thread::set_xstate32(const Context *ctx) const {
 			uint32_t *reg_data = &xsave.st_space[n * 4];
 			std::memcpy(reg_data, ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
 		}
+
+		xsave.xstate_bv |= FEATURE_X87;
 	}
 
-	// Set up SIMD state (SSE only for 32-bit)
+	// Set up SIMD state (SSE and AVX for 32-bit)
 	if (ctx->xstate_.simd.sse_filled) {
 		xsave.mxcsr      = ctx->xstate_.simd.mxcsr;
 		xsave.mxcsr_mask = ctx->xstate_.simd.mxcsr_mask;
@@ -920,19 +967,31 @@ void Thread::set_xstate32(const Context *ctx) const {
 			uint32_t *reg_data = &xsave.xmm_space[n * 4];
 			std::memcpy(reg_data, ctx->xstate_.simd.registers[n].data, SseRegisterSize);
 		}
+
+		xsave.xstate_bv |= FEATURE_SSE;
 	}
 
-#if 1
-	if (ptrace(PTRACE_SETFPXREGS, tid_, 0, &xsave) == -1) {
-		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
+	// Set up AVX state (upper 128 bits of YMM0-YMM7)
+	if (ctx->xstate_.simd.avx_filled) {
+		constexpr size_t AvxRegisterSize = 32;
+		constexpr size_t SseRegisterSize = 16;
+		constexpr size_t AvxUpperSize    = AvxRegisterSize - SseRegisterSize; // 32 - 16 = 16 bytes
+
+		// For 32-bit, AVX upper halves are stored in the buffer area
+		// They start at the beginning of the buffer (not offset by header bytes)
+		uint8_t *avx_upper_data = xsave.buffer;
+		for (size_t n = 0; n < 8; ++n) {
+			std::memcpy(avx_upper_data + AvxUpperSize * n, ctx->xstate_.simd.registers[n].data + SseRegisterSize, AvxUpperSize);
+		}
+
+		xsave.xstate_bv |= FEATURE_AVX;
 	}
-#else
-	// Note: 32-bit doesn't support AVX or AVX-512, so we don't handle those states
+
+	// Use NT_X86_XSTATE for full AVX support on 32-bit
 	struct iovec iov = {&xsave, sizeof(xsave)};
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
 		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
 	}
-#endif
 }
 
 /**

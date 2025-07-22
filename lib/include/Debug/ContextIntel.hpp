@@ -233,11 +233,27 @@ struct Context_x86_32_xstate {
 	uint32_t mxcsr;
 	uint32_t mxcsr_mask;
 	uint32_t st_space[32];  // 8 16-byte fields
-	uint32_t xmm_space[32]; // 16 16-byte fields
-	uint32_t padding[56];
-};
+	uint32_t xmm_space[16]; // 16 16-byte fields
+	uint32_t padding[60];
+	union {
+		uint64_t xcr0;
+		uint8_t sw_usable_bytes[48];
+	};
 
-static_assert(sizeof(Context_x86_32_xstate) == 512, "Context_x86_32_xstate is messed up!");
+	union {
+		uint64_t xstate_bv;
+		uint8_t xstate_hdr_bytes[64];
+	};
+
+	uint8_t buffer[2112];
+} __attribute__((packed, aligned(64)));
+
+// static_assert(sizeof(Context_x86_32_xstate) == 512, "Context_x86_32_xstate is messed up!");
+static_assert(offsetof(Context_x86_32_xstate, xstate_bv) == 512, "Context_x86_32_xstate is messed up!");
+static_assert(offsetof(Context_x86_32_xstate, st_space) == 32, "ST space should appear at offset 32");
+static_assert(offsetof(Context_x86_32_xstate, xmm_space) == 160, "XMM space should appear at offset 160");
+static_assert(offsetof(Context_x86_32_xstate, xcr0) == 464, "XCR0 should appear at offset 464");
+static_assert(sizeof(Context_x86_32_xstate) == 2688, "Context_x86_64_xstate is messed up!");
 static_assert(std::is_standard_layout<Context_x86_32_xstate>::value, "Not standard layout");
 
 // Reflects user_regs_struct in sys/user.h.
