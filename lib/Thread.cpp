@@ -622,6 +622,7 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers64(Context *ctx) const {
+	// TODO(eteran): i think this might be incorrect.
 	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -638,6 +639,7 @@ void Thread::get_debug_registers64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers32(Context *ctx) const {
+	// TODO(eteran): i think this might be incorrect.
 	ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -1007,4 +1009,44 @@ void Thread::set_context(const Context *ctx) const {
 	set_registers(ctx);
 	set_xstate(ctx);
 	set_debug_registers(ctx);
+}
+
+uint64_t Thread::get_instruction_pointer() const {
+#if defined(__x86_64__)
+	return get_instruction_pointer64();
+#elif defined(__i386__)
+	if (is_64_bit_) {
+		return get_instruction_pointer64();
+	} else {
+		return get_instruction_pointer32();
+	}
+#endif
+}
+
+void Thread::set_instruction_pointer(uint64_t ip) const {
+#if defined(__x86_64__)
+	set_instruction_pointer64(ip);
+#elif defined(__i386__)
+	if (is_64_bit_) {
+		set_instruction_pointer64(ip);
+	} else {
+		set_instruction_pointer32(ip);
+	}
+#endif
+}
+
+uint64_t Thread::get_instruction_pointer32() const {
+	return ptrace(PTRACE_PEEKUSER, tid_, offsetof(Context_x86_32, eip), 0);
+}
+
+uint64_t Thread::get_instruction_pointer64() const {
+	return ptrace(PTRACE_PEEKUSER, tid_, offsetof(Context_x86_64, rip), 0);
+}
+
+void Thread::set_instruction_pointer32(uint64_t ip) const {
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(Context_x86_32, eip), ip);
+}
+
+void Thread::set_instruction_pointer64(uint64_t ip) const {
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(Context_x86_64, rip), ip);
 }

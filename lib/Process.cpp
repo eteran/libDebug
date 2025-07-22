@@ -500,11 +500,8 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
-		Context ctx;
-		current_thread->get_context(&ctx);
 
-		RegisterRef ip_ref = ctx[RegisterId::XIP];
-		uint64_t ip        = ip_ref.as<uint64_t>();
+		uint64_t ip = current_thread->get_instruction_pointer();
 
 		std::printf("Stopped at: %016" PRIx64 "\n", ip);
 
@@ -566,8 +563,8 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 						bp->hit();
 
-						ip_ref -= bp->size();
-						current_thread->set_context(&ctx);
+						ip -= bp->size();
+						current_thread->set_instruction_pointer(ip);
 
 						// BREAKPOINT!
 						// TODO(eteran): report as a trap event

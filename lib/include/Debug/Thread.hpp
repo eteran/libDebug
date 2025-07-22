@@ -45,6 +45,12 @@ public:
 	void set_context(const Context *ctx) const;
 
 public:
+	uint64_t get_instruction_pointer() const;
+	void set_instruction_pointer(uint64_t ip) const;
+
+
+
+public:
 	void kill() const;
 	void step();
 	void resume();
@@ -74,6 +80,11 @@ private:
 	void set_xstate(const Context *ctx) const;
 	void set_xstate32(const Context *ctx) const;
 	void set_xstate64(const Context *ctx) const;
+
+	uint64_t get_instruction_pointer32() const;
+	uint64_t get_instruction_pointer64() const;
+	void set_instruction_pointer32(uint64_t ip) const;
+	void set_instruction_pointer64(uint64_t ip) const;
 
 private:
 	pid_t pid_      = 0;

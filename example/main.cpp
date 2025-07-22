@@ -132,13 +132,16 @@ int main() {
 
 				process->report();
 
-				Context ctx;
-				process->active_thread()->get_context(&ctx);
+				auto current = process->active_thread();
 
 				// EXPERIMENT: copy XMM7 to XMM0
+				Context ctx;
+				current->get_context(&ctx);
 				ctx[RegisterId::YMM0] = ctx[RegisterId::YMM7];
+				current->set_context(&ctx);
 
-				process->active_thread()->set_context(&ctx);
+				printf("Instruction Pointer: %016" PRIx64 "\n",  ctx.get(RegisterId::XIP).as<uint64_t>());
+				printf("Other Instruction Pointer: %016" PRIx64 "\n", current->get_instruction_pointer());
 
 				return EventStatus::Stop;
 			})) {
