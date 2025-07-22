@@ -44,6 +44,39 @@ void Context::dump() {
 		std::printf("DS: %04x ES : %04x GS_BASE:  %08x\n", get(RegisterId::DS).as<uint16_t>(), get(RegisterId::ES).as<uint16_t>(), get(RegisterId::GS_BASE).as<uint32_t>());
 		std::printf("FS: %04x GS : %04x\n", get(RegisterId::FS).as<uint16_t>(), get(RegisterId::GS).as<uint16_t>());
 	}
+
+	if (xstate_.simd.sse_filled) {
+		std::printf("XSTATE SSE registers:\n");
+		for (size_t n = 0; n < (is_64_bit() ? 16 : 8); ++n) {
+			std::printf("XMM%02zu: ", n);
+			for (size_t b = 0; b < 16; ++b) {
+				std::printf("%02x", xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
+	if (xstate_.simd.avx_filled) {
+		std::printf("XSTATE AVX registers:\n");
+		for (size_t n = 0; n < (is_64_bit() ? 16 : 8); ++n) {
+			std::printf("YMM%02zu: ", n);
+			for (size_t b = 0; b < 32; ++b) {
+				std::printf("%02x", xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
+	if (is_64_bit() && xstate_.simd.zmm_filled) {
+		std::printf("XSTATE ZMM registers:\n");
+		for (size_t n = 0; n < 32; ++n) {
+			std::printf("ZMM%02zu: ", n);
+			for (size_t b = 0; b < 64; ++b) {
+				std::printf("%02x", xstate_.simd.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
 }
 
 /**

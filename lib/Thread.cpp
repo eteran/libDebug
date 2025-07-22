@@ -254,7 +254,7 @@ int Thread::stop_status() const {
 void Thread::get_registers(Context *ctx) const {
 #if defined(__x86_64__)
 	get_registers64(ctx);
-#else
+#elif defined(__i386__)
 	get_registers32(ctx);
 #endif
 }
@@ -300,7 +300,7 @@ void Thread::get_registers32(Context *ctx) const {
 void Thread::get_xstate(Context *ctx) const {
 #if defined(__x86_64__)
 	get_xstate64(ctx);
-#else
+#elif defined(__i386__)
 	if (is_64_bit_) {
 		get_xstate64(ctx);
 	} else {
@@ -470,39 +470,6 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		ctx->xstate_.simd.zmm_filled = true;
 	}
-
-	if (ctx->xstate_.simd.sse_filled) {
-		std::printf("XSTATE SSE registers:\n");
-		for (size_t n = 0; n < 16; ++n) {
-			std::printf("XMM%02zu: ", n);
-			for (size_t b = 0; b < 16; ++b) {
-				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
-			}
-			std::printf("\n");
-		}
-	}
-
-	if (ctx->xstate_.simd.avx_filled) {
-		std::printf("XSTATE AVX registers:\n");
-		for (size_t n = 0; n < 16; ++n) {
-			std::printf("YMM%02zu: ", n);
-			for (size_t b = 0; b < 32; ++b) {
-				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
-			}
-			std::printf("\n");
-		}
-	}
-
-	if (ctx->xstate_.simd.zmm_filled) {
-		std::printf("XSTATE ZMM registers:\n");
-		for (size_t n = 0; n < 32; ++n) {
-			std::printf("ZMM%02zu: ", n);
-			for (size_t b = 0; b < 64; ++b) {
-				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
-			}
-			std::printf("\n");
-		}
-	}
 }
 
 /**
@@ -630,28 +597,6 @@ void Thread::get_xstate32(Context *ctx) const {
 
 	// 32-bit doesn't support AVX-512, so this remains unset
 	ctx->xstate_.simd.zmm_filled = false;
-
-	if (ctx->xstate_.simd.sse_filled) {
-		std::printf("XSTATE 32-bit SSE registers:\n");
-		for (size_t n = 0; n < 8; ++n) { // Only show 8 registers for 32-bit
-			std::printf("XMM%zu: ", n);
-			for (size_t b = 0; b < 16; ++b) {
-				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
-			}
-			std::printf("\n");
-		}
-	}
-
-	if (ctx->xstate_.simd.avx_filled) {
-		std::printf("XSTATE 32-bit AVX registers:\n");
-		for (size_t n = 0; n < 8; ++n) { // Only show 8 registers for 32-bit
-			std::printf("YMM%zu: ", n);
-			for (size_t b = 0; b < 32; ++b) {
-				std::printf("%02x", ctx->xstate_.simd.registers[n].data[b]);
-			}
-			std::printf("\n");
-		}
-	}
 }
 
 /**
@@ -1019,7 +964,7 @@ void Thread::set_debug_registers32(const Context *ctx) const {
 void Thread::set_registers(const Context *ctx) const {
 #if defined(__x86_64__)
 	set_registers64(ctx);
-#else
+#elif defined(__i386__)
 	set_registers32(ctx);
 #endif
 }
@@ -1045,7 +990,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
 void Thread::set_xstate(const Context *ctx) const {
 #if defined(__x86_64__)
 	set_xstate64(ctx);
-#else
+#elif defined(__i386__)
 	set_xstate32(ctx);
 #endif
 }

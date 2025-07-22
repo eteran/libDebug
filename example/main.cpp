@@ -45,8 +45,7 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
 		if (remaining <= 0) {
 			remaining = process->read_memory(first, buffer, sizeof(buffer));
 			if (remaining == -1) {
-				std::printf("Error Reading Memory\n");
-				return;
+				throw DebuggerError("Failed to read memory at %016" PRIx64 ": %s", first, strerror(errno));
 			}
 			buffer_index = 0;
 		}
@@ -102,10 +101,12 @@ int main() {
 		return 1;
 	}
 
+#if 0
 #ifdef TEST64
 	process->add_breakpoint(0x40190c); // main of TestApp on my machine (64-bit)
 #else
 	process->add_breakpoint(0x080498da); // main of TestApp on my machine (32-bit)
+#endif
 #endif
 
 	uint64_t prev_memory_map_hash = hash_regions(process->pid());
@@ -118,7 +119,7 @@ int main() {
 
 	process->resume();
 
-	for (int i = 0; i < 20; ++i) {
+	for (int i = 0; i < 10; ++i) {
 		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
 				std::printf("Debug Event!\n");
 

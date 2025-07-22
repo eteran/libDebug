@@ -18,10 +18,10 @@ int main() {
 	};
 
 	__asm__ __volatile__("vmovaps %0, %%ymm7" : : "m"(data));
-
+	while (1) {
+		__asm__ __volatile__("int3");
+	}
 #if 0
-	volatile __m256 ymm0_data = _mm256_load_ps((const float *)data);
-#endif
 	float angle = 0.0f;
 
 	while (1) {
@@ -29,4 +29,5 @@ int main() {
 		std::printf("Hello, world! Angle: %f\n", std::sin(angle));
 		angle += 10.0f;
 	}
+#endif
 }
