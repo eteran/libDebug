@@ -336,6 +336,15 @@ RegisterRef Context::get_32(RegisterId reg) {
 	case RegisterId::XMM6:		return make_register("xmm6",  xstate_.simd.registers[6].data,  16, 0);
 	case RegisterId::XMM7:		return make_register("xmm7",  xstate_.simd.registers[7].data,  16, 0);
 
+	case RegisterId::YMM0:		return make_register("ymm0",  xstate_.simd.registers[0].data,  32, 0);
+	case RegisterId::YMM1:		return make_register("ymm1",  xstate_.simd.registers[1].data,  32, 0);
+	case RegisterId::YMM2:		return make_register("ymm2",  xstate_.simd.registers[2].data,  32, 0);
+	case RegisterId::YMM3:		return make_register("ymm3",  xstate_.simd.registers[3].data,  32, 0);
+	case RegisterId::YMM4:		return make_register("ymm4",  xstate_.simd.registers[4].data,  32, 0);
+	case RegisterId::YMM5:		return make_register("ymm5",  xstate_.simd.registers[5].data,  32, 0);
+	case RegisterId::YMM6:		return make_register("ymm6",  xstate_.simd.registers[6].data,  32, 0);
+	case RegisterId::YMM7:		return make_register("ymm7",  xstate_.simd.registers[7].data,  32, 0);
+
 	// Size generic registers
 	case RegisterId::XAX:		return make_register("eax", ctx_32_.regs.eax, 0);
 	case RegisterId::XCX:		return make_register("ecx", ctx_32_.regs.ecx, 0);

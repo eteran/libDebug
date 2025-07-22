@@ -566,9 +566,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 						bp->hit();
 
-						// EXPERIMENT: copy XMM7 to XMM0
-						ctx[RegisterId::XMM0] = ctx[RegisterId::XMM7];
-
 						ip_ref -= bp->size();
 						current_thread->set_context(&ctx);
 

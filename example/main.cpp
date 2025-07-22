@@ -13,51 +13,6 @@
 #include <cstdlib>
 #include <thread>
 
-void tracee() {
-#if 1
-	for (int i = 0; i < 5; ++i) {
-		auto thr = std::thread([](int n) {
-			int j = 0;
-			while (true) {
-				std::printf("In child, doing some work [%d]...\n", n);
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-
-				if (j++ == 3 && n == 1) {
-					std::printf("Exiting Thread!\n");
-					return;
-				}
-			}
-		},
-							   i);
-
-		thr.detach();
-	}
-#endif
-	while (true) {
-		std::printf("In child, doing some work [%d]...\n", -1);
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-	}
-}
-
-void tracer(pid_t cpid) {
-	auto debugger = std::make_unique<Debugger>();
-	auto process  = debugger->attach(cpid);
-	process->resume();
-
-	std::this_thread::sleep_for(std::chrono::seconds(5));
-	process->stop();
-
-	while (true) {
-		if (!process->next_debug_event(std::chrono::seconds(10), []([[maybe_unused]] const Event &e) {
-				std::printf("Debug Event!\n");
-				return EventStatus::Stop;
-			})) {
-			std::printf("Timeout!\n");
-			std::exit(0);
-		}
-	}
-}
-
 /**
  * @brief Dumps the regions of a given process.
  *
@@ -123,24 +78,11 @@ void dump_memory(Process *process, uint64_t address, size_t n) {
  */
 int main() {
 
-#if 0
-	switch (const pid_t cpid = fork()) {
-	case 0:
-		tracee();
-		break;
-	case -1:
-		std::perror("fork");
-		std::exit(1);
-	default:
-		tracer(cpid);
-		break;
-	}
-#else
 	auto debugger = std::make_unique<Debugger>();
 	debugger->set_disable_aslr(true);
 	debugger->set_disable_lazy_binding(true);
 
-#define TEST64
+#define TEST32
 
 	const char *argv[] = {
 #ifdef TEST64
@@ -189,6 +131,14 @@ int main() {
 
 				process->report();
 
+				Context ctx;
+				process->active_thread()->get_context(&ctx);
+
+				// EXPERIMENT: copy XMM7 to XMM0
+				ctx[RegisterId::YMM0] = ctx[RegisterId::YMM7];
+
+				process->active_thread()->set_context(&ctx);
+
 				return EventStatus::Stop;
 			})) {
 			std::printf("Timeout!\n");
@@ -198,5 +148,4 @@ int main() {
 
 	std::printf("Done Stepping\n");
 	process->kill();
-#endif
 }

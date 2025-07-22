@@ -397,6 +397,14 @@ private:
 		Context32 ctx_32_;
 	};
 
+	union {
+		// NOTE(eteran): these are mutable so that we can make our API logically const
+		// and still reuse the same context we read in order to preserve the parts of
+		// the xstate that we don't modify when writing back.
+		mutable Context_x86_64_xstate ctx_64_xstate_;
+		mutable Context_x86_32_xstate ctx_32_xstate_;
+	};
+
 	Context_xstate xstate_;
 
 	bool is_64_bit_ = false;
