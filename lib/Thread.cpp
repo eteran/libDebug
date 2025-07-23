@@ -265,10 +265,21 @@ void Thread::get_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_registers64(Context *ctx) const {
+#if 0
 	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
 	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
 	}
+#else
+	struct iovec iov;
+
+	iov.iov_base = &ctx->ctx_64_.regs;
+	iov.iov_len  = sizeof(ctx->ctx_64_.regs);
+
+	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
+	}
+#endif
 }
 
 /**
@@ -609,6 +620,10 @@ void Thread::get_debug_registers(Context *ctx) const {
 	get_debug_registers64(ctx);
 #elif defined(__i386__)
 	if (is_64_bit_) {
+		// NOTE(eteran): on 32-bit systems, this doesn't work correctly
+		// because the debug registers are 64-bit, but the ONLY way to
+		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
+		// registers.
 		get_debug_registers64(ctx);
 	} else {
 		get_debug_registers32(ctx);
@@ -622,7 +637,6 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers64(Context *ctx) const {
-	// TODO(eteran): i think this might be incorrect.
 	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -720,9 +734,19 @@ void Thread::get_context(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_registers64(const Context *ctx) const {
+#if 0
 	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
 		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
 	}
+#else
+	struct iovec iov;
+	iov.iov_base = const_cast<Context_x86_64 *>(&ctx->ctx_64_.regs);
+	iov.iov_len  = sizeof(ctx->ctx_64_.regs);
+
+	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
+	}
+#endif
 }
 
 /**
@@ -732,14 +756,8 @@ void Thread::set_registers64(const Context *ctx) const {
  */
 void Thread::set_registers32(const Context *ctx) const {
 	struct iovec iov;
-	if (is_64_bit_) {
-		iov.iov_base = const_cast<Context_x86_64 *>(&ctx->ctx_64_.regs);
-		iov.iov_len  = sizeof(ctx->ctx_64_.regs);
-
-	} else {
-		iov.iov_base = const_cast<Context_x86_32 *>(&ctx->ctx_32_.regs);
-		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
-	}
+	iov.iov_base = const_cast<Context_x86_32 *>(&ctx->ctx_32_.regs);
+	iov.iov_len  = sizeof(ctx->ctx_32_.regs);
 
 	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
 		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
@@ -937,25 +955,14 @@ void Thread::set_debug_registers64(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_debug_registers32(const Context *ctx) const {
-	if (ctx->is_64_bit()) {
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_64_.debug_regs[0]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_64_.debug_regs[1]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_64_.debug_regs[2]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_64_.debug_regs[3]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_64_.debug_regs[4]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_64_.debug_regs[5]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_64_.debug_regs[6]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_64_.debug_regs[7]);
-	} else {
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_32_.debug_regs[0]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_32_.debug_regs[1]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_32_.debug_regs[2]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_32_.debug_regs[3]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_32_.debug_regs[4]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_32_.debug_regs[5]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_32_.debug_regs[6]);
-		ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_32_.debug_regs[7]);
-	}
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_32_.debug_regs[0]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_32_.debug_regs[1]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_32_.debug_regs[2]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_32_.debug_regs[3]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_32_.debug_regs[4]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_32_.debug_regs[5]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_32_.debug_regs[6]);
+	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_32_.debug_regs[7]);
 }
 
 /**
@@ -967,7 +974,11 @@ void Thread::set_registers(const Context *ctx) const {
 #if defined(__x86_64__)
 	set_registers64(ctx);
 #elif defined(__i386__)
-	set_registers32(ctx);
+	if (ctx->is_64_bit()) {
+		set_registers64(ctx);
+	} else {
+		set_registers32(ctx);
+	}
 #endif
 }
 
@@ -980,7 +991,11 @@ void Thread::set_debug_registers(const Context *ctx) const {
 #ifdef __x86_64__
 	set_debug_registers64(ctx);
 #elif defined(__i386__)
-	set_debug_registers32(ctx);
+	if (ctx->is_64_bit()) {
+		set_debug_registers64(ctx);
+	} else {
+		set_debug_registers32(ctx);
+	}
 #endif
 }
 
@@ -1010,4 +1025,3 @@ void Thread::set_context(const Context *ctx) const {
 	set_xstate(ctx);
 	set_debug_registers(ctx);
 }
-

@@ -81,7 +81,7 @@ int main() {
 	debugger->set_disable_aslr(true);
 	debugger->set_disable_lazy_binding(true);
 
-#define TEST64
+#define TEST32
 
 	const char *argv[] = {
 #ifdef TEST64
