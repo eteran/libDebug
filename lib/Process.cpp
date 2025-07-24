@@ -38,7 +38,7 @@ namespace {
  */
 struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 	struct timespec ts;
-	ts.tv_sec  = msecs.count() / 1000;
+	ts.tv_sec  = static_cast<time_t>(msecs.count() / 1000);
 	ts.tv_nsec = static_cast<long>((msecs.count() % 1000) * 1000000);
 	return ts;
 }
@@ -157,6 +157,7 @@ Process::Process(pid_t pid, Flag flags)
 void Process::report() const {
 
 	for (auto [tid, thread] : threads_) {
+		(void)tid;
 
 		if (thread->state_ == Thread::State::Running) {
 			std::printf("Thread: %d [RUNNING]\n", thread->tid());
@@ -358,6 +359,7 @@ void Process::step() {
 	// this should be a rare circumstance
 	if (!active_thread_) {
 		for (auto &[tid, thread] : threads_) {
+			(void)tid;
 			if (thread->state_ == Thread::State::Stopped) {
 				active_thread_ = thread;
 				break;
@@ -374,6 +376,7 @@ void Process::step() {
  */
 void Process::resume() {
 	for (auto [tid, thread] : threads_) {
+		(void)tid;
 		if (thread->state_ == Thread::State::Stopped) {
 			thread->resume();
 		}
@@ -394,6 +397,7 @@ void Process::stop() {
 		active_thread_->stop();
 	} else {
 		for (auto &[tid, thread] : threads_) {
+			(void)tid;
 			if (thread->state_ == Thread::State::Running) {
 				thread->stop();
 				break;
