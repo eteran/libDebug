@@ -45,6 +45,22 @@ void Context::dump() {
 		std::printf("FS: %04x GS : %04x\n", get(RegisterId::FS).as<uint16_t>(), get(RegisterId::GS).as<uint16_t>());
 	}
 
+	if(xstate_.x87.filled) {
+
+		std::printf("XSTATE x87 control word: %04x\n", xstate_.x87.control_word);
+		std::printf("XSTATE x87 status word: %04x\n", xstate_.x87.status_word);
+		std::printf("XSTATE x87 tag word: %04x\n", xstate_.x87.tag_word);
+
+		std::printf("XSTATE x87 registers:\n");
+		for (size_t n = 0; n < (is_64_bit() ? 16 : 8); ++n) {
+			std::printf("ST%02zu: ", n);
+			for (size_t b = 0; b < 16; ++b) {
+				std::printf("%02x", xstate_.x87.registers[n].data[b]);
+			}
+			std::printf("\n");
+		}
+	}
+
 	if (xstate_.simd.sse_filled) {
 		std::printf("XSTATE SSE registers:\n");
 		for (size_t n = 0; n < (is_64_bit() ? 16 : 8); ++n) {

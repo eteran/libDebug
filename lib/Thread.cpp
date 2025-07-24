@@ -623,7 +623,8 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 int Thread::get_xstate32_legacy(Context *ctx) const {
 	// Try to get SSE/MMX state using PTRACE_GETFPXREGS first
 	// Note: user_fpxregs_struct is from older kernel headers, use Context_x86_32_xstate as fallback
-	Context_x86_32_xstate fpxregs;
+	Context_x86_32_xstate fpxregs = {};
+#if 1
 	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) == 0) {
 		// Successfully got extended FP state (SSE + x87)
 
@@ -642,8 +643,7 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 		constexpr size_t FpuRegisterSize  = 16;
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			// Convert from uint32_t array format to byte array
-			const uint32_t *reg_data = &fpxregs.st_space[n * 4];
-			std::memcpy(ctx->xstate_.x87.registers[n].data, reg_data, FpuRegisterSize);
+			std::memcpy(ctx->xstate_.x87.registers[n].data, &fpxregs.st_space[n * 4], FpuRegisterSize);
 		}
 		ctx->xstate_.x87.filled = true;
 
@@ -660,8 +660,7 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 			const uint32_t *reg_data = &fpxregs.xmm_space[n * 4];
 			std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
 			// Clear upper portions since legacy API only supports SSE (128-bit)
-			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0,
-						sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
+			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
 		}
 
 		// Initialize remaining registers (XMM8-XMM31) to zero since 32-bit doesn't have them
@@ -675,63 +674,37 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 
 		return 0;
 	}
+#endif
+#if 1
+	user_fpregs_struct_32 fpregs = {};
 
-#if 0
 	// PTRACE_GETFPXREGS failed, try legacy PTRACE_GETFPREGS for basic x87 state
-	struct user_fpregs_struct fpregs;
 	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) == 0) {
-		// Successfully got basic x87 FP state only
+		// Extract x87 state from fpregs
+		ctx->xstate_.x87.control_word = static_cast<uint16_t>(fpregs.cwd);
+		ctx->xstate_.x87.status_word  = static_cast<uint16_t>(fpregs.swd);
+		ctx->xstate_.x87.tag_word     = static_cast<uint16_t>(fpregs.twd);
+		ctx->xstate_.x87.opcode            = 0; // ? fpregs.fop;
+		ctx->xstate_.x87.inst_ptr_offset   = fpregs.fip;
+		ctx->xstate_.x87.data_ptr_offset   = fpregs.foo;
+		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(fpregs.fcs);
+		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpregs.fos);
 
-		ctx->xstate_.x87.control_word      = fpregs.cwd;
-		ctx->xstate_.x87.status_word       = fpregs.swd;
-		ctx->xstate_.x87.tag_word          = fpregs.ftw; // Note: ftw is different from twd
-		ctx->xstate_.x87.opcode            = fpregs.fop;
-
-		// For x86-64, the structure uses rip/rdp instead of fip/fcs/foo/fos
-		ctx->xstate_.x87.inst_ptr_offset   = static_cast<uint32_t>(fpregs.rip & 0xFFFFFFFF);
-		ctx->xstate_.x87.data_ptr_offset   = static_cast<uint32_t>(fpregs.rdp & 0xFFFFFFFF);
-		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>((fpregs.rip >> 32) & 0xFFFF);
-		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>((fpregs.rdp >> 32) & 0xFFFF);
-
-		// Copy x87 register data from st_space (32-bit words -> 80-bit registers)
+		// Copy x87 register data (8 registers of 16 bytes each)
 		constexpr size_t FpuRegisterCount = 8;
+		constexpr size_t FpuRegisterSize  = 10;
 
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
-			// st_space contains 32 words (128 bytes total), 4 words per 80-bit register
-			const auto* src = &fpregs.st_space[n * 4];
-			auto* dst = ctx->xstate_.x87.registers[n].data;
-
-			// Copy 80-bit (10 bytes) from the 4 32-bit words
-			std::memcpy(dst, src, 10);
-			std::memset(dst + 10, 0, 6); // Zero-pad to 16 bytes
+			// Convert from uint32_t array format to byte array
+			std::memcpy(ctx->xstate_.x87.registers[n].data, &fpregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
 		}
 		ctx->xstate_.x87.filled = true;
 
-		// Copy XMM registers from xmm_space for SSE state
-		ctx->xstate_.simd.mxcsr      = fpregs.mxcsr;
-		ctx->xstate_.simd.mxcsr_mask = fpregs.mxcr_mask;
-
-		constexpr size_t XmmRegisterCount = 16; // x86-64 has 16 XMM registers
-		for (size_t n = 0; n < XmmRegisterCount; ++n) {
-			// xmm_space contains 64 words (256 bytes total), 4 words per 128-bit XMM register
-			const auto* src = &fpregs.xmm_space[n * 4];
-			auto* dst = ctx->xstate_.simd.registers[n].data;
-
-			std::memcpy(dst, src, 16); // Copy 128-bit XMM register
-			std::memset(dst + 16, 0, 48); // Zero upper YMM/ZMM portions
-		}
-
-		// Clear remaining SIMD registers (17-31)
-		for (size_t n = XmmRegisterCount; n < 32; ++n) {
-			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
-		}
-
-		ctx->xstate_.simd.sse_filled = true;  // XMM registers are available
-		ctx->xstate_.simd.avx_filled = false; // No AVX support in legacy API
+		ctx->xstate_.simd.sse_filled = false;
+		ctx->xstate_.simd.avx_filled = false;
 		ctx->xstate_.simd.zmm_filled = false;
 
-		std::printf("Thread::get_xstate32_legacy: Successfully retrieved x87+SSE state via PTRACE_GETFPREGS\n");
-		return 0; // Success
+		return 0;
 	}
 #endif
 
@@ -745,7 +718,7 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_xstate32(Context *ctx) const {
-	int ret = get_xstate32_modern(ctx);
+	int ret = -1; // get_xstate32_modern(ctx);
 	if (ret != 0) {
 		ret = get_xstate32_legacy(ctx);
 		if (ret != 0) {
@@ -1081,7 +1054,7 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
  */
 void Thread::set_xstate32(const Context *ctx) const {
 
-	int ret = set_xstate32_modern(ctx);
+	int ret = -1; // set_xstate32_modern(ctx);
 	if (ret != 0) {
 		ret = set_xstate32_legacy(ctx);
 		if (ret != 0) {

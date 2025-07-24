@@ -232,8 +232,8 @@ struct Context_x86_32_xstate {
 	uint32_t fos; // last operand selector in 32 bit mode
 	uint32_t mxcsr;
 	uint32_t mxcsr_mask;
-	uint32_t st_space[32];  // 8 16-byte fields
-	uint32_t xmm_space[16]; // 16 16-byte fields
+	uint32_t st_space[32];  /* 8*16 bytes for each FP-reg = 128 bytes */
+	uint32_t xmm_space[16]; /* 8*16 bytes for each XMM-reg = 128 bytes */
 	uint32_t padding[60];
 	union {
 		uint64_t xcr0;
@@ -356,6 +356,33 @@ static_assert(offsetof(Context_x86_64_xstate, xmm_space) == 160, "XMM space shou
 static_assert(offsetof(Context_x86_64_xstate, xcr0) == 464, "XCR0 should appear at offset 464");
 static_assert(sizeof(Context_x86_64_xstate) == 2688, "Context_x86_64_xstate is messed up!");
 static_assert(std::is_standard_layout<Context_x86_64_xstate>::value, "Not standard layout");
+
+// Reflects user_fpregs_struct in sys/user.h
+// This is used for 32-bit processes on x86_64 systems.
+struct user_fpregs_struct_32 {
+	uint32_t cwd;
+	uint32_t swd;
+	uint32_t twd;
+	uint32_t fip;
+	uint32_t fcs;
+	uint32_t foo;
+	uint32_t fos;
+	uint8_t st_space[80];
+};
+
+struct user_fpregs_struct_64 {
+	uint16_t cwd;
+	uint16_t swd;
+	uint16_t ftw;
+	uint16_t fop;
+	uint64_t rip;
+	uint64_t rdp;
+	uint32_t mxcsr;
+	uint32_t mxcr_mask;
+	uint8_t st_space[128];  /* 8*16 bytes for each FP-reg = 128 bytes */
+	uint8_t xmm_space[256]; /* 16*16 bytes for each XMM-reg = 256 bytes */
+	uint8_t padding[96];
+};
 
 class Context {
 	friend class Thread;

@@ -65,8 +65,9 @@ set_target_properties(
     TestApp32
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
-               COMPILE_OPTIONS "-march=native;-m32"
+               COMPILE_OPTIONS "-m32;-mno-sse;-mno-sse2;-mno-sse3;-mno-sse4.1;-mno-sse4.2;-mno-avx;-mno-avx2"
                LINK_FLAGS "-m32"
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 target_link_libraries(TestApp32 -static)
+
