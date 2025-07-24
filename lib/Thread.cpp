@@ -33,11 +33,26 @@ enum FeatureBit : uint64_t {
 	FEATURE_ZMM    = 1 << 7,
 	FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
 };
-}
 
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
 							  PTRACE_O_TRACEEXIT;
+
+/**
+ * @brief Create a ptrace options object
+ *
+ * @param f Flags that control the attach behavior.
+ * @return ptrace options to use when attaching to a thread.
+ */
+long create_ptrace_options(Thread::Flag f) {
+	long options = TraceOptions;
+	if (f & Thread::KillOnTracerExit) {
+		options |= PTRACE_O_EXITKILL;
+	}
+	return options;
+}
+
+}
 
 /**
  * @brief Construct a new Thread object.
@@ -56,12 +71,10 @@ Thread::Thread(pid_t pid, pid_t tid, Flag f)
 
 	wait();
 
-	long options = TraceOptions;
-	if (f & KillOnTracerExit) {
-		options |= PTRACE_O_EXITKILL;
+	const long options = create_ptrace_options(f);
+	if (ptrace(PTRACE_SETOPTIONS, tid, 0L, options) != 0) {
+		throw DebuggerError("Failed to set ptrace options for thread %d: %s", tid, strerror(errno));
 	}
-
-	ptrace(PTRACE_SETOPTIONS, tid, 0L, options);
 
 	is_64_bit_ = detect_64_bit();
 }
@@ -615,7 +628,7 @@ void Thread::get_debug_registers(Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		throw DebuggerError("get_debug_registers called on 64-bit thread with 32-bit debugger");
+		printf("get_debug_registers called on 64-bit thread with 32-bit debugger\n");
 	} else {
 		get_debug_registers32(ctx);
 	}
@@ -713,7 +726,7 @@ void Thread::get_context(Context *ctx) const {
 
 	get_registers(ctx);
 	get_xstate(ctx);
-	// get_debug_registers(ctx);
+	get_debug_registers(ctx);
 	get_segment_bases(ctx);
 }
 
@@ -977,7 +990,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		throw DebuggerError("set_debug_registers called on 64-bit thread with 32-bit debugger");
+		printf("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
 	} else {
 		set_debug_registers32(ctx);
 	}
@@ -1008,7 +1021,7 @@ void Thread::set_context(const Context *ctx) const {
 
 	set_registers(ctx);
 	set_xstate(ctx);
-	// set_debug_registers(ctx);
+	set_debug_registers(ctx);
 }
 
 /**
@@ -1020,6 +1033,9 @@ uint64_t Thread::get_instruction_pointer() const {
 #if defined(__x86_64__)
 	return static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.rip), 0L));
 #elif defined(__i386__)
+
+	// NOTE(eteran): unfortunately, PTRACE_PEEKUSER still gets 32-bit values when is_64_bit_ is true
+	// so we have to use PTRACE_GETREGSET for 64-bit threads when in a 32-bit debugger.
 	if (is_64_bit_) {
 		Context_x86_64 ctx;
 		struct iovec iov;
@@ -1041,6 +1057,11 @@ void Thread::set_instruction_pointer(uint64_t ip) const {
 #if defined(__x86_64__)
 	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.rip), ip);
 #elif defined(__i386__)
+
+	// NOTE(eteran): unfortunately, PTRACE_PEEKUSER still gets 32-bit values when is_64_bit_ is true
+	// so we have to use PTRACE_GETREGSET for 64-bit threads when in a 32-bit debugger.
+	// The "set" operation is sadly even worse than the "get" operation, because it requires
+	// that we first get the registers, modify them, and then set them back.
 	if (is_64_bit_) {
 		Context_x86_64 ctx;
 		struct iovec iov;
