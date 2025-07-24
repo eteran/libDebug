@@ -81,7 +81,7 @@ int main() {
 	debugger->set_disable_aslr(true);
 	debugger->set_disable_lazy_binding(true);
 
-#define TEST64
+#define TEST32
 
 	const char *argv[] = {
 #ifdef TEST64
@@ -131,7 +131,7 @@ int main() {
 				}
 
 				process->report();
-
+#if 1
 				auto current = process->active_thread();
 
 				// EXPERIMENT: copy XMM7 to XMM0
@@ -143,7 +143,7 @@ int main() {
 				printf("Instruction Pointer: %016" PRIx64 "\n", ctx.get(RegisterId::XIP).as<uint64_t>());
 				printf("Instruction Pointer (Alt): %016" PRIx64 "\n", current->get_instruction_pointer());
 				current->set_instruction_pointer(current->get_instruction_pointer());
-
+#endif
 				return EventStatus::Stop;
 			})) {
 			std::printf("Timeout!\n");

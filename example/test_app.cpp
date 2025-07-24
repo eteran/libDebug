@@ -17,7 +17,7 @@ int main() {
 		0x88888888,
 	};
 
-	__asm__ __volatile__("vmovaps %0, %%ymm7" : : "m"(data));
+	__asm__ __volatile__("vmovaps %0, %%xmm7" : : "m"(data));
 	while (1) {
 		__asm__ __volatile__("int3");
 	}

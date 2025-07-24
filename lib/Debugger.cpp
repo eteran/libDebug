@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <sys/personality.h>
 #include <sys/ptrace.h>
+#include <unistd.h>
 
 /**
  * @brief Construct a new Debugger object.

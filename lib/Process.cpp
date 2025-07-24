@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 namespace {
 

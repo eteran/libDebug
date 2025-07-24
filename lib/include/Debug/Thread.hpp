@@ -78,6 +78,11 @@ private:
 	void set_xstate32(const Context *ctx) const;
 	void set_xstate64(const Context *ctx) const;
 
+	int get_xstate32_modern(Context *ctx) const;
+	int get_xstate32_legacy(Context *ctx) const;
+	int set_xstate32_modern(const Context *ctx) const;
+	int set_xstate32_legacy(const Context *ctx) const;
+
 private:
 	pid_t pid_      = 0;
 	pid_t tid_      = 0;
