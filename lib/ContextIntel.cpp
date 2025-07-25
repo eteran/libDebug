@@ -1,5 +1,4 @@
-
-#include "Debug/Context.hpp"
+#include "Debug/ContextIntel.hpp"
 #include <cinttypes>
 #include <cstdio>
 
@@ -45,7 +44,7 @@ void Context::dump() {
 		std::printf("FS: %04x GS : %04x\n", get(RegisterId::FS).as<uint16_t>(), get(RegisterId::GS).as<uint16_t>());
 	}
 
-	if(xstate_.x87.filled) {
+	if (xstate_.x87.filled) {
 
 		std::printf("XSTATE x87 control word: %04x\n", xstate_.x87.control_word);
 		std::printf("XSTATE x87 status word: %04x\n", xstate_.x87.status_word);

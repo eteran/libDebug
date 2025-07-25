@@ -3,16 +3,16 @@ cmake_minimum_required(VERSION 3.10)
 add_library(
     Debug
     Breakpoint.cpp
-    Context.cpp
+    ContextIntel.cpp
     Debugger.cpp
     Proc.cpp
     Process.cpp
-    Thread.cpp
+    ThreadIntel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Debugger.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Event.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/EventStatus.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/RegisterRef.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Thread.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/ThreadIntel.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Process.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Breakpoint.hpp

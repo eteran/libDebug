@@ -139,10 +139,6 @@ int main() {
 				current->get_context(&ctx);
 				ctx[RegisterId::YMM0] = ctx[RegisterId::YMM7];
 				current->set_context(&ctx);
-
-				printf("Instruction Pointer: %016" PRIx64 "\n", ctx.get(RegisterId::XIP).as<uint64_t>());
-				printf("Instruction Pointer (Alt): %016" PRIx64 "\n", current->get_instruction_pointer());
-				current->set_instruction_pointer(current->get_instruction_pointer());
 #endif
 				return EventStatus::Stop;
 			})) {

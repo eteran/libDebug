@@ -1,5 +1,5 @@
 
-#include "Debug/Thread.hpp"
+#include "Debug/ThreadIntel.hpp"
 #include "Debug/Context.hpp"
 #include "Debug/DebuggerError.hpp"
 
@@ -35,6 +35,14 @@ enum FeatureBit : uint64_t {
 	FEATURE_ZMM    = 1 << 7,
 	FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
 };
+
+#if 0
+	// Possible sizes of X86_XSTATE
+	static constexpr size_t BNDREGS_SIZE           = 1024;
+	static constexpr size_t BNDCFG_SIZE            = 1088;
+	static constexpr size_t AVX512_SIZE            = 2688;
+	static constexpr size_t MAX_SIZE               = 2688;
+#endif
 
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
@@ -333,14 +341,6 @@ void Thread::get_xstate(Context *ctx) const {
  */
 void Thread::get_xstate64(Context *ctx) const {
 
-#if 0
-	// Possible sizes of X86_XSTATE
-	static constexpr size_t BNDREGS_SIZE           = 1024;
-	static constexpr size_t BNDCFG_SIZE            = 1088;
-	static constexpr size_t AVX512_SIZE            = 2688;
-	static constexpr size_t MAX_SIZE               = 2688;
-#endif
-
 	auto xsave       = &ctx->ctx_64_xstate_;
 	struct iovec iov = {xsave, sizeof(Context_x86_64_xstate)};
 
@@ -494,6 +494,7 @@ void Thread::get_xstate64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 int Thread::get_xstate32_modern(Context *ctx) const {
+
 	auto xsave = &ctx->ctx_32_xstate_;
 
 	struct iovec iov = {xsave, sizeof(Context_x86_32_xstate)};
@@ -621,93 +622,107 @@ int Thread::get_xstate32_modern(Context *ctx) const {
  */
 int Thread::get_xstate32_legacy(Context *ctx) const {
 
-#if 1
 	// Try to get SSE/MMX state using PTRACE_GETFPXREGS first
 	Context_x86_32_xstate fpxregs = {};
-	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) == 0) {
-
-		// Extract x87 state from fpxregs
-		ctx->xstate_.x87.control_word      = fpxregs.cwd;
-		ctx->xstate_.x87.status_word       = fpxregs.swd;
-		ctx->xstate_.x87.tag_word          = fpxregs.twd;
-		ctx->xstate_.x87.opcode            = fpxregs.fop;
-		ctx->xstate_.x87.inst_ptr_offset   = fpxregs.fip;
-		ctx->xstate_.x87.data_ptr_offset   = fpxregs.foo;
-		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(fpxregs.fcs);
-		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpxregs.fos);
-
-		// Copy x87 register data (8 registers of 16 bytes each)
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 16;
-		for (size_t n = 0; n < FpuRegisterCount; ++n) {
-			// Convert from uint32_t array format to byte array
-			std::memcpy(ctx->xstate_.x87.registers[n].data, &fpxregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
-		}
-		ctx->xstate_.x87.filled = true;
-
-		// Extract SSE state from fpxregs
-		ctx->xstate_.simd.mxcsr      = fpxregs.mxcsr;
-		ctx->xstate_.simd.mxcsr_mask = fpxregs.mxcsr_mask;
-
-		// Copy XMM registers (8 registers for 32-bit, 16 bytes each)
-		constexpr size_t SseRegisterCount = 32; // Total SIMD structure size
-		constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits
-
-		for (size_t n = 0; n < 8; ++n) { // 32-bit x86 only has XMM0-XMM7
-			// Copy XMM register data (128 bits)
-			const uint32_t *reg_data = &fpxregs.xmm_space[n * 4];
-			std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
-			// Clear upper portions since legacy API only supports SSE (128-bit)
-			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
-		}
-
-		// Initialize remaining registers (XMM8-XMM31) to zero since 32-bit doesn't have them
-		for (size_t n = 8; n < SseRegisterCount; ++n) {
-			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
-		}
-
-		ctx->xstate_.simd.sse_filled = true;
-		ctx->xstate_.simd.avx_filled = false; // Legacy API doesn't support AVX
-		ctx->xstate_.simd.zmm_filled = false; // Legacy API doesn't support AVX-512
-
-		return 0;
+	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) != 0) {
+		return errno;
 	}
-#endif
-#if 1
+
+	std::printf("Thread::get_xstate32_legacy: (x87=%d sse=%d avx=%d)\n",
+				static_cast<int>(1),
+				static_cast<int>(1),
+				static_cast<int>(0));
+
+	// Extract x87 state from fpxregs
+	ctx->xstate_.x87.control_word      = fpxregs.cwd;
+	ctx->xstate_.x87.status_word       = fpxregs.swd;
+	ctx->xstate_.x87.tag_word          = fpxregs.twd;
+	ctx->xstate_.x87.opcode            = fpxregs.fop;
+	ctx->xstate_.x87.inst_ptr_offset   = fpxregs.fip;
+	ctx->xstate_.x87.data_ptr_offset   = fpxregs.foo;
+	ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(fpxregs.fcs);
+	ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpxregs.fos);
+
+	// Copy x87 register data (8 registers of 16 bytes each)
+	constexpr size_t FpuRegisterCount = 8;
+	constexpr size_t FpuRegisterSize  = 16;
+	for (size_t n = 0; n < FpuRegisterCount; ++n) {
+		// Convert from uint32_t array format to byte array
+		std::memcpy(ctx->xstate_.x87.registers[n].data, &fpxregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
+	}
+	ctx->xstate_.x87.filled = true;
+
+	// Extract SSE state from fpxregs
+	ctx->xstate_.simd.mxcsr      = fpxregs.mxcsr;
+	ctx->xstate_.simd.mxcsr_mask = fpxregs.mxcsr_mask;
+
+	// Copy XMM registers (8 registers for 32-bit, 16 bytes each)
+	constexpr size_t SseRegisterCount = 32; // Total SIMD structure size
+	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits
+
+	for (size_t n = 0; n < 8; ++n) { // 32-bit x86 only has XMM0-XMM7
+		// Copy XMM register data (128 bits)
+		const uint32_t *reg_data = &fpxregs.xmm_space[n * 4];
+		std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
+		// Clear upper portions since legacy API only supports SSE (128-bit)
+		std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
+	}
+
+	// Initialize remaining registers (XMM8-XMM31) to zero since 32-bit doesn't have them
+	for (size_t n = 8; n < SseRegisterCount; ++n) {
+		std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
+	}
+
+	ctx->xstate_.simd.sse_filled = true;
+	ctx->xstate_.simd.avx_filled = false; // Legacy API doesn't support AVX
+	ctx->xstate_.simd.zmm_filled = false; // Legacy API doesn't support AVX-512
+
+	return 0;
+}
+
+/**
+ * @brief Retrieves the thread xstate using last-resort APIs (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ */
+int Thread::get_xstate32_fallback(Context *ctx) const {
 	user_fpregs_struct_32 fpregs = {};
 
 	// PTRACE_GETFPXREGS failed, try legacy PTRACE_GETFPREGS for basic x87 state
-	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) == 0) {
-		// Extract x87 state from fpregs
-		ctx->xstate_.x87.control_word      = static_cast<uint16_t>(fpregs.cwd);
-		ctx->xstate_.x87.status_word       = static_cast<uint16_t>(fpregs.swd);
-		ctx->xstate_.x87.tag_word          = static_cast<uint16_t>(fpregs.twd);
-		ctx->xstate_.x87.opcode            = 0; // not present in the given structure
-		ctx->xstate_.x87.inst_ptr_offset   = fpregs.fip;
-		ctx->xstate_.x87.data_ptr_offset   = fpregs.foo;
-		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(fpregs.fcs);
-		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpregs.fos);
-
-		// Copy x87 register data (8 registers of 16 bytes each)
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 10;
-
-		for (size_t n = 0; n < FpuRegisterCount; ++n) {
-			// Convert from uint32_t array format to byte array
-			std::memcpy(ctx->xstate_.x87.registers[n].data, &fpregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
-		}
-		ctx->xstate_.x87.filled = true;
-
-		ctx->xstate_.simd.sse_filled = false;
-		ctx->xstate_.simd.avx_filled = false;
-		ctx->xstate_.simd.zmm_filled = false;
-
-		return 0;
+	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) != 0) {
+		return errno;
 	}
-#endif
 
-	// Both legacy APIs failed
-	return errno;
+	std::printf("Thread::get_xstate32_fallback: (x87=%d sse=%d avx=%d)\n",
+				static_cast<int>(1),
+				static_cast<int>(0),
+				static_cast<int>(0));
+
+	// Extract x87 state from fpregs
+	ctx->xstate_.x87.control_word      = static_cast<uint16_t>(fpregs.cwd);
+	ctx->xstate_.x87.status_word       = static_cast<uint16_t>(fpregs.swd);
+	ctx->xstate_.x87.tag_word          = static_cast<uint16_t>(fpregs.twd);
+	ctx->xstate_.x87.opcode            = 0; // not present in the given structure
+	ctx->xstate_.x87.inst_ptr_offset   = fpregs.fip;
+	ctx->xstate_.x87.data_ptr_offset   = fpregs.foo;
+	ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(fpregs.fcs);
+	ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpregs.fos);
+
+	// Copy x87 register data (8 registers of 10 bytes each)
+	constexpr size_t FpuRegisterCount = 8;
+	constexpr size_t FpuRegisterSize  = 10;
+
+	for (size_t n = 0; n < FpuRegisterCount; ++n) {
+		// Convert from uint32_t array format to byte array
+		std::memcpy(ctx->xstate_.x87.registers[n].data, &fpregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
+	}
+
+	ctx->xstate_.x87.filled      = true;
+	ctx->xstate_.simd.sse_filled = false;
+	ctx->xstate_.simd.avx_filled = false;
+	ctx->xstate_.simd.zmm_filled = false;
+
+	return 0;
 }
 
 /**
@@ -716,12 +731,15 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_xstate32(Context *ctx) const {
-	int ret = get_xstate32_modern(ctx);
-	if (ret != 0) {
-		ret = get_xstate32_legacy(ctx);
-		if (ret != 0) {
-			throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
-		}
+
+	if (get_xstate32_modern(ctx) == 0) {
+		return;
+	} else if (get_xstate32_legacy(ctx) == 0) {
+		return;
+	} else if (get_xstate32_fallback(ctx) == 0) {
+		return;
+	} else {
+		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
@@ -768,7 +786,6 @@ void Thread::get_debug_registers64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers32(Context *ctx) const {
-	// TODO(eteran): i think this might be incorrect.
 	ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -1036,9 +1053,26 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
 	return 0;
 }
 
+/**
+ * @brief Sets the thread xstate using legacy methods (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ * @return 0 on success, or an error code on failure.
+ */
 int Thread::set_xstate32_legacy(const Context *ctx) const {
 	// Legacy xstate setting for 32-bit is not implemented
 	// This is a placeholder for future implementation if needed
+	(void)ctx; // Suppress unused parameter warning
+	return 0;
+}
+
+/**
+ * @brief Sets the thread xstate using fallback methods (32-bit).
+ *
+ * @param ctx A pointer to the context object.
+ * @return 0 on success, or an error code on failure.
+ */
+int Thread::set_xstate32_fallback(const Context *ctx) const {
 	(void)ctx; // Suppress unused parameter warning
 	return 0;
 }
@@ -1050,12 +1084,14 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
  */
 void Thread::set_xstate32(const Context *ctx) const {
 
-	int ret = set_xstate32_modern(ctx);
-	if (ret != 0) {
-		ret = set_xstate32_legacy(ctx);
-		if (ret != 0) {
-			throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
-		}
+	if (set_xstate32_modern(ctx) == 0) {
+		return;
+	} else if (set_xstate32_legacy(ctx) == 0) {
+		return;
+	} else if (set_xstate32_fallback(ctx) == 0) {
+		return;
+	} else {
+		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
 	}
 }
 
