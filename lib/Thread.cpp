@@ -1050,7 +1050,7 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
  */
 void Thread::set_xstate32(const Context *ctx) const {
 
-	int ret = -1; // set_xstate32_modern(ctx);
+	int ret = set_xstate32_modern(ctx);
 	if (ret != 0) {
 		ret = set_xstate32_legacy(ctx);
 		if (ret != 0) {
