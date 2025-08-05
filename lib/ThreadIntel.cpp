@@ -1060,9 +1060,51 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
  * @return 0 on success, or an error code on failure.
  */
 int Thread::set_xstate32_legacy(const Context *ctx) const {
-	// Legacy xstate setting for 32-bit is not implemented
-	// This is a placeholder for future implementation if needed
-	(void)ctx; // Suppress unused parameter warning
+
+	// Prepare the fpxregs structure for setting x87 + SSE state
+	Context_x86_32_xstate fpxregs = {};
+
+	// Set x87 state
+	if (ctx->xstate_.x87.filled) {
+		fpxregs.cwd = ctx->xstate_.x87.control_word;
+		fpxregs.swd = ctx->xstate_.x87.status_word;
+		fpxregs.twd = ctx->xstate_.x87.tag_word;
+		fpxregs.fop = ctx->xstate_.x87.opcode;
+		fpxregs.fip = static_cast<int32_t>(ctx->xstate_.x87.inst_ptr_offset);
+		fpxregs.foo = static_cast<int32_t>(ctx->xstate_.x87.data_ptr_offset);
+		fpxregs.fcs = ctx->xstate_.x87.inst_ptr_selector;
+		fpxregs.fos = ctx->xstate_.x87.data_ptr_selector;
+
+		// Copy x87 register data (8 registers of 16 bytes each)
+		constexpr size_t FpuRegisterCount = 8;
+		constexpr size_t FpuRegisterSize  = 16;
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			// Convert from our byte array format to uint32_t array format
+			std::memcpy(&fpxregs.st_space[n * FpuRegisterSize], ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
+		}
+	}
+
+	// Set SSE state
+	if (ctx->xstate_.simd.sse_filled) {
+		fpxregs.mxcsr      = ctx->xstate_.simd.mxcsr;
+		fpxregs.mxcsr_mask = ctx->xstate_.simd.mxcsr_mask;
+
+		// Copy XMM registers (8 registers for 32-bit, 16 bytes each)
+		constexpr size_t SseRegisterSize = 16; // Each XMM register is 128 bits
+
+		for (size_t n = 0; n < 8; ++n) { // 32-bit x86 only has XMM0-XMM7
+			// Copy XMM register data (128 bits) to uint32_t array format
+			uint32_t *reg_data = &fpxregs.xmm_space[n * 4];
+			std::memcpy(reg_data, ctx->xstate_.simd.registers[n].data, SseRegisterSize);
+		}
+	}
+
+	// Use PTRACE_SETFPXREGS to set the extended FP state (x87 + SSE)
+	if (ptrace(PTRACE_SETFPXREGS, tid_, 0, &fpxregs) == -1) {
+		return errno;
+	}
+
+	std::printf("Thread::set_xstate32_legacy: Successfully set x87+SSE state via PTRACE_SETFPXREGS\n");
 	return 0;
 }
 
@@ -1073,7 +1115,37 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
  * @return 0 on success, or an error code on failure.
  */
 int Thread::set_xstate32_fallback(const Context *ctx) const {
-	(void)ctx; // Suppress unused parameter warning
+
+	// Prepare the fpregs structure for setting basic x87 state only
+	user_fpregs_struct_32 fpregs = {};
+
+	// Set x87 state only (no SSE support in fallback mode)
+	if (ctx->xstate_.x87.filled) {
+		fpregs.cwd = ctx->xstate_.x87.control_word;
+		fpregs.swd = ctx->xstate_.x87.status_word;
+		fpregs.twd = ctx->xstate_.x87.tag_word;
+		// Note: opcode is not available in user_fpregs_struct_32
+		fpregs.fip = ctx->xstate_.x87.inst_ptr_offset;
+		fpregs.foo = ctx->xstate_.x87.data_ptr_offset;
+		fpregs.fcs = ctx->xstate_.x87.inst_ptr_selector;
+		fpregs.fos = ctx->xstate_.x87.data_ptr_selector;
+
+		// Copy x87 register data (8 registers of 10 bytes each)
+		constexpr size_t FpuRegisterCount = 8;
+		constexpr size_t FpuRegisterSize  = 10; // 80-bit FP registers
+
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			// Convert from our byte array format to the basic fpregs format
+			std::memcpy(&fpregs.st_space[n * FpuRegisterSize], ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
+		}
+	}
+
+	// Use PTRACE_SETFPREGS to set the basic x87 FP state only
+	if (ptrace(PTRACE_SETFPREGS, tid_, 0, &fpregs) == -1) {
+		return errno;
+	}
+
+	std::printf("Thread::set_xstate32_fallback: Successfully set x87 state via PTRACE_SETFPREGS\n");
 	return 0;
 }
 
