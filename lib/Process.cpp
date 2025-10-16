@@ -126,7 +126,7 @@ Process::Process(pid_t pid, Flag flags)
 					continue;
 				}
 
-				auto new_thread = std::make_shared<Thread>(pid, tid, Thread::Attach | Thread::KillOnTracerExit);
+				auto new_thread = std::make_shared<Thread>(this, tid, Thread::Attach | Thread::KillOnTracerExit);
 				threads_.emplace(tid, new_thread);
 
 				if (!active_thread_) {
@@ -141,7 +141,7 @@ Process::Process(pid_t pid, Flag flags)
 			}
 		}
 	} else {
-		auto threads = std::make_shared<Thread>(pid, pid, Thread::NoAttach | Thread::KillOnTracerExit);
+		auto threads = std::make_shared<Thread>(this, pid, Thread::NoAttach | Thread::KillOnTracerExit);
 		threads_.emplace(pid, threads);
 	}
 
@@ -548,7 +548,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					if (ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
 
 						auto new_tid    = static_cast<pid_t>(message);
-						auto new_thread = std::make_shared<Thread>(pid_, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
+						auto new_thread = std::make_shared<Thread>(this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
 						threads_.emplace(new_tid, new_thread);
 
 						new_thread->wstatus_ = 0;

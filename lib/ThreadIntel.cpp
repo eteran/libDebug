@@ -1,7 +1,9 @@
 
 #include "Debug/ThreadIntel.hpp"
+#include "Debug/Breakpoint.hpp"
 #include "Debug/Context.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Process.hpp"
 
 #include <cassert>
 #include <cinttypes>
@@ -70,8 +72,10 @@ long create_ptrace_options(Thread::Flag f) {
  * @param tid The thread id to attach to.
  * @param f Controls the attach behavior of this constructor.
  */
-Thread::Thread(pid_t pid, pid_t tid, Flag f)
-	: pid_(pid), tid_(tid) {
+Thread::Thread(Process *process, pid_t tid, Flag f)
+	: process_(process), tid_(tid) {
+
+	assert(process);
 
 	if (f & Thread::Attach) {
 		if (ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
@@ -169,6 +173,14 @@ void Thread::resume() {
 
 	assert(state_ == State::Stopped);
 
+	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
+		assert(false);
+		bp->disable();
+		step();
+		wait();
+		bp->enable();
+	}
+
 	if (ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
 		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
 	}
@@ -183,7 +195,7 @@ void Thread::resume() {
 void Thread::stop() const {
 	assert(state_ == State::Running);
 
-	if (syscall(SYS_tgkill, pid_, tid_, SIGSTOP) == -1) {
+	if (syscall(SYS_tgkill, process_->pid(), tid_, SIGSTOP) == -1) {
 		throw DebuggerError("Failed to stop thread %d: %s", tid_, strerror(errno));
 	}
 }
@@ -194,7 +206,7 @@ void Thread::stop() const {
 void Thread::kill() const {
 	assert(state_ == State::Running);
 
-	if (syscall(SYS_tgkill, pid_, tid_, SIGKILL) == -1) {
+	if (syscall(SYS_tgkill, process_->pid(), tid_, SIGKILL) == -1) {
 		throw DebuggerError("Failed to kill thread %d: %s", tid_, strerror(errno));
 	}
 }
@@ -1070,8 +1082,8 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
 		fpxregs.swd = ctx->xstate_.x87.status_word;
 		fpxregs.twd = ctx->xstate_.x87.tag_word;
 		fpxregs.fop = ctx->xstate_.x87.opcode;
-		fpxregs.fip = static_cast<int32_t>(ctx->xstate_.x87.inst_ptr_offset);
-		fpxregs.foo = static_cast<int32_t>(ctx->xstate_.x87.data_ptr_offset);
+		fpxregs.fip = static_cast<uint32_t>(ctx->xstate_.x87.inst_ptr_offset);
+		fpxregs.foo = static_cast<uint32_t>(ctx->xstate_.x87.data_ptr_offset);
 		fpxregs.fcs = ctx->xstate_.x87.inst_ptr_selector;
 		fpxregs.fos = ctx->xstate_.x87.data_ptr_selector;
 
@@ -1125,8 +1137,8 @@ int Thread::set_xstate32_fallback(const Context *ctx) const {
 		fpregs.swd = ctx->xstate_.x87.status_word;
 		fpregs.twd = ctx->xstate_.x87.tag_word;
 		// Note: opcode is not available in user_fpregs_struct_32
-		fpregs.fip = ctx->xstate_.x87.inst_ptr_offset;
-		fpregs.foo = ctx->xstate_.x87.data_ptr_offset;
+		fpregs.fip = static_cast<uint32_t>(ctx->xstate_.x87.inst_ptr_offset);
+		fpregs.foo = static_cast<uint32_t>(ctx->xstate_.x87.data_ptr_offset);
 		fpregs.fcs = ctx->xstate_.x87.inst_ptr_selector;
 		fpregs.fos = ctx->xstate_.x87.data_ptr_selector;
 

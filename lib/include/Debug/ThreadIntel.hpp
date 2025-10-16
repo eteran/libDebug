@@ -6,6 +6,8 @@
 
 #include <sys/types.h>
 
+class Process;
+
 class Thread {
 	friend class Debugger;
 	friend class Process;
@@ -22,7 +24,7 @@ public:
 	static constexpr Flag KillOnTracerExit = 2;
 
 public:
-	Thread(pid_t pid, pid_t tid, Flag f);
+	Thread(Process *process, pid_t tid, Flag f);
 	~Thread();
 
 public:
@@ -86,11 +88,11 @@ private:
 	int set_xstate32_fallback(const Context *ctx) const;
 
 private:
-	pid_t pid_      = 0;
-	pid_t tid_      = 0;
-	int wstatus_    = 0;
-	State state_    = State::Running;
-	bool is_64_bit_ = false;
+	Process *process_ = nullptr;
+	pid_t tid_        = 0;
+	int wstatus_      = 0;
+	State state_      = State::Running;
+	bool is_64_bit_   = false;
 };
 
 #endif
