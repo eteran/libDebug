@@ -32,6 +32,8 @@ public:
 
 public:
 	Process(pid_t pid, Flag flags);
+	Process(const Process &)            = delete;
+	Process &operator=(const Process &) = delete;
 	~Process();
 
 public:
@@ -68,7 +70,7 @@ public:
 public:
 	[[nodiscard]] std::shared_ptr<Thread> find_thread(pid_t tid) const;
 
-	[[nodiscard]] std::unordered_map<pid_t, std::shared_ptr<Thread>> threads() const {
+	[[nodiscard]] const std::unordered_map<pid_t, std::shared_ptr<Thread>> &threads() const {
 		return threads_;
 	}
 

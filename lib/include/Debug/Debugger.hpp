@@ -11,6 +11,8 @@ class Process;
 class Debugger {
 public:
 	Debugger();
+	Debugger(const Debugger &)            = delete;
+	Debugger &operator=(const Debugger &) = delete;
 	~Debugger();
 
 public:

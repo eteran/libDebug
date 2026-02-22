@@ -30,8 +30,23 @@ public:
 	[[nodiscard]] void *data() { return ptr_; }
 
 public:
-	[[nodiscard]] bool operator==(const RegisterRef &rhs) const { return size_ == rhs.size_ && std::memcmp(ptr_, rhs.ptr_, size_) == 0; }
-	[[nodiscard]] bool operator!=(const RegisterRef &rhs) const { return size_ != rhs.size_ || std::memcmp(ptr_, rhs.ptr_, size_) != 0; }
+	[[nodiscard]] bool operator==(const RegisterRef &rhs) const {
+		if (size_ != rhs.size_) {
+			return false;
+		}
+
+		if (ptr_ == rhs.ptr_) {
+			return true;
+		}
+
+		if (!ptr_ || !rhs.ptr_) {
+			return false;
+		}
+
+		return std::memcmp(ptr_, rhs.ptr_, size_) == 0;
+	}
+
+	[[nodiscard]] bool operator!=(const RegisterRef &rhs) const { return !(*this == rhs); }
 
 public:
 	RegisterRef &operator=(const RegisterRef &rhs) {
@@ -84,19 +99,19 @@ public:
 			memcpy(ptr_, &u8, 1);
 			break;
 		case 2:
-			memcpy(&u16, ptr_, 1);
+			memcpy(&u16, ptr_, 2);
 			++u16;
-			memcpy(ptr_, &u16, 1);
+			memcpy(ptr_, &u16, 2);
 			break;
 		case 4:
-			memcpy(&u32, ptr_, 1);
+			memcpy(&u32, ptr_, 4);
 			++u32;
-			memcpy(ptr_, &u32, 1);
+			memcpy(ptr_, &u32, 4);
 			break;
 		case 8:
-			memcpy(&u64, ptr_, 1);
+			memcpy(&u64, ptr_, 8);
 			++u64;
-			memcpy(ptr_, &u64, 1);
+			memcpy(ptr_, &u64, 8);
 			break;
 		default:
 			assert(false && "Invalid size");
@@ -125,19 +140,19 @@ public:
 			memcpy(ptr_, &u8, 1);
 			break;
 		case 2:
-			memcpy(&u16, ptr_, 1);
+			memcpy(&u16, ptr_, 2);
 			--u16;
-			memcpy(ptr_, &u16, 1);
+			memcpy(ptr_, &u16, 2);
 			break;
 		case 4:
-			memcpy(&u32, ptr_, 1);
+			memcpy(&u32, ptr_, 4);
 			--u32;
-			memcpy(ptr_, &u32, 1);
+			memcpy(ptr_, &u32, 4);
 			break;
 		case 8:
-			memcpy(&u64, ptr_, 1);
+			memcpy(&u64, ptr_, 8);
 			--u64;
-			memcpy(ptr_, &u64, 1);
+			memcpy(ptr_, &u64, 8);
 			break;
 		default:
 			assert(false && "Invalid size");
@@ -169,19 +184,19 @@ public:
 			memcpy(ptr_, &u8, 1);
 			break;
 		case 2:
-			memcpy(&u16, ptr_, 1);
+			memcpy(&u16, ptr_, 2);
 			u16 += static_cast<uint16_t>(value);
-			memcpy(ptr_, &u16, 1);
+			memcpy(ptr_, &u16, 2);
 			break;
 		case 4:
-			memcpy(&u32, ptr_, 1);
+			memcpy(&u32, ptr_, 4);
 			u32 += static_cast<uint32_t>(value);
-			memcpy(ptr_, &u32, 1);
+			memcpy(ptr_, &u32, 4);
 			break;
 		case 8:
-			memcpy(&u64, ptr_, 1);
+			memcpy(&u64, ptr_, 8);
 			u64 += static_cast<uint64_t>(value);
-			memcpy(ptr_, &u64, 1);
+			memcpy(ptr_, &u64, 8);
 			break;
 		default:
 			assert(false && "Invalid size");
@@ -213,19 +228,19 @@ public:
 			memcpy(ptr_, &u8, 1);
 			break;
 		case 2:
-			memcpy(&u16, ptr_, 1);
+			memcpy(&u16, ptr_, 2);
 			u16 -= static_cast<uint16_t>(value);
-			memcpy(ptr_, &u16, 1);
+			memcpy(ptr_, &u16, 2);
 			break;
 		case 4:
-			memcpy(&u32, ptr_, 1);
+			memcpy(&u32, ptr_, 4);
 			u32 -= static_cast<uint32_t>(value);
-			memcpy(ptr_, &u32, 1);
+			memcpy(ptr_, &u32, 4);
 			break;
 		case 8:
-			memcpy(&u64, ptr_, 1);
+			memcpy(&u64, ptr_, 8);
 			u64 -= static_cast<uint64_t>(value);
-			memcpy(ptr_, &u64, 1);
+			memcpy(ptr_, &u64, 8);
 			break;
 		default:
 			assert(false && "Invalid size");

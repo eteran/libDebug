@@ -3,6 +3,7 @@
 #define BREAKPOINT_INTEL_HPP_
 
 #include "Process.hpp"
+#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -33,6 +34,8 @@ public:
 
 public:
 	Breakpoint(const Process *process, uint64_t address, TypeId type = TypeId::Automatic);
+	Breakpoint(const Breakpoint &)            = delete;
+	Breakpoint &operator=(const Breakpoint &) = delete;
 	~Breakpoint();
 
 public:
@@ -46,9 +49,9 @@ public:
 	[[nodiscard]] uint8_t *new_bytes() { return new_bytes_; }
 
 private:
+	std::atomic<uint64_t> hit_count_{0};
 	const Process *process_ = nullptr;
 	uint64_t address_       = 0;
-	uint64_t hit_count_     = 0;
 	uint8_t old_bytes_[2]   = {};
 	uint8_t new_bytes_[2]   = {};
 	size_t size_            = 0;

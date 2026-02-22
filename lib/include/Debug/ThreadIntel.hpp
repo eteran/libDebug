@@ -25,6 +25,8 @@ public:
 
 public:
 	Thread(Process *process, pid_t tid, Flag f);
+	Thread(const Thread &)            = delete;
+	Thread &operator=(const Thread &) = delete;
 	~Thread();
 
 public:
