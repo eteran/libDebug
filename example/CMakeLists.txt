@@ -16,6 +16,7 @@ target_compile_options(
            -Wshadow
            -Wsign-conversion
            -Wunused
+           -Wuseless-cast
 )
 
 add_executable(Debugger main.cpp)
@@ -47,6 +48,7 @@ target_compile_options(
            -Wshadow
            -Wsign-conversion
            -Wunused
+           -Wuseless-cast
 )
 
 add_executable(TestApp64 test_app.cpp)

@@ -174,7 +174,7 @@ void Thread::resume() {
 	assert(state_ == State::Stopped);
 
 	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
-		assert(false);
+		// handle single-instruction breakpoint placed at IP
 		bp->disable();
 		step();
 		wait();
@@ -396,7 +396,7 @@ void Thread::get_xstate64(Context *ctx) const {
 		ctx->xstate_.x87.opcode            = xsave->fop;
 
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
-			std::memcpy(ctx->xstate_.x87.registers[n].data, xsave->st_space + FpuRegisterSize * xsave->st_space[n * FpuRegisterSize], FpuRegisterSize);
+			std::memcpy(ctx->xstate_.x87.registers[n].data, &xsave->st_space[FpuRegisterSize * n], FpuRegisterSize);
 		}
 
 		ctx->xstate_.x87.filled = true;
@@ -641,9 +641,9 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 	}
 
 	std::printf("Thread::get_xstate32_legacy: (x87=%d sse=%d avx=%d)\n",
-				static_cast<int>(1),
-				static_cast<int>(1),
-				static_cast<int>(0));
+				1,
+				1,
+				0);
 
 	// Extract x87 state from fpxregs
 	ctx->xstate_.x87.control_word      = fpxregs.cwd;
@@ -706,9 +706,9 @@ int Thread::get_xstate32_fallback(Context *ctx) const {
 	}
 
 	std::printf("Thread::get_xstate32_fallback: (x87=%d sse=%d avx=%d)\n",
-				static_cast<int>(1),
-				static_cast<int>(0),
-				static_cast<int>(0));
+				1,
+				0,
+				0);
 
 	// Extract x87 state from fpregs
 	ctx->xstate_.x87.control_word      = static_cast<uint16_t>(fpregs.cwd);
