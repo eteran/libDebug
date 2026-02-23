@@ -4,8 +4,8 @@
 
 #include <memory>
 
-#include <sys/types.h>
 #include <signal.h>
+#include <sys/types.h>
 
 class Process;
 
@@ -29,7 +29,6 @@ public:
 
 private:
 	std::shared_ptr<Process> process_;
-	sigset_t prev_mask_;
 
 	bool disableLazyBinding_ = true;
 	bool disableASLR_        = true;

@@ -17,24 +17,40 @@
 #include <sys/ptrace.h>
 #include <unistd.h>
 
+// Per-thread counters and saved mask so we only modify the signal mask
+// once per thread regardless of how many Debugger instances exist.
+namespace {
+thread_local int DebuggerCount = 0;
+thread_local sigset_t PrevSigMask;
+}
+
 /**
  * @brief Construct a new Debugger object.
  */
 Debugger::Debugger() {
 
-	// we need to block SIGCHLD to make sure that we can control
-	// the waitpid calls.
-	sigset_t mask;
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &mask, &prev_mask_);
+	// Block SIGCHLD once per thread so waitpid usage is deterministic.
+	if (DebuggerCount == 0) {
+		sigset_t mask;
+		sigemptyset(&mask);
+		sigaddset(&mask, SIGCHLD);
+		if (sigprocmask(SIG_BLOCK, &mask, &PrevSigMask) == 0) {
+			DebuggerCount = 1;
+		}
+	} else {
+		++DebuggerCount;
+	}
 }
 
 /**
  * @brief Destroy the Debugger object.
  */
 Debugger::~Debugger() {
-	sigprocmask(SIG_SETMASK, &prev_mask_, nullptr);
+	if (DebuggerCount > 0) {
+		if (--DebuggerCount == 0) {
+			sigprocmask(SIG_SETMASK, &PrevSigMask, nullptr);
+		}
+	}
 }
 
 /**
