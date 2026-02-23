@@ -27,11 +27,23 @@ target_include_directories(
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# Apply target properties and optional coverage flags
 set_target_properties(
     Debug
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
-               COMPILE_OPTIONS ${TARGET_ARCH}
-               LINK_FLAGS ${TARGET_ARCH}
 )
+
+# Always apply architecture compile option
+target_compile_options(Debug PRIVATE ${TARGET_ARCH})
+
+if(ENABLE_COVERAGE)
+    # Enable debug, no optimization, and coverage instrumentation
+    target_compile_options(Debug PRIVATE -g -O0 --coverage)
+    # Ensure linker receives coverage flags and the target arch
+    set(LIB_LINK_FLAGS "${TARGET_ARCH} --coverage")
+else()
+    set(LIB_LINK_FLAGS "${TARGET_ARCH}")
+endif()
+set_target_properties(Debug PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")
 

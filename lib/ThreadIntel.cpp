@@ -418,8 +418,6 @@ void Thread::get_xstate64(Context *ctx) const {
 	// it looks as if the registers have always been zero. Thus we should provide the same
 	// illusion to the user.
 
-	// (have_* flags moved earlier)
-
 	if (x87_present && have_fpu) {
 		ctx->xstate_.x87.status_word       = xsave->swd;
 		ctx->xstate_.x87.control_word      = xsave->cwd;

@@ -49,3 +49,13 @@ TEST(ProcHelper) {
 	auto h = hash_regions(pid);
 	CHECK_MSG(h != 0 || !regions.empty(), "hash_regions returned zero and regions is empty");
 }
+
+TEST(EnumerateProcesses) {
+	pid_t self = getpid();
+	auto procs = enumerate_processes();
+	CHECK_MSG(!procs.empty(), "enumerate_processes returned empty list");
+
+	bool found = false;
+	for (auto p : procs) if (p == self) { found = true; break; }
+	CHECK_MSG(found, "enumerate_processes did not include current pid");
+}
