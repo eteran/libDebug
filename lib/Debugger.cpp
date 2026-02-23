@@ -111,7 +111,11 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 	constexpr std::size_t SharedMemSize = 4096;
 
-	void *ptr       = mmap(nullptr, SharedMemSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	void *ptr = mmap(nullptr, SharedMemSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (ptr == MAP_FAILED) {
+		throw DebuggerError("Failed to create shared memory: %s", strerror(errno));
+	}
+
 	auto shared_mem = static_cast<char *>(ptr);
 	std::memset(ptr, 0, SharedMemSize);
 
