@@ -151,7 +151,7 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::ECX:		return make_register("ecx",  ctx_64_.regs.rcx, sizeof(uint32_t), 0);
 	case RegisterId::EDX:		return make_register("edx",  ctx_64_.regs.rdx, sizeof(uint32_t), 0);
 	case RegisterId::ESI:		return make_register("esi",  ctx_64_.regs.rsi, sizeof(uint32_t), 0);
-	case RegisterId::EDI:		return make_register("esi",  ctx_64_.regs.rdi, sizeof(uint32_t), 0);
+	case RegisterId::EDI:		return make_register("edi",  ctx_64_.regs.rdi, sizeof(uint32_t), 0);
 	case RegisterId::EIP:		return make_register("eip",  ctx_64_.regs.rip, sizeof(uint32_t), 0);
 	case RegisterId::ESP:		return make_register("esp",  ctx_64_.regs.rsp, sizeof(uint32_t), 0);
 	case RegisterId::EBP:		return make_register("ebp",  ctx_64_.regs.rbp, sizeof(uint32_t), 0);
@@ -176,13 +176,13 @@ RegisterRef Context::get_64(RegisterId reg) {
 	case RegisterId::BP:		return make_register("bp",   ctx_64_.regs.rbp, sizeof(uint16_t), 0);
 	case RegisterId::SP:		return make_register("sp",   ctx_64_.regs.rsp, sizeof(uint16_t), 0);
 	case RegisterId::R8W:		return make_register("r8w",  ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R9W:		return make_register("r9w",  ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R10W:		return make_register("r10w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R11W:		return make_register("r11w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R12W:		return make_register("r12w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R13W:		return make_register("r13w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R14W:		return make_register("r14w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
-	case RegisterId::R15W:		return make_register("r15w", ctx_64_.regs.r8, sizeof(uint16_t),  0);
+	case RegisterId::R9W:		return make_register("r9w",  ctx_64_.regs.r9, sizeof(uint16_t),  0);
+	case RegisterId::R10W:		return make_register("r10w", ctx_64_.regs.r10, sizeof(uint16_t),  0);
+	case RegisterId::R11W:		return make_register("r11w", ctx_64_.regs.r11, sizeof(uint16_t),  0);
+	case RegisterId::R12W:		return make_register("r12w", ctx_64_.regs.r12, sizeof(uint16_t),  0);
+	case RegisterId::R13W:		return make_register("r13w", ctx_64_.regs.r13, sizeof(uint16_t),  0);
+	case RegisterId::R14W:		return make_register("r14w", ctx_64_.regs.r14, sizeof(uint16_t),  0);
+	case RegisterId::R15W:		return make_register("r15w", ctx_64_.regs.r15, sizeof(uint16_t),  0);
 
 	// 8-bit GP registers
 	case RegisterId::AL:		return make_register("al", ctx_64_.regs.rax,   sizeof(uint8_t), 0);

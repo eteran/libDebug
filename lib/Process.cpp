@@ -146,7 +146,9 @@ Process::Process(pid_t pid, Flag flags)
 	}
 
 	memfd_ = open_memfd(pid_);
-	assert(memfd_ != -1);
+	if (memfd_ == -1) {
+		throw DebuggerError("Failed to open memory file descriptor for process %d: %s", pid_, strerror(errno));
+	}
 
 	report();
 }
@@ -431,7 +433,11 @@ void Process::detach() {
  */
 std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
 	for (uint64_t i = Breakpoint::minBreakpointSize; i <= Breakpoint::maxBreakpointSize; ++i) {
-		if (auto bp = find_breakpoint(address - i)) {
+		if (address < i) {
+			continue;
+		}
+		const uint64_t candidate = address - i;
+		if (auto bp = find_breakpoint(candidate)) {
 			if (bp->size() == i) {
 				return bp;
 			}
@@ -490,7 +496,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			threads_.erase(it);
 
 			// if the active thread just exited... pick any other thread to be the active thread
-			if (active_thread_->tid() == tid) {
+			if (active_thread_ && active_thread_->tid() == tid) {
 				if (!threads_.empty()) {
 					active_thread_ = threads_.begin()->second;
 				} else {
@@ -596,8 +602,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
-		// NOTE(eteran): should never get here
-		assert(false && "internal error");
+		__builtin_unreachable();
 	}
 
 	// assert(active_thread_);

@@ -55,7 +55,8 @@ void proc_enumerator(const char *path, Callback callback) {
 
 	while (struct dirent *entry = readdir(dir)) {
 
-		if (entry->d_type != DT_DIR) {
+		// Accept directories or entries with unknown d_type (some filesystems)
+		if (entry->d_type != DT_DIR && entry->d_type != DT_UNKNOWN) {
 			continue;
 		}
 

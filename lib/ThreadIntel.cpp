@@ -160,6 +160,11 @@ void Thread::wait() {
  */
 void Thread::detach() {
 	if (tid_ != -1) {
+		// NOTE(eteran): we intentionally DO NOT try to catch or report errors from
+		// ptrace detach because we want to make a best effort to detach even if the
+		// thread has already exited or is in some other weird state.
+		// The destructor should never throw, and we don't want to leak resources
+		// just because the thread is in a bad state.
 		ptrace(PTRACE_DETACH, tid_, 0L, 0L);
 		tid_ = -1;
 	}
@@ -1295,7 +1300,12 @@ void Thread::set_context(const Context *ctx) const {
  */
 uint64_t Thread::get_instruction_pointer() const {
 #if defined(__x86_64__)
-	return static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.rip), 0L));
+	errno    = 0;
+	long ret = ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.rip), 0L);
+	if (ret == -1 && errno != 0) {
+		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(errno));
+	}
+	return static_cast<uint64_t>(ret);
 #elif defined(__i386__)
 
 	// NOTE(eteran): unfortunately, PTRACE_PEEKUSER still gets 32-bit values when is_64_bit_ is true
@@ -1313,13 +1323,20 @@ uint64_t Thread::get_instruction_pointer() const {
 
 		return ctx.rip;
 	}
-	return static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.eip), 0L));
+	errno    = 0;
+	long ret = ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.eip), 0L);
+	if (ret == -1 && errno != 0) {
+		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(errno));
+	}
+	return static_cast<uint64_t>(ret);
 #endif
 }
 
 void Thread::set_instruction_pointer(uint64_t ip) const {
 #if defined(__x86_64__)
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.rip), ip);
+	if (ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.rip), ip) == -1) {
+		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(errno));
+	}
 #elif defined(__i386__)
 
 	// NOTE(eteran): unfortunately, PTRACE_PEEKUSER still gets 32-bit values when is_64_bit_ is true
@@ -1345,6 +1362,8 @@ void Thread::set_instruction_pointer(uint64_t ip) const {
 
 		return;
 	}
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.eip), static_cast<uint32_t>(ip));
+	if (ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.eip), static_cast<uint32_t>(ip)) == -1) {
+		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(errno));
+	}
 #endif
 }

@@ -5,6 +5,7 @@
 #include <memory>
 
 #include <sys/types.h>
+#include <signal.h>
 
 class Process;
 

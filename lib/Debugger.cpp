@@ -63,7 +63,7 @@ void Debugger::set_disable_aslr(bool value) {
  * @throws DebuggerError if the process could not be attached.
  */
 std::shared_ptr<Process> Debugger::attach(pid_t pid) {
-	process_ = std::make_unique<Process>(pid, Process::Attach);
+	process_ = std::make_shared<Process>(pid, Process::Attach);
 	return process_;
 }
 
@@ -104,7 +104,6 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 
 		if (disableASLR_) {
 			const int current = personality(UINT32_MAX);
-			// This shouldn't fail, but let's at least perror if it does anyway
 			if (current == -1) {
 				std::snprintf(shared_mem, SharedMemSize, "Failed to get current personality: %s", strerror(errno));
 				std::abort();
@@ -141,7 +140,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	default:
 		std::printf("Debugging New Process: %d\n", cpid);
 
-		process_ = std::make_unique<Process>(cpid, Process::NoAttach);
+		process_ = std::make_shared<Process>(cpid, Process::NoAttach);
 
 		SCOPE_EXIT({
 			munmap(ptr, SharedMemSize);
