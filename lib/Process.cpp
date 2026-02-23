@@ -60,8 +60,7 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
 	sigprocmask(SIG_BLOCK, &mask, nullptr);
-	int ret = sigtimedwait(&mask, &info, &ts);
-	return ret == SIGCHLD;
+	return sigtimedwait(&mask, &info, &ts) == SIGCHLD;
 }
 
 /**
