@@ -38,8 +38,11 @@ namespace {
  */
 struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
 	struct timespec ts;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuseless-cast"
 	ts.tv_sec  = static_cast<time_t>(msecs.count() / 1000);
 	ts.tv_nsec = static_cast<long>((msecs.count() % 1000) * 1000000);
+#pragma GCC diagnostic pop
 	return ts;
 }
 
@@ -57,7 +60,8 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGCHLD);
 	sigprocmask(SIG_BLOCK, &mask, nullptr);
-	return sigtimedwait(&mask, &info, &ts) == SIGCHLD;
+	int ret = sigtimedwait(&mask, &info, &ts);
+	return ret == SIGCHLD;
 }
 
 /**
@@ -426,6 +430,17 @@ void Process::detach() {
 }
 
 /**
+ * @brief A light wrapper around `waitpid` to wait for all threads to exit.
+ * This is useful to call after calling `kill` to ensure the process is
+ * fully cleaned up before returning from the function that called `kill`.
+ */
+int Process::wait() const {
+	int status;
+	waitpid(pid_, &status, 0);
+	return status;
+}
+
+/**
  * @brief Searches for an active breakpoint which when executed will END at the given address.
  *
  * @param address The address to search for.
@@ -451,12 +466,16 @@ std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
  * @brief Waits for `timeout` milliseconds for the next debug event to occur.
  * If there was a debug event, and we are in "all-stop" mode, then it will also
  * stop all other running threads. Events will be reported by calling `callback`.
- * Note that it is possible for a single call to this function can result in
- * multiple events to be reported.
  *
  * @param timeout The amount of milliseconds to wait for the next event.
  * @param callback The function to call when an event occurs.
  * @return true if a debug event occurred withing `timeout` milliseconds, otherwise false.
+ *
+ * @note This function can return true but not report any events if a debug event occurred that was filtered out
+ * (e.g. a breakpoint event for a breakpoint that was just removed).
+ * @note It is possible for a single call to this function can result in
+ * multiple events to be reported.
+ *
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
 

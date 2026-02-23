@@ -19,9 +19,9 @@ class Thread {
 
 public:
 	using Flag                             = uint32_t;
-	static constexpr Flag Attach           = 0;
-	static constexpr Flag NoAttach         = 1;
-	static constexpr Flag KillOnTracerExit = 2;
+	static constexpr Flag Attach           = 1u << 0;
+	static constexpr Flag NoAttach         = 1u << 1;
+	static constexpr Flag KillOnTracerExit = 1u << 2;
 
 public:
 	Thread(Process *process, pid_t tid, Flag f);

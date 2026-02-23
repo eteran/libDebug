@@ -24,11 +24,11 @@ public:
 
 public:
 	using Flag                               = uint32_t;
-	static constexpr Flag Attach             = 0;
-	static constexpr Flag NoAttach           = 1;
-	static constexpr Flag KillOnTracerExit   = 2;
-	static constexpr Flag DisableAslr        = 4;
-	static constexpr Flag DisableLazyBinding = 8;
+	static constexpr Flag Attach             = 1u << 0;
+	static constexpr Flag NoAttach           = 1u << 1;
+	static constexpr Flag KillOnTracerExit   = 1u << 2;
+	static constexpr Flag DisableAslr        = 1u << 3;
+	static constexpr Flag DisableLazyBinding = 1u << 4;
 
 public:
 	Process(pid_t pid, Flag flags);
@@ -54,6 +54,7 @@ public:
 	void stop();
 	void detach();
 	bool next_debug_event(std::chrono::milliseconds timeout, event_callback callback);
+	int wait() const;
 
 public:
 	// breakpoint API

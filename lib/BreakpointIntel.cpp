@@ -3,9 +3,11 @@
 #include "Debug/DebuggerError.hpp"
 
 #include <cassert>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/ptrace.h>
 
 namespace {
 
@@ -101,6 +103,7 @@ void Breakpoint::enable() {
 	if (enabled_) {
 		return;
 	}
+
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
 	if (r == -1) {
 		throw DebuggerError("Failed to read memory for process %d: %s", process_->pid(), strerror(errno));
@@ -126,6 +129,7 @@ void Breakpoint::disable() {
 	if (w == -1) {
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
+
 	enabled_ = false;
 }
 
