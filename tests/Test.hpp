@@ -24,10 +24,16 @@ struct test_type {
 	};                                                                                                               \
 	void TestFuncDetail_##name()
 
-void my_assert_fail(const char *expr, const char *file, int line);
+void my_assert_fail(const char *expr, const char *file, int line, const char *msg = nullptr);
 
 #define CHECK(expr) \
 	((expr)         \
 		 ? void(0)  \
-		 : my_assert_fail(#expr, __FILE__, __LINE__))
+		 : my_assert_fail(#expr, __FILE__, __LINE__, nullptr))
+
+#define CHECK_MSG(expr, msg) \
+	((expr)                  \
+		 ? void(0)           \
+		 : my_assert_fail(#expr, __FILE__, __LINE__, msg))
+
 #endif

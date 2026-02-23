@@ -15,11 +15,11 @@ TEST(BreakpointHit) {
 
 	int addr_pipe[2];
 	int sync_pipe[2];
-	CHECK(pipe(addr_pipe) == 0);
-	CHECK(pipe(sync_pipe) == 0);
+	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
+	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
 
 	pid_t cpid = fork();
-	CHECK(cpid >= 0);
+	CHECK_MSG(cpid >= 0, "fork() failed");
 
 	if (cpid == 0) {
 		close(addr_pipe[0]);
@@ -67,7 +67,7 @@ TEST(BreakpointHit) {
 
 	uint64_t code_addr = 0;
 	ssize_t rr         = read(addr_pipe[0], &code_addr, sizeof(code_addr));
-	CHECK(rr == static_cast<ssize_t>(sizeof(code_addr)));
+	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(code_addr)), "failed to read code address from pipe");
 
 	Debugger dbg;
 	std::shared_ptr<Process> proc;
@@ -79,7 +79,7 @@ TEST(BreakpointHit) {
 		waitpid(cpid, nullptr, 0);
 		return;
 	}
-	CHECK(proc != nullptr);
+	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
 
 	proc->add_breakpoint(code_addr);
 
@@ -115,7 +115,7 @@ TEST(BreakpointHit) {
 			printf("Spurious debug event observed, waiting for breakpoint...\n");
 		}
 	}
-	CHECK(observed);
+	CHECK_MSG(observed, "did not observe expected breakpoint event");
 
 	proc->kill();
 	proc->wait();

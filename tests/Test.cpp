@@ -13,8 +13,12 @@
 constexpr int READ_END  = 0;
 constexpr int WRITE_END = 1;
 
-void my_assert_fail(const char *expr, const char *file, int line) {
-	printf("%s:%d: CHECK '%s' failed.\n", file, line, expr);
+void my_assert_fail(const char *expr, const char *file, int line, const char *msg) {
+	if (msg) {
+		printf("%s:%d: CHECK '%s' failed: %s\n", file, line, expr, msg);
+	} else {
+		printf("%s:%d: CHECK '%s' failed.\n", file, line, expr);
+	}
 	abort();
 }
 
@@ -92,15 +96,15 @@ void run_test(test_type &test, bool capture_output = true) {
 struct Span {
 	test_type *test = nullptr;
 	size_t count    = 0;
+
+	test_type *begin() const {
+		return test;
+	}
+
+	test_type *end() const {
+		return test + count;
+	}
 };
-
-auto begin(Span s) {
-	return s.test;
-}
-
-auto end(Span s) {
-	return s.test + s.count;
-}
 
 Span collect_tests() {
 	extern test_type __start_test_array[];

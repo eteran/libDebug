@@ -1,60 +1,113 @@
 #include "Debug/Debugger.hpp"
+#include "Debug/DebuggerError.hpp"
+#include "Debug/Event.hpp"
+#include "Debug/EventStatus.hpp"
 #include "Debug/Proc.hpp"
 #include "Debug/Process.hpp"
-#include "Debug/Region.hpp"
 #include "Test.hpp"
-#include "Debug/DebuggerError.hpp"
 
-#include <cstring>
-#include <vector>
+#include <sys/mman.h>
+#include <sys/wait.h>
 
-TEST(ProcessReadWrite) {
+using namespace std::chrono_literals;
+
+TEST(ReadWrite) {
+
+	int addr_pipe[2];
+	int sync_pipe[2];
+	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
+	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
+
+	pid_t cpid = fork();
+	CHECK_MSG(cpid >= 0, "fork() failed");
+
+	if (cpid == 0) {
+		close(addr_pipe[0]);
+		close(sync_pipe[1]);
+
+		const size_t page = 4096;
+		void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		if (mem == MAP_FAILED) {
+			perror("mmap");
+			_exit(1);
+		}
+
+		// fill memory with a known pattern that the parent can verify after writing to it
+		auto ptr = static_cast<uint8_t *>(mem);
+		for (int i = 0; i < 32; ++i) {
+			ptr[i] = static_cast<uint8_t>(0xaa + i);
+		}
+
+		// NOTE(eteran): This cast is only circumstantially "useless" depending
+		// on if we are building with -m32 or -m64, so we need to silence the warning here.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+		auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr));
+#pragma GCC diagnostic pop
+
+		ssize_t wrote = write(addr_pipe[1], &addr, sizeof(addr));
+		if (wrote != static_cast<ssize_t>(sizeof(addr))) {
+			_exit(1);
+		}
+
+		// wait for parent to signal it's ready
+		char ready;
+		if (read(sync_pipe[0], &ready, 1) != 1) {
+			_exit(1);
+		}
+
+		_exit(0);
+	}
+
+	close(addr_pipe[1]);
+	close(sync_pipe[0]);
+
+	uint64_t mem_addr = 0;
+	ssize_t rr        = read(addr_pipe[0], &mem_addr, sizeof(mem_addr));
+	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(mem_addr)), "failed to read memory address from pipe");
+
 	Debugger dbg;
-	const char *argv[] = {"./TestApp64", nullptr};
 	std::shared_ptr<Process> proc;
 	try {
-		proc = dbg.spawn(nullptr, argv, nullptr);
+		proc = dbg.attach(cpid);
 	} catch (const DebuggerError &e) {
-		printf("Skipping test: spawn failed: %s\n", e.what());
-		fflush(stdout);
+		// ptrace not permitted in this environment (e.g., YAMA/ptrace_scope)
+		kill(cpid, SIGKILL);
+		waitpid(cpid, nullptr, 0);
 		return;
 	}
-	CHECK(proc != nullptr);
+	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
 
-	pid_t pid = proc->pid();
-
-	// Find writable heap region
-	auto regions  = enumerate_regions(pid);
-	uint64_t addr = 0;
-	for (auto &r : regions) {
-		if (r.is_writable() && r.is_heap()) {
-			addr = r.start();
-			break;
-		}
+	// verify we can read the known pattern from the child process
+	uint8_t buffer[32];
+	int64_t nread = proc->read_memory(mem_addr, buffer, sizeof(buffer));
+	CHECK_MSG(nread == sizeof(buffer), "proc->read_memory returned unexpected size");
+	for (int i = 0; i < 32; ++i) {
+		CHECK_MSG(buffer[i] == static_cast<uint8_t>(0xaa + i), "initial pattern mismatch in child memory");
 	}
 
-	CHECK(addr != 0);
+	// verify we can write to the child process
+	for (int i = 0; i < 32; ++i) {
+		buffer[i] = static_cast<uint8_t>(0x55 + i);
+	}
+	int64_t nwritten = proc->write_memory(mem_addr, buffer, sizeof(buffer));
+	CHECK_MSG(nwritten == sizeof(buffer), "proc->write_memory wrote unexpected number of bytes");
 
-	const size_t N = 8;
-	std::vector<uint8_t> orig(N);
-	std::vector<uint8_t> pattern(N);
-	for (size_t i = 0; i < N; ++i)
-		pattern[i] = static_cast<uint8_t>(0xAA + i);
+	// verify the changes were written to the child process
+	uint8_t verify_buffer[32];
+	nread = proc->read_memory(mem_addr, verify_buffer, sizeof(verify_buffer));
+	CHECK_MSG(nread == sizeof(verify_buffer), "proc->read_memory returned unexpected size for verification");
+	for (int i = 0; i < 32; ++i) {
+		CHECK_MSG(verify_buffer[i] == static_cast<uint8_t>(0x55 + i), "verify buffer mismatch after write");
+	}
 
-	const int64_t r = proc->read_memory(addr, orig.data(), N);
-	CHECK(r == static_cast<int64_t>(N));
+	// signal child to continue
+	char one = 1;
+	if (write(sync_pipe[1], &one, 1) != 1) {
+		_exit(1);
+	}
 
-	const int64_t w = proc->write_memory(addr, pattern.data(), N);
-	CHECK(w == static_cast<int64_t>(N));
-
-	std::vector<uint8_t> check(N);
-	const int64_t r2 = proc->read_memory(addr, check.data(), N);
-	CHECK(r2 == static_cast<int64_t>(N));
-	CHECK(std::memcmp(check.data(), pattern.data(), N) == 0);
-
-	// restore
-	const int64_t w2 = proc->write_memory(addr, orig.data(), N);
-	CHECK(w2 == static_cast<int64_t>(N));
-
+	proc->resume();
 	proc->kill();
+	proc->wait();
 }
