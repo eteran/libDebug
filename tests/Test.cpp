@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <span>
 #include <sys/wait.h>
@@ -121,9 +122,19 @@ Span collect_tests() {
 
 int main(int argc, char *argv[]) {
 
+	bool capture_output = true;
+	for (int i = 1; i < argc; ++i) {
+		if (std::strcmp(argv[i], "--no-capture-output") == 0) {
+			capture_output = false;
+		} else {
+			printf("Usage: %s [--no-capture-output]\n", argv[0]);
+			return EXIT_FAILURE;
+		}
+	}
+
 	int fail_count = 0;
 	for (test_type &test : collect_tests()) {
-		run_test(test, false);
+		run_test(test, capture_output);
 		if (!test.result) {
 			fail_count++;
 		}

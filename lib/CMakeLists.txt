@@ -34,3 +34,4 @@ set_target_properties(
                COMPILE_OPTIONS ${TARGET_ARCH}
                LINK_FLAGS ${TARGET_ARCH}
 )
+
