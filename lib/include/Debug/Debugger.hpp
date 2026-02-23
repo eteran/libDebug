@@ -6,6 +6,7 @@
 
 #include <signal.h>
 #include <sys/types.h>
+#include <thread>
 
 class Process;
 
@@ -29,7 +30,7 @@ public:
 
 private:
 	std::shared_ptr<Process> process_;
-
+	std::thread::id ctor_thread_id_;
 	bool disableLazyBinding_ = true;
 	bool disableASLR_        = true;
 };

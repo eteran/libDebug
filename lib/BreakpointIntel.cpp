@@ -105,12 +105,12 @@ void Breakpoint::enable() {
 	}
 
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
-	if (r == -1) {
+	if (static_cast<size_t>(r) != size_) {
 		throw DebuggerError("Failed to read memory for process %d: %s", process_->pid(), strerror(errno));
 	}
 
 	const int64_t w = process_->write_memory(address_, new_bytes_, size_);
-	if (w == -1) {
+	if (static_cast<size_t>(w) != size_) {
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
 
@@ -126,7 +126,7 @@ void Breakpoint::disable() {
 	}
 
 	const int64_t w = process_->write_memory(address_, old_bytes_, size_);
-	if (w == -1) {
+	if (static_cast<size_t>(w) != size_) {
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
 

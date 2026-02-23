@@ -29,6 +29,8 @@ thread_local sigset_t PrevSigMask;
  */
 Debugger::Debugger() {
 
+	ctor_thread_id_ = std::this_thread::get_id();
+
 	// Block SIGCHLD once per thread so waitpid usage is deterministic.
 	if (DebuggerCount == 0) {
 		sigset_t mask;
@@ -46,6 +48,13 @@ Debugger::Debugger() {
  * @brief Destroy the Debugger object.
  */
 Debugger::~Debugger() {
+	// NOTE(eteran): Enforce that the Debugger is destroyed on the same thread it was
+	// constructed on. Restoring the signal mask must occur on that thread.
+	if (std::this_thread::get_id() != ctor_thread_id_) {
+		std::fprintf(stderr, "Debugger destroyed on a different thread than constructed\n");
+		std::abort();
+	}
+
 	if (DebuggerCount > 0) {
 		if (--DebuggerCount == 0) {
 			sigprocmask(SIG_SETMASK, &PrevSigMask, nullptr);
