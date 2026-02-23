@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string>
 #include <type_traits>
+#include "DebuggerError.hpp"
 
 class RegisterRef {
 public:
@@ -50,7 +51,9 @@ public:
 
 public:
 	RegisterRef &operator=(const RegisterRef &rhs) {
-		assert(is_valid() && rhs.is_valid());
+		if (!is_valid() || !rhs.is_valid()) {
+			throw DebuggerError("RegisterRef: invalid assignment between '%s' and '%s'", name_.c_str(), rhs.name().c_str());
+		}
 		if (this != &rhs) {
 			std::memset(ptr_, 0, size_);
 			std::memcpy(ptr_, rhs.data(), std::min(size_, rhs.size()));
@@ -63,6 +66,9 @@ public:
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	Integer as() const {
 		// NOTE(eteran): effectively zero-extend the value to the size of the integer being read into
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid read from '%s'", name_.c_str());
+		}
 		Integer value;
 		std::memset(&value, 0, sizeof(Integer));
 		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
@@ -71,6 +77,10 @@ public:
 
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	RegisterRef &operator=(Integer value) {
+
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid write to '%s'", name_.c_str());
+		}
 
 		// NOTE(eteran): effectively zero-extend the value to the size of the register
 		std::memset(ptr_, 0, size_);
@@ -85,6 +95,9 @@ public:
 	 * @return A reference to this register.
 	 */
 	RegisterRef &operator++() {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid increment on '%s'", name_.c_str());
+		}
 		union {
 			uint8_t u8;
 			uint16_t u16;
@@ -126,6 +139,9 @@ public:
 	 * @return A reference to this register.
 	 */
 	RegisterRef &operator--() {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid decrement on '%s'", name_.c_str());
+		}
 		union {
 			uint8_t u8;
 			uint16_t u16;
@@ -169,6 +185,9 @@ public:
 	 */
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	RegisterRef &operator+=(Integer value) {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid add-assign on '%s'", name_.c_str());
+		}
 
 		union {
 			uint8_t u8;
@@ -213,6 +232,9 @@ public:
 	 */
 	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
 	RegisterRef &operator-=(Integer value) {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid sub-assign on '%s'", name_.c_str());
+		}
 
 		union {
 			uint8_t u8;

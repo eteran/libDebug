@@ -3,6 +3,8 @@
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Region.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cinttypes>
 #include <cstdio>
@@ -172,21 +174,39 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 
 		// address           perms offset  dev   inode       pathname
 		// 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
+		const int matched = std::sscanf(line,
+										"%" SCNx64 "-%" SCNx64 " %7s %" SCNx64 " %" SCNx32 ":%" SCNx32 " %" SCNu32 " %4095[^\n]",
+										&start,
+										&end,
+										perms,
+										&offset,
+										&dev_maj,
+										&dev_min,
+										&inode,
+										name);
 
-		//  PRIx32
-		if (std::sscanf(line, "%" PRIx64 "-%" PRIx64 " %s %" PRIx64 " %x:%x %x %s", &start, &end, perms, &offset, &dev_maj, &dev_min, &inode, name) != -1) {
+		if (matched >= 7) {
+			if (matched < 8) {
+				name[0] = '\0';
+			} else {
+				// Trim trailing whitespace (including trailing newline captured by %[^
+				size_t len = std::strlen(name);
+				while (len > 0 && std::isspace(static_cast<unsigned char>(name[len - 1]))) {
+					name[--len] = '\0';
+				}
+			}
 #if 0
-			if (std::strchr(name, 'r')) permissions |= Region::Read;
-			if (std::strchr(name, 'w')) permissions |= Region::Write;
-			if (std::strchr(name, 'x')) permissions |= Region::Execute;
-			if (std::strchr(name, 'p')) permissions |= Region::Private;
-			if (std::strchr(name, 's')) permissions |= Region::Shared;
+			if (std::strchr(perms, 'r')) permissions |= Region::Read;
+			if (std::strchr(perms, 'w')) permissions |= Region::Write;
+			if (std::strchr(perms, 'x')) permissions |= Region::Execute;
+			if (std::strchr(perms, 'p')) permissions |= Region::Private;
+			if (std::strchr(perms, 's')) permissions |= Region::Shared;
 #else
-			permissions |= (!!std::strchr(name, 'r') * Region::Read);
-			permissions |= (!!std::strchr(name, 'w') * Region::Write);
-			permissions |= (!!std::strchr(name, 'x') * Region::Execute);
-			permissions |= (!!std::strchr(name, 'p') * Region::Private);
-			permissions |= (!!std::strchr(name, 's') * Region::Shared);
+			permissions |= (!!std::strchr(perms, 'r') * Region::Read);
+			permissions |= (!!std::strchr(perms, 'w') * Region::Write);
+			permissions |= (!!std::strchr(perms, 'x') * Region::Execute);
+			permissions |= (!!std::strchr(perms, 'p') * Region::Private);
+			permissions |= (!!std::strchr(perms, 's') * Region::Shared);
 #endif
 			regions.emplace_back(start, end, offset, permissions, name);
 		}

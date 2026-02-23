@@ -64,6 +64,20 @@ long create_ptrace_options(Thread::Flag f) {
 	return options;
 }
 
+// Common register size/count constants used throughout this file.
+constexpr size_t FpuRegisterCount = 8;
+constexpr size_t FpuRegisterSize  = 16;
+constexpr size_t SseRegisterCount = 32;
+constexpr size_t SseRegisterSize  = 16;
+constexpr size_t AvxRegisterSize  = 32;
+constexpr size_t ZmmRegisterSize  = 64;
+
+// AVX/AVX-512 layout offsets used by xsave buffer
+constexpr size_t AvxStateOffset      = 576;
+constexpr size_t AvxUpperSize        = AvxRegisterSize - SseRegisterSize;
+constexpr size_t ZmmHi256StateOffset = 1152;
+constexpr size_t Hi16ZmmStateOffset  = 1664;
+constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize;
 }
 
 /**
@@ -360,14 +374,34 @@ void Thread::get_xstate64(Context *ctx) const {
 		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
 	}
 
-	const bool x87_present = xsave->xstate_bv & FEATURE_X87;
-	const bool sse_present = xsave->xstate_bv & FEATURE_SSE;
-	const bool avx_present = xsave->xstate_bv & FEATURE_AVX;
-	const bool zmm_present = (xsave->xstate_bv & FEATURE_AVX512) == FEATURE_AVX512;
+	const size_t returned = static_cast<size_t>(iov.iov_len);
+
+	auto has_range = [&](size_t offset, size_t sz) -> bool {
+		return returned >= offset + sz;
+	};
+
+	uint64_t xstate_bv = 0;
+	if (has_range(offsetof(Context_x86_64_xstate, xstate_bv), sizeof(uint64_t))) {
+		xstate_bv = xsave->xstate_bv;
+	}
+
+	const size_t st_area_end  = offsetof(Context_x86_64_xstate, st_space) + FpuRegisterCount * FpuRegisterSize;
+	const size_t xmm_area_end = offsetof(Context_x86_64_xstate, xmm_space) + 16 * SseRegisterSize;
+
+	const bool have_fpu       = returned >= st_area_end;
+	const bool have_xmm_full  = returned >= xmm_area_end;
+	const bool have_avx_upper = returned >= (AvxStateOffset + AvxUpperSize * 16);
+	const bool have_zmm_hi    = returned >= (ZmmHi256StateOffset + ZmmUpperSize * 16);
+	const bool have_hi16      = returned >= (Hi16ZmmStateOffset + ZmmRegisterSize * 16);
+
+	const bool x87_present = (xstate_bv & FEATURE_X87) != 0 && have_fpu;
+	const bool sse_present = (xstate_bv & FEATURE_SSE) != 0 && have_xmm_full;
+	const bool avx_present = (xstate_bv & FEATURE_AVX) != 0 && have_avx_upper;
+	const bool zmm_present = ((xstate_bv & FEATURE_AVX512) == FEATURE_AVX512) && have_zmm_hi && have_hi16;
 
 	std::printf("Thread::get_xstate64: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
-				iov.iov_len,
-				xsave->xstate_bv,
+				returned,
+				xstate_bv,
 				static_cast<int>(x87_present),
 				static_cast<int>(sse_present),
 				static_cast<int>(avx_present),
@@ -378,14 +412,10 @@ void Thread::get_xstate64(Context *ctx) const {
 	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
 	// it looks as if the registers have always been zero. Thus we should provide the same
 	// illusion to the user.
-	constexpr size_t FpuRegisterCount = 8;
-	constexpr size_t FpuRegisterSize  = 16;
-	constexpr size_t SseRegisterCount = 32; // SIMD structure now has 32 registers (ZMM0-ZMM31)
-	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
-	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
-	constexpr size_t ZmmRegisterSize  = 64; // Each ZMM register is 512 bits = 64 bytes
 
-	if (x87_present) {
+	// (have_* flags moved earlier)
+
+	if (x87_present && have_fpu) {
 		ctx->xstate_.x87.status_word       = xsave->swd;
 		ctx->xstate_.x87.control_word      = xsave->cwd;
 		ctx->xstate_.x87.tag_word          = xsave->ftw;
@@ -406,41 +436,40 @@ void Thread::get_xstate64(Context *ctx) const {
 			std::memset(ctx->xstate_.x87.registers[n].data, 0, FpuRegisterSize);
 		}
 
-		ctx->xstate_.x87              = {};
-		ctx->xstate_.x87.control_word = xsave->cwd; // this appears always present
-		ctx->xstate_.x87.tag_word     = 0xffff;
-		ctx->xstate_.x87.filled       = true;
+		ctx->xstate_.x87 = {};
+		// If we don't have full FPU area, try to preserve control word if header was returned
+		if (returned >= offsetof(Context_x86_64_xstate, cwd) + sizeof(xsave->cwd)) {
+			ctx->xstate_.x87.control_word = xsave->cwd;
+		}
+
+		ctx->xstate_.x87.tag_word = 0xffff;
+		ctx->xstate_.x87.filled   = true;
 	}
 
-	// NOTE(eteran): on 64-bit systems, SSE is always present, so we always populate it
-	// even if xsave->xstate_bv & FEATURE_SSE is false.
-	if (sse_present) {
+	// NOTE(eteran): on 64-bit systems, SSE is commonly present, but the kernel
+	// may return a truncated iovec. Only read fields if the returned buffer
+	// contains them; otherwise initialize to safe defaults.
+	// SSE/XMM area: if we returned the whole XMM region we can copy them in one shot
+	if (sse_present && have_xmm_full) {
 		ctx->xstate_.simd.mxcsr      = xsave->mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave->mxcr_mask;
 
-		// Only populate ZMM0-ZMM15 for SSE (XMM registers)
 		for (size_t n = 0; n < 16; ++n) {
-			// Copy the 128-bit XMM register data to the first 16 bytes of the AvxRegister
 			std::memcpy(ctx->xstate_.simd.registers[n].data, xsave->xmm_space + SseRegisterSize * n, SseRegisterSize);
-			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
 			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
 		}
 
-		// Initialize ZMM16-ZMM31 to zero for SSE
 		for (size_t n = 16; n < SseRegisterCount; ++n) {
 			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
 		}
 
 		ctx->xstate_.simd.sse_filled = true;
 	} else {
-		// SSE not present, initialize with zeros
 		ctx->xstate_.simd.mxcsr      = 0x1f80; // Default MXCSR value
 		ctx->xstate_.simd.mxcsr_mask = 0;
-
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
 			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
 		}
-
 		ctx->xstate_.simd.sse_filled = true;
 	}
 
@@ -451,20 +480,17 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		// AVX state starts after the legacy area (576 bytes) in the xsave buffer
 		// Each YMM register's upper 128 bits are stored sequentially
-		constexpr size_t AvxStateOffset = 576;
-		constexpr size_t AvxUpperSize   = AvxRegisterSize - SseRegisterSize;
 
-		auto avx_upper_data = reinterpret_cast<const uint8_t *>(xsave) + AvxStateOffset;
-
-		// Only populate ZMM0-ZMM15 for AVX (YMM registers)
-		for (size_t n = 0; n < 16; ++n) {
-			// Copy the upper 128 bits (bytes 16-31) of each YMM register
-			std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
-			// Clear the remaining 224 bytes (bytes 32-255)
-			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize + AvxUpperSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize - AvxUpperSize);
+		if (avx_present && have_avx_upper) {
+			const uint8_t *avx_upper_data = reinterpret_cast<const uint8_t *>(xsave) + AvxStateOffset;
+			for (size_t n = 0; n < 16; ++n) {
+				std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
+				std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize + AvxUpperSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize - AvxUpperSize);
+			}
+			ctx->xstate_.simd.avx_filled = true;
+		} else {
+			ctx->xstate_.simd.avx_filled = false;
 		}
-
-		ctx->xstate_.simd.avx_filled = true;
 	}
 
 	if (zmm_present) {
@@ -477,27 +503,23 @@ void Thread::get_xstate64(Context *ctx) const {
 		// - ZMM_Hi256 state (upper 256 bits of ZMM0-ZMM15) starts at offset 1152
 		// - Hi16_ZMM state (ZMM16-ZMM31, full 512 bits) starts at offset 1664
 
-		constexpr size_t ZmmHi256StateOffset = 1152;                              // Upper 256 bits of ZMM0-ZMM15
-		constexpr size_t Hi16ZmmStateOffset  = 1664;                              // Full 512 bits of ZMM16-ZMM31
-		constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize; // 64 - 32 = 32 bytes
-
 		const uint8_t *xsave_data = reinterpret_cast<const uint8_t *>(xsave);
 
-		// Handle ZMM0-ZMM15: populate upper 256 bits
-		const uint8_t *zmm_upper_data = xsave_data + ZmmHi256StateOffset;
-		for (size_t n = 0; n < 16; ++n) {
-			// Copy the upper 256 bits (bytes 32-63) of each ZMM register
-			std::memcpy(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, zmm_upper_data + ZmmUpperSize * n, ZmmUpperSize);
-		}
+		if (zmm_present && have_zmm_hi && have_hi16) {
+			const uint8_t *zmm_upper_data = xsave_data + ZmmHi256StateOffset;
+			for (size_t n = 0; n < 16; ++n) {
+				std::memcpy(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, zmm_upper_data + ZmmUpperSize * n, ZmmUpperSize);
+			}
 
-		// Handle ZMM16-ZMM31: populate full 512 bits
-		const uint8_t *hi16_zmm_data = xsave_data + Hi16ZmmStateOffset;
-		for (size_t n = 16; n < 32; ++n) {
-			// Copy the full 512 bits (bytes 0-63) of each ZMM register
-			std::memcpy(ctx->xstate_.simd.registers[n].data, hi16_zmm_data + ZmmRegisterSize * (n - 16), ZmmRegisterSize);
-		}
+			const uint8_t *hi16_zmm_data = xsave_data + Hi16ZmmStateOffset;
+			for (size_t n = 16; n < 32; ++n) {
+				std::memcpy(ctx->xstate_.simd.registers[n].data, hi16_zmm_data + ZmmRegisterSize * (n - 16), ZmmRegisterSize);
+			}
 
-		ctx->xstate_.simd.zmm_filled = true;
+			ctx->xstate_.simd.zmm_filled = true;
+		} else {
+			ctx->xstate_.simd.zmm_filled = false;
+		}
 	}
 }
 /**
@@ -514,13 +536,32 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 		return errno;
 	}
 
-	const bool x87_present = xsave->xstate_bv & FEATURE_X87;
-	const bool sse_present = xsave->xstate_bv & FEATURE_SSE;
-	const bool avx_present = xsave->xstate_bv & FEATURE_AVX;
+	const size_t returned = static_cast<size_t>(iov.iov_len);
+
+	auto has_range = [&](size_t offset, size_t sz) -> bool {
+		return returned >= offset + sz;
+	};
+
+	uint64_t xstate_bv = 0;
+	if (has_range(offsetof(Context_x86_32_xstate, xstate_bv), sizeof(uint64_t))) {
+		xstate_bv = xsave->xstate_bv;
+	}
+
+	const size_t st_area_end       = offsetof(Context_x86_32_xstate, st_space) + FpuRegisterCount * FpuRegisterSize;
+	const size_t xmm_area_end      = offsetof(Context_x86_32_xstate, xmm_space) + 8 * SseRegisterSize; // 32-bit only has XMM0-XMM7
+	const size_t avx_buffer_needed = offsetof(Context_x86_32_xstate, buffer) + AvxUpperSize * 8;
+
+	const bool have_fpu       = returned >= st_area_end;
+	const bool have_xmm       = returned >= xmm_area_end;
+	const bool have_avx_upper = returned >= avx_buffer_needed && has_range(offsetof(Context_x86_32_xstate, buffer), AvxUpperSize * 8);
+
+	const bool x87_present = (xstate_bv & FEATURE_X87) != 0 && have_fpu;
+	const bool sse_present = (xstate_bv & FEATURE_SSE) != 0 && have_xmm;
+	const bool avx_present = (xstate_bv & FEATURE_AVX) != 0 && have_avx_upper;
 
 	std::printf("Thread::get_xstate32: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d)\n",
-				iov.iov_len,
-				xsave->xstate_bv,
+				returned,
+				xstate_bv,
 				static_cast<int>(x87_present),
 				static_cast<int>(sse_present),
 				static_cast<int>(avx_present));
@@ -530,22 +571,10 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
 	// it looks as if the registers have always been zero. Thus we should provide the same
 	// illusion to the user.
-	constexpr size_t FpuRegisterCount = 8;
-	constexpr size_t FpuRegisterSize  = 16;
-	constexpr size_t SseRegisterCount = 32; // SIMD structure now has 32 registers
-	constexpr size_t SseRegisterSize  = 16; // Each XMM register is 128 bits = 16 bytes
-	constexpr size_t AvxRegisterSize  = 32; // Each YMM register is 256 bits = 32 bytes
 
 	if (x87_present) {
-		ctx->xstate_.x87.status_word = xsave->swd;
-
-		// Convert 32-bit st_space format to our format
-		// st_space in 32-bit format contains 8 registers of 16 bytes each, stored as uint32_t[32]
-		for (size_t n = 0; n < FpuRegisterCount; ++n) {
-			// Each register is 16 bytes = 4 uint32_t values
-			std::memcpy(ctx->xstate_.x87.registers[n].data, &xsave->st_space[n * FpuRegisterSize], FpuRegisterSize);
-		}
-
+		// Full FPU area present — copy all fields directly
+		ctx->xstate_.x87.status_word       = xsave->swd;
 		ctx->xstate_.x87.control_word      = xsave->cwd;
 		ctx->xstate_.x87.tag_word          = xsave->twd;
 		ctx->xstate_.x87.inst_ptr_offset   = xsave->fip;
@@ -553,30 +582,32 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 		ctx->xstate_.x87.inst_ptr_selector = static_cast<uint16_t>(xsave->fcs);
 		ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(xsave->fos);
 		ctx->xstate_.x87.opcode            = xsave->fop;
-		ctx->xstate_.x87.filled            = true;
+
+		for (size_t n = 0; n < FpuRegisterCount; ++n) {
+			std::memcpy(ctx->xstate_.x87.registers[n].data, &xsave->st_space[n * FpuRegisterSize], FpuRegisterSize);
+		}
+
+		ctx->xstate_.x87.filled = true;
 	} else {
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			std::memset(ctx->xstate_.x87.registers[n].data, 0, FpuRegisterSize);
 		}
 
-		ctx->xstate_.x87              = {};
-		ctx->xstate_.x87.control_word = xsave->cwd; // this appears always present
-		ctx->xstate_.x87.tag_word     = 0xffff;
-		ctx->xstate_.x87.filled       = true;
+		ctx->xstate_.x87 = {};
+		if (has_range(offsetof(Context_x86_32_xstate, cwd), sizeof(xsave->cwd)))
+			ctx->xstate_.x87.control_word = xsave->cwd; // this appears always present
+		ctx->xstate_.x87.tag_word = 0xffff;
+		ctx->xstate_.x87.filled   = true;
 	}
 
 	if (sse_present) {
+		// Full XMM area present — copy MXCSR and XMM registers
 		ctx->xstate_.simd.mxcsr      = xsave->mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave->mxcsr_mask;
 
-		// Only populate first 8 XMM registers for 32-bit (XMM0-XMM7)
-		// 32-bit x86 only has 8 XMM registers, not 16 like x86-64
 		for (size_t n = 0; n < 8; ++n) {
-			// Convert 32-bit xmm_space format to our format
-			// xmm_space contains 8 registers of 16 bytes each, stored as uint32_t[16]
 			const uint32_t *reg_data = &xsave->xmm_space[n * 4];
 			std::memcpy(ctx->xstate_.simd.registers[n].data, reg_data, SseRegisterSize);
-			// Clear the upper 240 bytes since SSE only uses the lower 128 bits
 			std::memset(ctx->xstate_.simd.registers[n].data + SseRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - SseRegisterSize);
 		}
 
@@ -609,17 +640,21 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 
 		// For 32-bit, AVX upper halves are stored in the buffer area
 		// They start at the beginning of the buffer (not offset by header bytes)
-		const uint8_t *avx_upper_data = xsave->buffer;
+		if (avx_present) {
+			const uint8_t *avx_upper_data = xsave->buffer;
 
-		// Only populate first 8 YMM registers for 32-bit (YMM0-YMM7)
-		for (size_t n = 0; n < 8; ++n) {
-			// Copy the upper 128 bits (bytes 16-31) of each YMM register
-			std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
-			// Clear the remaining 224 bytes (bytes 32-255) since 32-bit AVX only uses 256 bits
-			std::memset(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - AvxRegisterSize);
+			// Only populate first 8 YMM registers for 32-bit (YMM0-YMM7)
+			for (size_t n = 0; n < 8; ++n) {
+				// Copy the upper 128 bits (bytes 16-31) of each YMM register
+				std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
+				// Clear the remaining 224 bytes (bytes 32-255) since 32-bit AVX only uses 256 bits
+				std::memset(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, 0, sizeof(ctx->xstate_.simd.registers[n].data) - AvxRegisterSize);
+			}
+
+			ctx->xstate_.simd.avx_filled = true;
+		} else {
+			ctx->xstate_.simd.avx_filled = false;
 		}
-
-		ctx->xstate_.simd.avx_filled = true;
 	}
 
 	// 32-bit doesn't support AVX-512, so this remains unset
@@ -782,6 +817,8 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers64(Context *ctx) const {
+	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
+	// There isn't really any harm in this since the debug registers will just appear to have some large value.
 	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -798,6 +835,8 @@ void Thread::get_debug_registers64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers32(Context *ctx) const {
+	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
+	// There isn't really any harm in this since the debug registers will just appear to have some large value.
 	ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
 	ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
 	ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
@@ -922,8 +961,6 @@ void Thread::set_xstate64(const Context *ctx) const {
 		xsave->rdp = ctx->xstate_.x87.data_ptr_offset;
 
 		// Copy x87 register data
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 16;
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			std::memcpy(xsave->st_space + FpuRegisterSize * n,
 						ctx->xstate_.x87.registers[n].data,
@@ -939,7 +976,6 @@ void Thread::set_xstate64(const Context *ctx) const {
 		xsave->mxcr_mask = ctx->xstate_.simd.mxcsr_mask;
 
 		// Copy XMM register data (lower 128 bits of ZMM0-ZMM15)
-		constexpr size_t SseRegisterSize = 16;
 		for (size_t n = 0; n < 16; ++n) {
 			std::memcpy(xsave->xmm_space + SseRegisterSize * n, ctx->xstate_.simd.registers[n].data, SseRegisterSize);
 		}
@@ -949,11 +985,6 @@ void Thread::set_xstate64(const Context *ctx) const {
 
 	// Set up AVX state (upper 128 bits of YMM0-YMM15)
 	if (ctx->xstate_.simd.avx_filled) {
-		constexpr size_t AvxStateOffset  = 576;
-		constexpr size_t AvxRegisterSize = 32;
-		constexpr size_t SseRegisterSize = 16;
-		constexpr size_t AvxUpperSize    = AvxRegisterSize - SseRegisterSize;
-
 		uint8_t *avx_upper_data = reinterpret_cast<uint8_t *>(xsave) + AvxStateOffset;
 		for (size_t n = 0; n < 16; ++n) {
 			std::memcpy(avx_upper_data + AvxUpperSize * n, ctx->xstate_.simd.registers[n].data + SseRegisterSize, AvxUpperSize);
@@ -964,12 +995,6 @@ void Thread::set_xstate64(const Context *ctx) const {
 
 	// Set up AVX-512 state
 	if (ctx->xstate_.simd.zmm_filled) {
-		constexpr size_t ZmmHi256StateOffset = 1152; // Upper 256 bits of ZMM0-ZMM15
-		constexpr size_t Hi16ZmmStateOffset  = 1664; // Full 512 bits of ZMM16-ZMM31
-		constexpr size_t AvxRegisterSize     = 32;
-		constexpr size_t ZmmRegisterSize     = 64;
-		constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize;
-
 		uint8_t *xsave_data = reinterpret_cast<uint8_t *>(xsave);
 
 		// Copy upper 256 bits of ZMM0-ZMM15
@@ -1013,8 +1038,6 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
 		xsave->fos = ctx->xstate_.x87.data_ptr_selector;
 
 		// Copy x87 register data
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 16;
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			// Convert our format to 32-bit st_space format
 			std::memcpy(&xsave->st_space[n * FpuRegisterSize], ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
@@ -1029,7 +1052,6 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
 		xsave->mxcsr_mask = ctx->xstate_.simd.mxcsr_mask;
 
 		// Copy first 8 XMM registers (32-bit x86 only has XMM0-XMM7)
-		constexpr size_t SseRegisterSize = 16;
 		for (size_t n = 0; n < 8; ++n) {
 			// Convert our format to 32-bit xmm_space format
 			// Each register is 16 bytes = 4 uint32_t values
@@ -1042,10 +1064,6 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
 
 	// Set up AVX state (upper 128 bits of YMM0-YMM7)
 	if (ctx->xstate_.simd.avx_filled) {
-		constexpr size_t AvxRegisterSize = 32;
-		constexpr size_t SseRegisterSize = 16;
-		constexpr size_t AvxUpperSize    = AvxRegisterSize - SseRegisterSize; // 32 - 16 = 16 bytes
-
 		// For 32-bit, AVX upper halves are stored in the buffer area
 		// They start at the beginning of the buffer (not offset by header bytes)
 		uint8_t *avx_upper_data = xsave->buffer;
@@ -1088,8 +1106,6 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
 		fpxregs.fos = ctx->xstate_.x87.data_ptr_selector;
 
 		// Copy x87 register data (8 registers of 16 bytes each)
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 16;
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			// Convert from our byte array format to uint32_t array format
 			std::memcpy(&fpxregs.st_space[n * FpuRegisterSize], ctx->xstate_.x87.registers[n].data, FpuRegisterSize);
