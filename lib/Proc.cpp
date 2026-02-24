@@ -173,6 +173,8 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 		char perms[8]        = {};
 		char name[PATH_MAX]  = {};
 
+		static_assert(PATH_MAX >= 4096, "PATH_MAX must be at least 4096 to avoid buffer overflow in sscanf");
+
 		// address           perms offset  dev   inode       pathname
 		// 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
 		const int matched = std::sscanf(line,
@@ -187,28 +189,20 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 										name);
 
 		if (matched >= 7) {
-			if (matched < 8) {
-				name[0] = '\0';
-			} else {
+			if (matched >= 8) {
 				// Trim trailing whitespace (including trailing newline captured by %[^
 				size_t len = std::strlen(name);
 				while (len > 0 && std::isspace(static_cast<unsigned char>(name[len - 1]))) {
 					name[--len] = '\0';
 				}
 			}
-#if 0
-			if (std::strchr(perms, 'r')) permissions |= Region::Read;
-			if (std::strchr(perms, 'w')) permissions |= Region::Write;
-			if (std::strchr(perms, 'x')) permissions |= Region::Execute;
-			if (std::strchr(perms, 'p')) permissions |= Region::Private;
-			if (std::strchr(perms, 's')) permissions |= Region::Shared;
-#else
+
 			permissions |= (!!std::strchr(perms, 'r') * Region::Read);
 			permissions |= (!!std::strchr(perms, 'w') * Region::Write);
 			permissions |= (!!std::strchr(perms, 'x') * Region::Execute);
 			permissions |= (!!std::strchr(perms, 'p') * Region::Private);
 			permissions |= (!!std::strchr(perms, 's') * Region::Shared);
-#endif
+
 			regions.emplace_back(start, end, offset, permissions, name);
 		}
 	}

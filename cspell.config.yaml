@@ -6,6 +6,7 @@ words:
   - ASAN
   - ASLR
   - eteran
+  - fpxregs
   - GETFPREGS
   - GETFPXREGS
   - INSB

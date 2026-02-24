@@ -196,6 +196,10 @@ void Thread::resume() {
 		// handle single-instruction breakpoint placed at IP
 		bp->disable();
 		step();
+		// TODO(eteran): We need to check if the wait resulted in a single step event or some other event
+		// (e.g. breakpoint hit by another thread) and handle that accordingly instead of assuming it was
+		// a single step event. if it wasn't a single step event, we need continue, but pass the signal
+		// through so that the thread stops again at with the event during the `next_debug_event` loop.
 		wait();
 		bp->enable();
 	}
@@ -694,8 +698,7 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 	ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpxregs.fos);
 
 	// Copy x87 register data (8 registers of 16 bytes each)
-	constexpr size_t FpuRegisterCount = 8;
-	constexpr size_t FpuRegisterSize  = 16;
+	constexpr size_t FpuRegisterSize = 16;
 	for (size_t n = 0; n < FpuRegisterCount; ++n) {
 		// Convert from uint32_t array format to byte array
 		std::memcpy(ctx->xstate_.x87.registers[n].data, &fpxregs.st_space[n * FpuRegisterSize], FpuRegisterSize);
@@ -759,8 +762,7 @@ int Thread::get_xstate32_fallback(Context *ctx) const {
 	ctx->xstate_.x87.data_ptr_selector = static_cast<uint16_t>(fpregs.fos);
 
 	// Copy x87 register data (8 registers of 10 bytes each)
-	constexpr size_t FpuRegisterCount = 8;
-	constexpr size_t FpuRegisterSize  = 10;
+	constexpr size_t FpuRegisterSize = 10;
 
 	for (size_t n = 0; n < FpuRegisterCount; ++n) {
 		// Convert from uint32_t array format to byte array
@@ -1162,8 +1164,7 @@ int Thread::set_xstate32_fallback(const Context *ctx) const {
 		fpregs.fos = ctx->xstate_.x87.data_ptr_selector;
 
 		// Copy x87 register data (8 registers of 10 bytes each)
-		constexpr size_t FpuRegisterCount = 8;
-		constexpr size_t FpuRegisterSize  = 10; // 80-bit FP registers
+		constexpr size_t FpuRegisterSize = 10; // 80-bit FP registers
 
 		for (size_t n = 0; n < FpuRegisterCount; ++n) {
 			// Convert from our byte array format to the basic fpregs format

@@ -22,11 +22,11 @@ public:
 	std::shared_ptr<Process> spawn(const char *cwd, const char *argv[], const char *envp[] = nullptr);
 
 public:
-	[[nodiscard]] std::shared_ptr<Process> process() const { return process_; }
+	[[nodiscard]] const std::shared_ptr<Process> &process() const { return process_; }
 
 public:
-	void set_disable_lazy_binding(bool value);
-	void set_disable_aslr(bool value);
+	void set_disable_lazy_binding(bool value) noexcept;
+	void set_disable_aslr(bool value) noexcept;
 
 private:
 	std::shared_ptr<Process> process_;

@@ -392,14 +392,14 @@ public:
 
 public:
 	void dump();
-	[[nodiscard]] RegisterRef operator[](RegisterId reg);
-	[[nodiscard]] RegisterRef get(RegisterId reg);
+	[[nodiscard]] RegisterRef operator[](RegisterId reg) const;
+	[[nodiscard]] RegisterRef get(RegisterId reg) const;
 	[[nodiscard]] bool is_64_bit() const { return is_64_bit_; }
 	[[nodiscard]] bool is_set() const { return is_set_; }
 
 private:
-	[[nodiscard]] RegisterRef get_64(RegisterId reg);
-	[[nodiscard]] RegisterRef get_32(RegisterId reg);
+	[[nodiscard]] RegisterRef get_64(RegisterId reg) const;
+	[[nodiscard]] RegisterRef get_32(RegisterId reg) const;
 
 private:
 	struct Context64 {

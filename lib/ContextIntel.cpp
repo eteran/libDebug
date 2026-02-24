@@ -100,7 +100,7 @@ void Context::dump() {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-RegisterRef Context::get_64(RegisterId reg) {
+RegisterRef Context::get_64(RegisterId reg) const {
 
 	// clang-format off
 	switch (reg) {
@@ -310,7 +310,7 @@ RegisterRef Context::get_64(RegisterId reg) {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-RegisterRef Context::get_32(RegisterId reg) {
+RegisterRef Context::get_32(RegisterId reg) const {
 
 	// clang-format off
 	switch (reg) {
@@ -415,7 +415,7 @@ RegisterRef Context::get_32(RegisterId reg) {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-RegisterRef Context::get(RegisterId reg) {
+RegisterRef Context::get(RegisterId reg)const  {
 
 #if defined(__x86_64__)
 	return get_64(reg);
@@ -434,6 +434,6 @@ RegisterRef Context::get(RegisterId reg) {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-RegisterRef Context::operator[](RegisterId reg) {
+RegisterRef Context::operator[](RegisterId reg) const {
 	return get(reg);
 }

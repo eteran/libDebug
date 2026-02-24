@@ -26,6 +26,9 @@ thread_local sigset_t PrevSigMask;
 
 /**
  * @brief Construct a new Debugger object.
+ * This constructor blocks SIGCHLD for the current thread if this is the first Debugger
+ * instance being created. This ensures that waitpid usage in Process::wait() is deterministic,
+ * and that we can use sigtimedwait to implement timeouts in Process::next_debug_event().
  */
 Debugger::Debugger() {
 
@@ -36,16 +39,22 @@ Debugger::Debugger() {
 		sigset_t mask;
 		sigemptyset(&mask);
 		sigaddset(&mask, SIGCHLD);
-		if (sigprocmask(SIG_BLOCK, &mask, &PrevSigMask) == 0) {
-			DebuggerCount = 1;
+
+		if (sigprocmask(SIG_BLOCK, &mask, &PrevSigMask) != 0) {
+			throw DebuggerError("Failed to block SIGCHLD: %s", strerror(errno));
 		}
-	} else {
-		++DebuggerCount;
 	}
+	++DebuggerCount;
 }
 
 /**
  * @brief Destroy the Debugger object.
+ * This destructor unblocks SIGCHLD for the current thread if this is the last Debugger
+ * instance being destroyed.
+ *
+ * @note The destructor must be called on the same thread that the constructor was called on, since
+ * the signal mask is modified on that thread. If the destructor is called on a different thread,
+ * we print an error message and abort the process.
  */
 Debugger::~Debugger() {
 	// NOTE(eteran): Enforce that the Debugger is destroyed on the same thread it was
@@ -67,7 +76,7 @@ Debugger::~Debugger() {
  *
  * @param value true to disable lazy binding, false to enable it.
  */
-void Debugger::set_disable_lazy_binding(bool value) {
+void Debugger::set_disable_lazy_binding(bool value) noexcept {
 	disableLazyBinding_ = value;
 }
 
@@ -76,7 +85,7 @@ void Debugger::set_disable_lazy_binding(bool value) {
  *
  * @param value true to disable ASLR, false to enable it.
  */
-void Debugger::set_disable_aslr(bool value) {
+void Debugger::set_disable_aslr(bool value) noexcept {
 	disableASLR_ = value;
 }
 
@@ -99,12 +108,12 @@ std::shared_ptr<Process> Debugger::attach(pid_t pid) {
  * @param argv The arguments to pass to the process.
  * @param envp The environment variables to pass to the process.
  *
- * @return The process object.
+ * @return The process object or `nullptr` if the process could not be spawned or attached to.
  * @note The first argument in `argv` must be the path to the executable.
  * @note The last argument in `argv` must be nullptr.
- * @note If envp is nullptr, the current environment is used.
+ * @note If `envp` is `nullptr`, the current environment is used.
  * @note The environment variables are passed as a null-terminated array of strings, where each string is of the form "KEY=VALUE".
- * @note The last argument in `envp` must be nullptr.
+ * @note The last argument in `envp` must be `nullptr`.
  * @throws DebuggerError if any errors occur during the process creation.
  */
 std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], const char *envp[]) {
@@ -171,8 +180,6 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	case -1:
 		return nullptr;
 	default:
-		std::printf("Debugging New Process: %d\n", cpid);
-
 		process_ = std::make_shared<Process>(cpid, Process::NoAttach);
 
 		auto thread = process_->find_thread(cpid);
