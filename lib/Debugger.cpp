@@ -119,6 +119,10 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	auto shared_mem = static_cast<char *>(ptr);
 	std::memset(ptr, 0, SharedMemSize);
 
+	SCOPE_EXIT({
+		munmap(ptr, SharedMemSize);
+	});
+
 	// NOTE(eteran): the use of std::abort() in the child is intentional, as it
 	// generates a SIGABRT that the parent can detect and report the error message.
 	switch (const pid_t cpid = fork()) {
@@ -170,10 +174,6 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 		std::printf("Debugging New Process: %d\n", cpid);
 
 		process_ = std::make_shared<Process>(cpid, Process::NoAttach);
-
-		SCOPE_EXIT({
-			munmap(ptr, SharedMemSize);
-		});
 
 		auto thread = process_->find_thread(cpid);
 		if (!thread) {
