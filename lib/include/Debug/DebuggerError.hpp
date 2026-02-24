@@ -13,7 +13,7 @@ public:
 		const int n = vsnprintf(buffer_, sizeof(buffer_), fmt, ap);
 		va_end(ap);
 		if (n < 0 || static_cast<size_t>(n) >= sizeof(buffer_)) {
-			throw std::runtime_error("DebuggerError: message too long");
+			printf("DebuggerError: message truncated because it was too long\n");
 		}
 	}
 
