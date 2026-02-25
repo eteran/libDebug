@@ -1,23 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
-
-target_compile_options(
-    Debug
-    PUBLIC -pedantic
-           -W
-           -Wall
-           -Wcast-align
-           -Wconversion
-           -Wformat=2
-           -Wnarrowing
-           -Wnon-virtual-dtor
-           -Wnull-dereference
-           -Wold-style-cast
-           -Woverloaded-virtual
-           -Wshadow
-           -Wsign-conversion
-           -Wunused
-           -Wuseless-cast
-)
+cmake_minimum_required(VERSION 3.15)
 
 add_executable(Debugger main.cpp)
 
