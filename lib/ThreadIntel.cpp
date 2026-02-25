@@ -100,7 +100,7 @@ Thread::Thread(Process *process, pid_t tid, Flag f)
 	wait();
 
 	const long options = create_ptrace_options(f);
-	if (ptrace(PTRACE_SETOPTIONS, tid, 0L, options) != 0) {
+	if (ptrace(PTRACE_SETOPTIONS, tid, 0L, options) == -1) {
 		throw DebuggerError("Failed to set ptrace options for thread %d: %s", tid, strerror(errno));
 	}
 
@@ -408,14 +408,6 @@ void Thread::get_xstate64(Context *ctx) const {
 	const bool avx_present = (xstate_bv & FEATURE_AVX) != 0 && have_avx_upper;
 	const bool zmm_present = ((xstate_bv & FEATURE_AVX512) == FEATURE_AVX512) && have_zmm_hi && have_hi16;
 
-	std::printf("Thread::get_xstate64: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d zmm=%d)\n",
-				returned,
-				xstate_bv,
-				static_cast<int>(x87_present),
-				static_cast<int>(sse_present),
-				static_cast<int>(avx_present),
-				static_cast<int>(zmm_present));
-
 	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
 	// has not touched the corresponding registers yet. But once the registers are
 	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
@@ -566,13 +558,6 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 	const bool sse_present = (xstate_bv & FEATURE_SSE) != 0 && have_xmm;
 	const bool avx_present = (xstate_bv & FEATURE_AVX) != 0 && have_avx_upper;
 
-	std::printf("Thread::get_xstate32: size=%zu, xstate_bv=0x%016" PRIx64 " (x87=%d sse=%d avx=%d)\n",
-				returned,
-				xstate_bv,
-				static_cast<int>(x87_present),
-				static_cast<int>(sse_present),
-				static_cast<int>(avx_present));
-
 	// Due to the lazy saving the feature bits may be unset in XSTATE_BV if the app
 	// has not touched the corresponding registers yet. But once the registers are
 	// touched, they are initialized to zero by the OS (not control/tag ones). To the app
@@ -678,14 +663,9 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 
 	// Try to get SSE/MMX state using PTRACE_GETFPXREGS first
 	Context_x86_32_xstate fpxregs = {};
-	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) != 0) {
+	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) == -1) {
 		return errno;
 	}
-
-	std::printf("Thread::get_xstate32_legacy: (x87=%d sse=%d avx=%d)\n",
-				1,
-				1,
-				0);
 
 	// Extract x87 state from fpxregs
 	ctx->xstate_.x87.control_word      = fpxregs.cwd;
@@ -742,14 +722,9 @@ int Thread::get_xstate32_fallback(Context *ctx) const {
 	user_fpregs_struct_32 fpregs = {};
 
 	// PTRACE_GETFPXREGS failed, try legacy PTRACE_GETFPREGS for basic x87 state
-	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) != 0) {
+	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) == -1) {
 		return errno;
 	}
-
-	std::printf("Thread::get_xstate32_fallback: (x87=%d sse=%d avx=%d)\n",
-				1,
-				0,
-				0);
 
 	// Extract x87 state from fpregs
 	ctx->xstate_.x87.control_word      = static_cast<uint16_t>(fpregs.cwd);
@@ -859,7 +834,13 @@ void Thread::get_debug_registers32(Context *ctx) const {
  * @param reg The register to get the segment base for.
  * @return The segment base.
  */
-uint32_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
+uint32_t Thread::get_segment_base32(Context *ctx, RegisterId reg) const {
+
+	// Try to fetch the selector descriptor via PTRACE_GET_THREAD_AREA.
+	// Historically this API targets LDT entries, but many Linux kernels
+	// expose descriptor info here even for GDT selectors. We check
+	// seg_not_present and index < LDT_ENTRIES and treat failures
+	// as "base unknown" to remain robust across kernels.
 
 	uint16_t segment = ctx->get(reg).as<uint16_t>();
 	if (segment == 0) {
@@ -872,9 +853,15 @@ uint32_t Thread::get_segment_base(Context *ctx, RegisterId reg) const {
 		return 0;
 	}
 
+	const uint32_t index = (segment >> 3) & 0x1fff; // 13-bit index
+
 	struct user_desc desc;
-	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, segment / LDT_ENTRY_SIZE, &desc) == -1) {
+	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, index, &desc) == -1) {
 		std::perror("ptrace(PTRACE_GET_THREAD_AREA)");
+		return 0;
+	}
+
+	if (desc.seg_not_present) {
 		return 0;
 	}
 
@@ -891,8 +878,8 @@ void Thread::get_segment_bases([[maybe_unused]] Context *ctx) const {
 	// NOTE(eteran): on x86-64, FS and GS are already populated as part of the context
 	// so we don't need to do anything here.
 	if (!is_64_bit_) {
-		ctx->ctx_32_.gs_base = get_segment_base(ctx, RegisterId::GS);
-		ctx->ctx_32_.fs_base = get_segment_base(ctx, RegisterId::FS);
+		ctx->ctx_32_.gs_base = get_segment_base32(ctx, RegisterId::GS);
+		ctx->ctx_32_.fs_base = get_segment_base32(ctx, RegisterId::FS);
 	}
 }
 
@@ -1137,7 +1124,6 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
 		return errno;
 	}
 
-	std::printf("Thread::set_xstate32_legacy: Successfully set x87+SSE state via PTRACE_SETFPXREGS\n");
 	return 0;
 }
 
@@ -1177,7 +1163,6 @@ int Thread::set_xstate32_fallback(const Context *ctx) const {
 		return errno;
 	}
 
-	std::printf("Thread::set_xstate32_fallback: Successfully set x87 state via PTRACE_SETFPREGS\n");
 	return 0;
 }
 

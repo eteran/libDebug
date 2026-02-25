@@ -61,7 +61,7 @@ public:
 
 private:
 	[[nodiscard]] bool detect_64_bit() const;
-	[[nodiscard]] uint32_t get_segment_base(Context *ctx, RegisterId reg) const;
+	[[nodiscard]] uint32_t get_segment_base32(Context *ctx, RegisterId reg) const;
 	void get_debug_registers(Context *ctx) const;
 	void get_debug_registers32(Context *ctx) const;
 	void get_debug_registers64(Context *ctx) const;
