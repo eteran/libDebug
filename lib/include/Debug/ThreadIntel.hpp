@@ -55,6 +55,8 @@ public:
 	void kill() const;
 	void step();
 	void resume();
+	void step(int signal);
+	void resume(int signal);
 	void stop() const;
 	void detach();
 	void wait();

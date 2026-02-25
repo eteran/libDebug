@@ -186,6 +186,49 @@ void Thread::step() {
 }
 
 /**
+ * @brief Causes the thread to step one instruction. This will be
+ * eventually followed by a debug event when it stops again.
+ *
+ * @param signal The signal to deliver to the thread after stepping. If 0, no signal is delivered.
+ */
+void Thread::step(int signal) {
+	assert(state_ == State::Stopped);
+
+	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal) == -1) {
+		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(errno));
+	}
+
+	state_ = State::Running;
+}
+
+/**
+ * @brief Causes the thread to resume execution.
+ *
+ * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
+ */
+void Thread::resume(int signal) {
+	assert(state_ == State::Stopped);
+
+	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
+		// handle single-instruction breakpoint placed at IP
+		bp->disable();
+		step();
+		// TODO(eteran): We need to check if the wait resulted in a single step event or some other event
+		// (e.g. breakpoint hit by another thread) and handle that accordingly instead of assuming it was
+		// a single step event. if it wasn't a single step event, we need continue, but pass the signal
+		// through so that the thread stops again at with the event during the `next_debug_event` loop.
+		wait();
+		bp->enable();
+	}
+
+	if (ptrace(PTRACE_CONT, tid_, 0L, signal) == -1) {
+		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
+	}
+
+	state_ = State::Running;
+}
+
+/**
  * @brief Causes the thread to resume execution.
  */
 void Thread::resume() {

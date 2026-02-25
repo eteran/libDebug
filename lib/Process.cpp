@@ -611,11 +611,29 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				}
 			}
 
-			// TODO(eteran): the callback should dictate what to do next
-			callback(e);
+			const EventStatus status = callback(e);
+			switch (status) {
+			case EventStatus::Stop:
+				// do nothing, the debugger will instigate the next event
+				break;
+			case EventStatus::Continue:
+				current_thread->resume();
+				break;
+			case EventStatus::ContinueStep:
+				current_thread->step();
+				break;
+			case EventStatus::ContinueBreakPoint:
+				// TODO(eteran): we need to disable the breakpoint, step, and then re-enable
+				// the breakpoint, but we also need to check if the event was actually a single step event
+			case EventStatus::ExceptionNotHandled:
+				current_thread->resume(e.siginfo.si_signo);
+				break;
+			case EventStatus::NextHandler:
+				// pass the event to the next handler
+				// TODO(eteran): implement
+				break;
+			}
 
-			// TODO(eteran): conditionally resume
-			current_thread->resume();
 			continue;
 		}
 

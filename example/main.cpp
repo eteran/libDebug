@@ -118,7 +118,7 @@ int main() {
 
 	process->resume();
 
-	for (int i = 0; i < 10; ++i) {
+	for (int i = 0; i < 100; ++i) {
 		if (!process->next_debug_event(std::chrono::seconds(10), [&]([[maybe_unused]] const Event &e) {
 				std::printf("Debug Event!\n");
 
@@ -139,7 +139,7 @@ int main() {
 				ctx[RegisterId::YMM0].assign(ctx[RegisterId::YMM7]);
 				current->set_context(&ctx);
 #endif
-				return EventStatus::Stop;
+				return EventStatus::Continue;
 			})) {
 			std::printf("Timeout!\n");
 			std::exit(0);
