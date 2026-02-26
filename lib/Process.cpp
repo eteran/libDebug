@@ -22,6 +22,7 @@
 #include <cstring>
 #include <memory>
 #include <thread>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/ptrace.h>
@@ -496,6 +497,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		}
 
 		if (tid == 0) {
+			// no more events to process at the moment, we just return to the caller to wait for the next event
 			break;
 		}
 
@@ -534,18 +536,16 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 		if (WIFSIGNALED(wstatus)) {
 			// TODO(eteran): implement
-			if (first_stop) {
+			if (std::exchange(first_stop, false)) {
 				active_thread_ = current_thread;
-				first_stop     = false;
 			}
 
 			continue;
 		}
 
 		if (WIFSTOPPED(wstatus)) {
-			if (first_stop) {
+			if (std::exchange(first_stop, false)) {
 				active_thread_ = current_thread;
-				first_stop     = false;
 			}
 
 			Event e = {
@@ -622,9 +622,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			case EventStatus::ContinueStep:
 				current_thread->step();
 				break;
-			case EventStatus::ContinueBreakPoint:
-				// TODO(eteran): we need to disable the breakpoint, step, and then re-enable
-				// the breakpoint, but we also need to check if the event was actually a single step event
 			case EventStatus::ExceptionNotHandled:
 				current_thread->resume(e.siginfo.si_signo);
 				break;
