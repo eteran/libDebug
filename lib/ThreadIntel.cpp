@@ -165,7 +165,7 @@ void Thread::detach() {
 		// thread has already exited or is in some other weird state.
 		// The destructor should never throw, and we don't want to leak resources
 		// just because the thread is in a bad state.
-		ptrace(PTRACE_DETACH, tid_, 0L, 0L);
+		(void)ptrace(PTRACE_DETACH, tid_, 0L, 0L);
 		tid_ = -1;
 	}
 }

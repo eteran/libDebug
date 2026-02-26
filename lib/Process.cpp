@@ -647,7 +647,28 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
  * @param address The address to add the breakpoint at.
  */
 void Process::add_breakpoint(uint64_t address) {
+	// Construct the breakpoint first
+	// so we can use its actual size for precise overlap checks.
 	auto bp = std::make_shared<Breakpoint>(this, address);
+	assert(bp->size() > 0);
+
+	const uint64_t new_start = bp->address();
+	const uint64_t new_size  = bp->size();
+	const uint64_t new_end   = new_start + (new_size - 1);
+
+	for (auto const &entry : breakpoints_) {
+		const uint64_t existing_addr  = entry.first;
+		const auto existing_bp        = entry.second;
+		const uint64_t existing_start = existing_addr;
+		const uint64_t existing_size  = existing_bp->size();
+		const uint64_t existing_end   = existing_start + (existing_size - 1);
+
+		if (!(new_end < existing_start || new_start > existing_end)) {
+			throw DebuggerError("Cannot add breakpoint at %" PRIx64 ": overlaps existing breakpoint at %" PRIx64, address, existing_addr);
+		}
+	}
+
+	bp->enable();
 	breakpoints_.emplace(address, bp);
 }
 
