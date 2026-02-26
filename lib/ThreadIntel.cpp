@@ -210,14 +210,38 @@ void Thread::resume(int signal) {
 	assert(state_ == State::Stopped);
 
 	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
-		// handle single-instruction breakpoint placed at IP
 		bp->disable();
 		step();
-		// TODO(eteran): We need to check if the wait resulted in a single step event or some other event
+		// NOTE(eteran): We need to check if the wait resulted in a single step event or some other event
 		// (e.g. breakpoint hit by another thread) and handle that accordingly instead of assuming it was
 		// a single step event. if it wasn't a single step event, we need continue, but pass the signal
 		// through so that the thread stops again at with the event during the `next_debug_event` loop.
 		wait();
+
+		// If the wait did not result in the single-step we expected, forward the
+		// event (signal/exit) back to the event loop by continuing with the
+		// appropriate signal and returning without re-enabling the breakpoint.
+		if (!WIFSTOPPED(wstatus_) || WSTOPSIG(wstatus_) != SIGTRAP) {
+			// If the thread exited or was signaled, nothing to continue here.
+			if (WIFEXITED(wstatus_) || WIFSIGNALED(wstatus_)) {
+				return;
+			}
+
+			siginfo_t siginfo;
+			int cont_sig = signal;
+			if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo) == -1) {
+				// Fallback: use the provided signal (may be 0)
+				std::perror("ptrace(PTRACE_GETSIGINFO)");
+			} else {
+				cont_sig = siginfo.si_signo;
+			}
+
+			if (ptrace(PTRACE_CONT, tid_, 0L, cont_sig) == -1) {
+				throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
+			}
+			return;
+		}
+
 		bp->enable();
 	}
 
@@ -232,26 +256,7 @@ void Thread::resume(int signal) {
  * @brief Causes the thread to resume execution.
  */
 void Thread::resume() {
-
-	assert(state_ == State::Stopped);
-
-	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
-		// handle single-instruction breakpoint placed at IP
-		bp->disable();
-		step();
-		// TODO(eteran): We need to check if the wait resulted in a single step event or some other event
-		// (e.g. breakpoint hit by another thread) and handle that accordingly instead of assuming it was
-		// a single step event. if it wasn't a single step event, we need continue, but pass the signal
-		// through so that the thread stops again at with the event during the `next_debug_event` loop.
-		wait();
-		bp->enable();
-	}
-
-	if (ptrace(PTRACE_CONT, tid_, 0L, 0L) == -1) {
-		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
-	}
-
-	state_ = State::Running;
+	resume(0);
 }
 
 /**
