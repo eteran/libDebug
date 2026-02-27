@@ -478,7 +478,6 @@ std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
 
-	// TODO(eteran): handle breakpoints
 	// TODO(eteran): handle ignored exceptions
 
 	if (!wait_for_sigchild(timeout)) {
@@ -560,8 +559,10 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			if (is_trap_event(wstatus)) {
 
-				if (ptrace(PTRACE_GETSIGINFO, tid, 0L, &e.siginfo) == -1) {
+				if (ptrace(PTRACE_GETSIGINFO, tid, 0L, &current_thread->siginfo_) == -1) {
 					std::perror("ptrace(PTRACE_GETSIGINFO)");
+				} else {
+					e.siginfo = current_thread->siginfo_;
 				}
 
 				if (is_exit_trace_event(wstatus)) {
@@ -577,7 +578,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 						new_thread->wstatus_ = 0;
 						new_thread->state_   = Thread::State::Stopped;
 						// TODO(eteran): start the new thread optionally
-						new_thread->resume();
+						new_thread->resume(0);
 					}
 				} else {
 

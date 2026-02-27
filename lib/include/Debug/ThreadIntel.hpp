@@ -4,7 +4,8 @@
 
 #include "Context.hpp"
 
-#include <sys/types.h>
+#include <sys/ptrace.h>
+#include <sys/wait.h>
 
 class Process;
 
@@ -92,11 +93,12 @@ private:
 	int set_xstate32_fallback(const Context *ctx) const;
 
 private:
-	Process *process_ = nullptr;
-	pid_t tid_        = 0;
-	int wstatus_      = 0;
-	State state_      = State::Running;
-	bool is_64_bit_   = false;
+	Process *process_  = nullptr;
+	pid_t tid_         = 0;
+	int wstatus_       = 0;
+	State state_       = State::Running;
+	bool is_64_bit_    = false;
+	siginfo_t siginfo_ = {};
 };
 
 #endif

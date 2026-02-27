@@ -175,14 +175,10 @@ void Thread::detach() {
  * eventually followed by a debug event when it stops again.
  */
 void Thread::step() {
-
-	assert(state_ == State::Stopped);
-
-	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, 0L) == -1) {
-		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(errno));
-	}
-
-	state_ = State::Running;
+	// TODO(eteran): based on the current state of the thread, we may want to send a signal here instead of just resuming with no signal.
+	// For example, if the thread is currently stopped because it of a SEGFAULT, we may want to resume with SIGSEGV to trigger the
+	// appropriate signal handlers and events instead of just resuming with no signal which would skip over the signal handlers and events.
+	step(0);
 }
 
 /**
@@ -227,13 +223,12 @@ void Thread::resume(int signal) {
 				return;
 			}
 
-			siginfo_t siginfo;
 			int cont_sig = signal;
-			if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo) == -1) {
+			if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_) == -1) {
 				// Fallback: use the provided signal (may be 0)
 				std::perror("ptrace(PTRACE_GETSIGINFO)");
 			} else {
-				cont_sig = siginfo.si_signo;
+				cont_sig = siginfo_.si_signo;
 			}
 
 			if (ptrace(PTRACE_CONT, tid_, 0L, cont_sig) == -1) {
@@ -256,6 +251,9 @@ void Thread::resume(int signal) {
  * @brief Causes the thread to resume execution.
  */
 void Thread::resume() {
+	// TODO(eteran): based on the current state of the thread, we may want to send a signal here instead of just resuming with no signal.
+	// For example, if the thread is currently stopped because it of a SEGFAULT, we may want to resume with SIGSEGV to trigger the
+	// appropriate signal handlers and events instead of just resuming with no signal which would skip over the signal handlers and events.
 	resume(0);
 }
 
