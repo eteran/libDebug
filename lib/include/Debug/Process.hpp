@@ -85,8 +85,9 @@ private:
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;
 
 private:
-	pid_t pid_ = 0;
-	int memfd_ = -1;
+	pid_t pid_     = 0;
+	int memfd_     = -1;
+	bool all_stop_ = true;
 	std::shared_ptr<Thread> active_thread_;
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
