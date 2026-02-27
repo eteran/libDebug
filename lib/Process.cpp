@@ -64,13 +64,28 @@ bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 }
 
 /**
+ * @brief Checks if the given status is a trap event.
+ *
+ * @param status The status to check.
+ * @return true if the status is a trap event, false otherwise.
+ */
+bool is_trap_event(int status) {
+	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
+}
+
+/**
  * @brief Checks if the given status is a clone event.
  *
  * @param status The status to check.
  * @return true if the status is a clone event, false otherwise.
  */
-constexpr bool is_clone_event(int status) {
-	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_CLONE << 8)));
+bool is_ptrace_event(int status, int event) {
+	// ptrace encodes the event in the high 16 bits of the wait status when a SIGTRAP stop is reported.
+	return is_trap_event(status) && (((status >> 16) & 0xffff) == event);
+}
+
+bool is_clone_event(int status) {
+	return is_ptrace_event(status, PTRACE_EVENT_CLONE);
 }
 
 /**
@@ -79,18 +94,8 @@ constexpr bool is_clone_event(int status) {
  * @param status The status to check.
  * @return true if the status is a trace event, false otherwise.
  */
-constexpr bool is_exit_trace_event(int status) {
-	return (status >> 8 == (SIGTRAP | (PTRACE_EVENT_EXIT << 8)));
-}
-
-/**
- * @brief Checks if the given status is a trap event.
- *
- * @param status The status to check.
- * @return true if the status is a trap event, false otherwise.
- */
-constexpr bool is_trap_event(int status) {
-	return WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
+bool is_exit_trace_event(int status) {
+	return is_ptrace_event(status, PTRACE_EVENT_EXIT);
 }
 
 /**
@@ -415,9 +420,7 @@ void Process::stop() {
  * @brief Terminates the attached process.
  */
 void Process::kill() const {
-	if (ptrace(PTRACE_KILL, pid_, 0L, 0L) == -1) {
-		throw DebuggerError("Failed to kill process %d: %s", pid_, strerror(errno));
-	}
+	::kill(pid_, SIGKILL);
 }
 
 /**
@@ -490,6 +493,8 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		int wstatus     = 0;
 		const pid_t tid = waitpid(-1, &wstatus, __WALL | WNOHANG);
 
+		std::printf("waitpid returned: tid=%d status=%d\n", tid, wstatus);
+
 		if (tid == -1) {
 			std::perror("waitpid");
 			break;
@@ -506,14 +511,25 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
-		auto &current_thread     = it->second;
+		auto current_thread     = it->second;
 		current_thread->wstatus_ = wstatus;
 		current_thread->state_   = Thread::State::Stopped;
 
 		if (WIFEXITED(wstatus)) {
-			threads_.erase(it);
+			// Report an Exited event to the callback before removing the thread
 
-			// if the active thread just exited... pick any other thread to be the active thread
+			Event e = {
+				{},
+				pid_,
+				tid,
+				wstatus,
+				Event::Type::Exited,
+			};
+
+			(void)callback(e);
+
+			// Remove from tracking and select a new active thread if needed
+			threads_.erase(it);
 			if (active_thread_ && active_thread_->tid() == tid) {
 				if (!threads_.empty()) {
 					active_thread_ = threads_.begin()->second;
@@ -534,9 +550,34 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		std::printf("Stopped at: %016" PRIx64 "\n", ip);
 
 		if (WIFSIGNALED(wstatus)) {
-			// TODO(eteran): implement
 			if (std::exchange(first_stop, false)) {
 				active_thread_ = current_thread;
+			}
+
+			std::printf("Thread %d was terminated by signal %d\n", tid, WTERMSIG(wstatus));
+
+			// Report a Terminated event so callers can observe the terminating signal.
+			Event e = {
+				{},
+				pid_,
+				tid,
+				wstatus,
+				Event::Type::Terminated,
+			};
+			// Populate minimal siginfo so handlers can inspect the signal.
+			e.siginfo.si_signo = WTERMSIG(wstatus);
+			(void)callback(e);
+
+			// The thread was terminated by a signal; remove it from tracking.
+			threads_.erase(it);
+
+			// If the active thread exited, pick another one.
+			if (active_thread_ && active_thread_->tid() == tid) {
+				if (!threads_.empty()) {
+					active_thread_ = threads_.begin()->second;
+				} else {
+					active_thread_ = nullptr;
+				}
 			}
 
 			continue;
@@ -547,6 +588,24 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				active_thread_ = current_thread;
 			}
 
+			/*
+			 * If this is a signal-stop (i.e. not a SIGTRAP), and the signal
+			 * is configured to be ignored for this Process, resume the thread
+			 * and do not report an event to the callback.
+			 *
+			 * For non-ignored stops we load the `siginfo` so event handlers
+			 * always receive valid signal information.
+			 */
+			const int stop_sig = WSTOPSIG(wstatus);
+			if (stop_sig != SIGTRAP && is_ignoring_signal(stop_sig)) {
+				std::printf("Signal %d is being ignored, resuming thread %d\n", stop_sig, tid);
+				current_thread->resume(stop_sig);
+				continue;
+			}
+
+			/* Load siginfo for stopped events so callbacks can inspect it. */
+			(void)current_thread->load_signal_info();
+
 			Event e = {
 				{},
 				pid_,
@@ -555,18 +614,35 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				Event::Type::Stopped,
 			};
 
+			e.siginfo = current_thread->siginfo_;
+
 			std::printf("Stopped Status: %d\n", current_thread->stop_status());
 
 			if (is_trap_event(wstatus)) {
 
-				if (ptrace(PTRACE_GETSIGINFO, tid, 0L, &current_thread->siginfo_) == -1) {
-					std::perror("ptrace(PTRACE_GETSIGINFO)");
-				} else {
-					e.siginfo = current_thread->siginfo_;
-				}
-
 				if (is_exit_trace_event(wstatus)) {
-					// Thread is about to exit, beyond that, this is a normal trap event
+					// Thread is about to exit — report as a Terminated event.
+					Event exit_event = e;
+
+					if (current_thread->load_signal_info()) {
+						exit_event.siginfo = current_thread->siginfo_;
+					} else {
+						exit_event.siginfo.si_signo = 0;
+					}
+
+					exit_event.type = Event::Type::Terminated;
+					(void)callback(exit_event);
+
+					// Remove the thread from tracking.
+					threads_.erase(it);
+					if (active_thread_ && active_thread_->tid() == tid) {
+						if (!threads_.empty()) {
+							active_thread_ = threads_.begin()->second;
+						} else {
+							active_thread_ = nullptr;
+						}
+					}
+					continue;
 				} else if (is_clone_event(wstatus)) {
 					unsigned long message;
 					if (ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
@@ -710,4 +786,32 @@ std::shared_ptr<Breakpoint> Process::find_breakpoint(uint64_t address) const {
 	}
 
 	return nullptr;
+}
+
+/**
+ * @brief Ignores a signal for the attached process.
+ * Ignored signals will not cause the process to stop and will not be reported to the event handler.
+ * However, they will still be delivered to the process as normal.
+ */
+void Process::ignore_signal(int signal) {
+	ignored_signals_.insert(signal);
+}
+
+/**
+ * @brief Unignores a signal for the attached process.
+ *
+ * @param signal The signal to unignore.
+ */
+void Process::unignore_signal(int signal) {
+	ignored_signals_.erase(signal);
+}
+
+/**
+ * @brief Checks if a signal is being ignored for the attached process.
+ *
+ * @param signal The signal to check.
+ * @return true if the signal is being ignored, false otherwise.
+ */
+[[nodiscard]] bool Process::is_ignoring_signal(int signal) const {
+	return ignored_signals_.count(signal) > 0;
 }

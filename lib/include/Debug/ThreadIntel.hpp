@@ -62,6 +62,9 @@ public:
 	void detach();
 	void wait();
 
+public:
+	bool load_signal_info();
+
 private:
 	[[nodiscard]] bool detect_64_bit() const;
 	[[nodiscard]] uint32_t get_segment_base32(Context *ctx, RegisterId reg) const;

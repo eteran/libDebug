@@ -171,6 +171,22 @@ void Thread::detach() {
 }
 
 /**
+ * @brief Loads the signal info for this thread into the `siginfo_` member.
+ * This should be called when handling a signal event to get more information
+ * about the signal that caused the event.
+ *
+ * @return true if the signal info was successfully loaded, false otherwise.
+ */
+bool Thread::load_signal_info() {
+	if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_) == -1) {
+		std::perror("ptrace(PTRACE_GETSIGINFO)");
+		siginfo_ = {};
+		return false;
+	}
+	return true;
+}
+
+/**
  * @brief Causes the thread to step one instruction. This will be
  * eventually followed by a debug event when it stops again.
  */
@@ -224,10 +240,7 @@ void Thread::resume(int signal) {
 			}
 
 			int cont_sig = signal;
-			if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_) == -1) {
-				// Fallback: use the provided signal (may be 0)
-				std::perror("ptrace(PTRACE_GETSIGINFO)");
-			} else {
+			if (load_signal_info()) {
 				cont_sig = siginfo_.si_signo;
 			}
 

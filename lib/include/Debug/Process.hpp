@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <sys/types.h>
 
@@ -61,9 +62,12 @@ public:
 	void add_breakpoint(uint64_t address);
 	void remove_breakpoint(uint64_t address);
 	[[nodiscard]] std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
+	[[nodiscard]] std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
 
 public:
-	[[nodiscard]] std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
+	void ignore_signal(int signal);
+	void unignore_signal(int signal);
+	[[nodiscard]] bool is_ignoring_signal(int signal) const;
 
 public:
 	void report() const;
@@ -91,6 +95,7 @@ private:
 	std::shared_ptr<Thread> active_thread_;
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
+	std::unordered_set<int> ignored_signals_;
 };
 
 #endif

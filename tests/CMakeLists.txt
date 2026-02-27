@@ -7,7 +7,9 @@ add_executable(UnitTests
     Test.hpp
     unit_tests.cpp
     readwrite_tests.cpp
+    process_events_tests.cpp
     breakpoint_tests.cpp)
+
 
 target_link_libraries(UnitTests PUBLIC Debug)
 set_target_properties(UnitTests PROPERTIES
