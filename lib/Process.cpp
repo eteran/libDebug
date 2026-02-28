@@ -487,6 +487,7 @@ void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
 		}
 	}
 }
+
 void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
 	(void)callback;
@@ -509,21 +510,13 @@ void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback
 
 	// Thread is about to exit — report as a Terminated event.
 
-	Event e = {
-		{},
+	Event exit_event = {
+		ctx.current_thread->siginfo_,
 		pid_,
 		ctx.tid,
 		ctx.wstatus,
 		Event::Type::Stopped,
 	};
-
-	Event exit_event = e;
-
-	if (ctx.current_thread->load_signal_info()) {
-		exit_event.siginfo = ctx.current_thread->siginfo_;
-	} else {
-		exit_event.siginfo.si_signo = 0;
-	}
 
 	exit_event.type = Event::Type::Terminated;
 	(void)callback(exit_event);
@@ -575,6 +568,43 @@ void Process::handle_continue_event(EventContext &ctx, event_callback callback) 
 	(void)ctx;
 	(void)callback;
 	// NOTE(eteran): Not sure under what circumstances we would get a continue event, but we handle it just in case.
+}
+
+void Process::handle_trap_event(EventContext &ctx, event_callback callback) {
+
+	(void)callback;
+
+	// general trap event, likely one of:
+	// * single step finished
+	// * processes stopped
+	// * a breakpoint
+	if (auto bp = search_breakpoint(ctx.address)) {
+		std::printf("Breakpoint!\n");
+
+		bp->hit();
+
+		ctx.address -= bp->size();
+		ctx.current_thread->set_instruction_pointer(ctx.address);
+
+		// BREAKPOINT!
+		// TODO(eteran): report as a trap event
+	}
+}
+
+void Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
+	(void)callback;
+
+	if (auto bp = find_breakpoint(ctx.address)) {
+		std::printf("Alt-Breakpoint!\n");
+
+		bp->hit();
+
+		// NOTE(eteran): no need to rewind here because the instruction used for the BP
+		// didn't advance the instruction pointer
+
+		// ALT-BREAKPOINT!
+		// TODO(eteran): report as a trap event
+	}
 }
 
 /**
@@ -630,6 +660,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		ctx.current_thread           = it->second;
 		ctx.current_thread->wstatus_ = ctx.wstatus;
 		ctx.current_thread->state_   = Thread::State::Stopped;
+		ctx.address                  = 0;
 
 		if (WIFEXITED(ctx.wstatus)) {
 			handle_exit_event(ctx, callback);
@@ -641,9 +672,9 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
-		uint64_t ip = ctx.current_thread->get_instruction_pointer();
+		ctx.address = ctx.current_thread->get_instruction_pointer();
 
-		std::printf("Stopped at: %016" PRIx64 "\n", ip);
+		std::printf("Stopped at: %016" PRIx64 "\n", ctx.address);
 
 		if (WIFSIGNALED(ctx.wstatus)) {
 			handle_signal_event(ctx, callback);
@@ -673,20 +704,9 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			/* Load siginfo for stopped events so callbacks can inspect it. */
 			(void)ctx.current_thread->load_signal_info();
 
-			Event e = {
-				{},
-				pid_,
-				tid,
-				ctx.wstatus,
-				Event::Type::Stopped,
-			};
-
-			e.siginfo = ctx.current_thread->siginfo_;
-
 			std::printf("Stopped Status: %d\n", ctx.current_thread->stop_status());
 
 			if (is_trap_event(ctx.wstatus)) {
-
 				if (is_exit_trace_event(ctx.wstatus)) {
 					handle_exit_trace_event(ctx, callback);
 					continue;
@@ -694,36 +714,19 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 					handle_clone_event(ctx, callback);
 					continue;
 				} else {
-
-					// general trap event, likely one of:
-					// * single step finished
-					// * processes stopped
-					// * a breakpoint
-					if (auto bp = search_breakpoint(ip)) {
-						std::printf("Breakpoint!\n");
-
-						bp->hit();
-
-						ip -= bp->size();
-						ctx.current_thread->set_instruction_pointer(ip);
-
-						// BREAKPOINT!
-						// TODO(eteran): report as a trap event
-					}
+					handle_trap_event(ctx, callback);
 				}
 			} else {
-				if (auto bp = find_breakpoint(ip)) {
-					std::printf("Alt-Breakpoint!\n");
-
-					bp->hit();
-
-					// NOTE(eteran): no need to rewind here because the instruction used for the BP
-					// didn't advance the instruction pointer
-
-					// ALT-BREAKPOINT!
-					// TODO(eteran): report as a trap event
-				}
+				handle_unknown_event(ctx, callback);
 			}
+
+			Event e = {
+				ctx.current_thread->siginfo_,
+				pid_,
+				tid,
+				ctx.wstatus,
+				Event::Type::Stopped,
+			};
 
 			const EventStatus status = callback(e);
 			switch (status) {
