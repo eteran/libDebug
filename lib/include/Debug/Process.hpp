@@ -84,6 +84,21 @@ public:
 	}
 
 private:
+	struct EventContext {
+		std::shared_ptr<Thread> current_thread;
+		pid_t tid       = 0;
+		int wstatus     = 0;
+		bool first_stop = false;
+	};
+
+	void handle_exit_event(EventContext &ctx, event_callback callback);
+	void handle_exit_trace_event(EventContext &ctx, event_callback callback);
+	void handle_clone_event(EventContext &ctx, event_callback callback);
+	void handle_signal_event(EventContext &ctx, event_callback callback);
+	void handle_continue_event(EventContext &ctx, event_callback callback);
+
+
+private:
 	int64_t read_memory_ptrace(uint64_t address, void *buffer, size_t n) const;
 	int64_t write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const;
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;

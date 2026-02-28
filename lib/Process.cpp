@@ -464,6 +464,119 @@ std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
 	return nullptr;
 }
 
+void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
+	// Report an Exited event to the callback before removing the thread
+
+	Event e = {
+		{},
+		pid_,
+		ctx.tid,
+		ctx.wstatus,
+		Event::Type::Exited,
+	};
+
+	(void)callback(e);
+
+	// Remove from tracking and select a new active thread if needed
+	threads_.erase(ctx.tid);
+	if (active_thread_ && active_thread_->tid() == ctx.tid) {
+		if (!threads_.empty()) {
+			active_thread_ = threads_.begin()->second;
+		} else {
+			active_thread_ = nullptr;
+		}
+	}
+}
+void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
+
+	(void)callback;
+
+	unsigned long message;
+	if (ptrace(PTRACE_GETEVENTMSG, ctx.tid, 0L, &message) != -1) {
+
+		auto new_tid    = static_cast<pid_t>(message);
+		auto new_thread = std::make_shared<Thread>(this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
+		threads_.emplace(new_tid, new_thread);
+
+		new_thread->wstatus_ = 0;
+		new_thread->state_   = Thread::State::Stopped;
+		// TODO(eteran): start the new thread optionally
+		new_thread->resume(0);
+	}
+}
+
+void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback) {
+
+	// Thread is about to exit — report as a Terminated event.
+
+	Event e = {
+		{},
+		pid_,
+		ctx.tid,
+		ctx.wstatus,
+		Event::Type::Stopped,
+	};
+
+	Event exit_event = e;
+
+	if (ctx.current_thread->load_signal_info()) {
+		exit_event.siginfo = ctx.current_thread->siginfo_;
+	} else {
+		exit_event.siginfo.si_signo = 0;
+	}
+
+	exit_event.type = Event::Type::Terminated;
+	(void)callback(exit_event);
+
+	// Remove the thread from tracking.
+	threads_.erase(ctx.tid);
+	if (active_thread_ && active_thread_->tid() == ctx.tid) {
+		if (!threads_.empty()) {
+			active_thread_ = threads_.begin()->second;
+		} else {
+			active_thread_ = nullptr;
+		}
+	}
+}
+
+void Process::handle_signal_event(EventContext &ctx, event_callback callback) {
+	if (std::exchange(ctx.first_stop, false)) {
+		active_thread_ = ctx.current_thread;
+	}
+
+	std::printf("Thread %d was terminated by signal %d\n", ctx.tid, WTERMSIG(ctx.wstatus));
+
+	// Report a Terminated event so callers can observe the terminating signal.
+	Event e = {
+		{},
+		pid_,
+		ctx.tid,
+		ctx.wstatus,
+		Event::Type::Terminated,
+	};
+	// Populate minimal siginfo so handlers can inspect the signal.
+	e.siginfo.si_signo = WTERMSIG(ctx.wstatus);
+	(void)callback(e);
+
+	// The thread was terminated by a signal; remove it from tracking.
+	threads_.erase(ctx.tid);
+
+	// If the active thread exited, pick another one.
+	if (active_thread_ && active_thread_->tid() == ctx.tid) {
+		if (!threads_.empty()) {
+			active_thread_ = threads_.begin()->second;
+		} else {
+			active_thread_ = nullptr;
+		}
+	}
+}
+
+void Process::handle_continue_event(EventContext &ctx, event_callback callback) {
+	(void)ctx;
+	(void)callback;
+	// NOTE(eteran): Not sure under what circumstances we would get a continue event, but we handle it just in case.
+}
+
 /**
  * @brief Waits for `timeout` milliseconds for the next debug event to occur.
  * If there was a debug event, and we are in "all-stop" mode, then it will also
@@ -487,13 +600,14 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		return false;
 	}
 
-	bool first_stop = true;
+	EventContext ctx;
+	// First stop should be true so the first stopped thread becomes the active thread.
+	ctx.first_stop = true;
 
 	while (true) {
-		int wstatus     = 0;
-		const pid_t tid = waitpid(-1, &wstatus, __WALL | WNOHANG);
+		const pid_t tid = waitpid(-1, &ctx.wstatus, __WALL | WNOHANG);
 
-		std::printf("waitpid returned: tid=%d status=%d\n", tid, wstatus);
+		std::printf("waitpid returned: tid=%d status=%d\n", tid, ctx.wstatus);
 
 		if (tid == -1) {
 			std::perror("waitpid");
@@ -511,81 +625,34 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			continue;
 		}
 
-		auto current_thread     = it->second;
-		current_thread->wstatus_ = wstatus;
-		current_thread->state_   = Thread::State::Stopped;
+		// Populate the ctx with per-event information for handlers.
+		ctx.tid                      = tid;
+		ctx.current_thread           = it->second;
+		ctx.current_thread->wstatus_ = ctx.wstatus;
+		ctx.current_thread->state_   = Thread::State::Stopped;
 
-		if (WIFEXITED(wstatus)) {
-			// Report an Exited event to the callback before removing the thread
-
-			Event e = {
-				{},
-				pid_,
-				tid,
-				wstatus,
-				Event::Type::Exited,
-			};
-
-			(void)callback(e);
-
-			// Remove from tracking and select a new active thread if needed
-			threads_.erase(it);
-			if (active_thread_ && active_thread_->tid() == tid) {
-				if (!threads_.empty()) {
-					active_thread_ = threads_.begin()->second;
-				} else {
-					active_thread_ = nullptr;
-				}
-			}
+		if (WIFEXITED(ctx.wstatus)) {
+			handle_exit_event(ctx, callback);
 			continue;
 		}
 
-		if (WIFCONTINUED(wstatus)) {
-			// NOTE(eteran): not 100% when this can actually happen...
+		if (WIFCONTINUED(ctx.wstatus)) {
+			handle_continue_event(ctx, callback);
 			continue;
 		}
 
-		uint64_t ip = current_thread->get_instruction_pointer();
+		uint64_t ip = ctx.current_thread->get_instruction_pointer();
 
 		std::printf("Stopped at: %016" PRIx64 "\n", ip);
 
-		if (WIFSIGNALED(wstatus)) {
-			if (std::exchange(first_stop, false)) {
-				active_thread_ = current_thread;
-			}
-
-			std::printf("Thread %d was terminated by signal %d\n", tid, WTERMSIG(wstatus));
-
-			// Report a Terminated event so callers can observe the terminating signal.
-			Event e = {
-				{},
-				pid_,
-				tid,
-				wstatus,
-				Event::Type::Terminated,
-			};
-			// Populate minimal siginfo so handlers can inspect the signal.
-			e.siginfo.si_signo = WTERMSIG(wstatus);
-			(void)callback(e);
-
-			// The thread was terminated by a signal; remove it from tracking.
-			threads_.erase(it);
-
-			// If the active thread exited, pick another one.
-			if (active_thread_ && active_thread_->tid() == tid) {
-				if (!threads_.empty()) {
-					active_thread_ = threads_.begin()->second;
-				} else {
-					active_thread_ = nullptr;
-				}
-			}
-
+		if (WIFSIGNALED(ctx.wstatus)) {
+			handle_signal_event(ctx, callback);
 			continue;
 		}
 
-		if (WIFSTOPPED(wstatus)) {
-			if (std::exchange(first_stop, false)) {
-				active_thread_ = current_thread;
+		if (WIFSTOPPED(ctx.wstatus)) {
+			if (std::exchange(ctx.first_stop, false)) {
+				active_thread_ = ctx.current_thread;
 			}
 
 			/*
@@ -596,66 +663,36 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			 * For non-ignored stops we load the `siginfo` so event handlers
 			 * always receive valid signal information.
 			 */
-			const int stop_sig = WSTOPSIG(wstatus);
+			const int stop_sig = WSTOPSIG(ctx.wstatus);
 			if (stop_sig != SIGTRAP && is_ignoring_signal(stop_sig)) {
 				std::printf("Signal %d is being ignored, resuming thread %d\n", stop_sig, tid);
-				current_thread->resume(stop_sig);
+				ctx.current_thread->resume(stop_sig);
 				continue;
 			}
 
 			/* Load siginfo for stopped events so callbacks can inspect it. */
-			(void)current_thread->load_signal_info();
+			(void)ctx.current_thread->load_signal_info();
 
 			Event e = {
 				{},
 				pid_,
 				tid,
-				wstatus,
+				ctx.wstatus,
 				Event::Type::Stopped,
 			};
 
-			e.siginfo = current_thread->siginfo_;
+			e.siginfo = ctx.current_thread->siginfo_;
 
-			std::printf("Stopped Status: %d\n", current_thread->stop_status());
+			std::printf("Stopped Status: %d\n", ctx.current_thread->stop_status());
 
-			if (is_trap_event(wstatus)) {
+			if (is_trap_event(ctx.wstatus)) {
 
-				if (is_exit_trace_event(wstatus)) {
-					// Thread is about to exit — report as a Terminated event.
-					Event exit_event = e;
-
-					if (current_thread->load_signal_info()) {
-						exit_event.siginfo = current_thread->siginfo_;
-					} else {
-						exit_event.siginfo.si_signo = 0;
-					}
-
-					exit_event.type = Event::Type::Terminated;
-					(void)callback(exit_event);
-
-					// Remove the thread from tracking.
-					threads_.erase(it);
-					if (active_thread_ && active_thread_->tid() == tid) {
-						if (!threads_.empty()) {
-							active_thread_ = threads_.begin()->second;
-						} else {
-							active_thread_ = nullptr;
-						}
-					}
+				if (is_exit_trace_event(ctx.wstatus)) {
+					handle_exit_trace_event(ctx, callback);
 					continue;
-				} else if (is_clone_event(wstatus)) {
-					unsigned long message;
-					if (ptrace(PTRACE_GETEVENTMSG, tid, 0L, &message) != -1) {
-
-						auto new_tid    = static_cast<pid_t>(message);
-						auto new_thread = std::make_shared<Thread>(this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
-						threads_.emplace(new_tid, new_thread);
-
-						new_thread->wstatus_ = 0;
-						new_thread->state_   = Thread::State::Stopped;
-						// TODO(eteran): start the new thread optionally
-						new_thread->resume(0);
-					}
+				} else if (is_clone_event(ctx.wstatus)) {
+					handle_clone_event(ctx, callback);
+					continue;
 				} else {
 
 					// general trap event, likely one of:
@@ -668,7 +705,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 						bp->hit();
 
 						ip -= bp->size();
-						current_thread->set_instruction_pointer(ip);
+						ctx.current_thread->set_instruction_pointer(ip);
 
 						// BREAKPOINT!
 						// TODO(eteran): report as a trap event
@@ -694,13 +731,13 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 				// do nothing, the debugger will instigate the next event
 				break;
 			case EventStatus::Continue:
-				current_thread->resume();
+				ctx.current_thread->resume();
 				break;
 			case EventStatus::ContinueStep:
-				current_thread->step();
+				ctx.current_thread->step();
 				break;
 			case EventStatus::ExceptionNotHandled:
-				current_thread->resume(e.siginfo.si_signo);
+				ctx.current_thread->resume(e.siginfo.si_signo);
 				break;
 			case EventStatus::NextHandler:
 				// pass the event to the next handler
