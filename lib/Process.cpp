@@ -86,7 +86,10 @@ bool is_ptrace_event(int status, int event) {
 }
 
 bool is_clone_event(int status) {
-	return is_ptrace_event(status, PTRACE_EVENT_CLONE);
+	// Treat CLONE, FORK and VFORK ptrace events as equivalent "clone"-style events
+	return is_ptrace_event(status, PTRACE_EVENT_CLONE) ||
+		   is_ptrace_event(status, PTRACE_EVENT_FORK) ||
+		   is_ptrace_event(status, PTRACE_EVENT_VFORK);
 }
 
 /**

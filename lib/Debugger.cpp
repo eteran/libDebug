@@ -16,6 +16,7 @@
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 #include <unistd.h>
+#include <vector>
 
 // Per-thread counters and saved mask so we only modify the signal mask
 // once per thread regardless of how many Debugger instances exist.
@@ -168,7 +169,34 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 		}
 
 		if (envp) {
-			// TODO(eteran): work out the interaction between disableLazyBinding and envp
+			// If the caller provided an explicit envp, setting an env var with
+			// setenv() above won't affect the environment passed to execve().
+			// If lazy binding is disabled, inject LD_BIND_NOW=1 into the envp
+			// we pass to execve unless the caller already set it.
+			if (disableLazyBinding_) {
+				bool has_ld = false;
+				for (const char **e = envp; *e; ++e) {
+					if (std::strncmp(*e, "LD_BIND_NOW=", 12) == 0) {
+						has_ld = true;
+						break;
+					}
+				}
+
+				if (!has_ld) {
+					std::vector<char *> new_env;
+					for (const char **e = envp; *e; ++e) {
+						new_env.emplace_back(const_cast<char *>(*e));
+					}
+					new_env.emplace_back(const_cast<char *>("LD_BIND_NOW=1"));
+					new_env.push_back(nullptr);
+					execve(argv[0], const_cast<char **>(argv), new_env.data());
+					// execve only returns on error; fallthrough records the error below
+				}
+			}
+
+			// If lazy binding isn't disabled or execve above failed, fall back
+			// to calling execve with the original envp (this will also run
+			// if disableLazyBinding_ was false).
 			execve(argv[0], const_cast<char **>(argv), const_cast<char **>(envp));
 		} else {
 			execv(argv[0], const_cast<char **>(argv));
