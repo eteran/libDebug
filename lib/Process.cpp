@@ -501,6 +501,19 @@ void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
 		new_thread->wstatus_ = 0;
 		new_thread->state_   = Thread::State::Stopped;
+
+		Event clone_event = {
+			ctx.current_thread->siginfo_,
+			pid_,
+			ctx.tid,
+			ctx.wstatus,
+			Event::Type::Clone,
+			new_tid,
+
+		};
+
+		(void)callback(clone_event);
+
 		// TODO(eteran): start the new thread optionally
 		new_thread->resume(0);
 	}
@@ -515,10 +528,9 @@ void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback
 		pid_,
 		ctx.tid,
 		ctx.wstatus,
-		Event::Type::Stopped,
+		Event::Type::Terminated,
 	};
 
-	exit_event.type = Event::Type::Terminated;
 	(void)callback(exit_event);
 
 	// Remove the thread from tracking.

@@ -11,6 +11,7 @@ struct Event {
 		Exited,     // exited normally
 		Terminated, // terminated by event
 		Stopped,    // normal event
+		Clone,      // clone/fork/vfork event
 		Unknown,
 	};
 
@@ -19,6 +20,7 @@ struct Event {
 	pid_t tid         = 0;
 	int status        = 0;
 	Type type         = Type::Unknown;
+	pid_t new_tid     = 0; // for clone events, the TID of the new thread/process
 };
 
 #endif

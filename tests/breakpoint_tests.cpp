@@ -38,8 +38,8 @@ TEST(BreakpointHit) {
 		code[1] = 0x90; // NOP
 		code[2] = 0xc3; // RET
 
-        // NOTE(eteran): This cast is only circumstantially "useless" depending
-        // on if we are building with -m32 or -m64, so we need to silence the warning here.
+		// NOTE(eteran): This cast is only circumstantially "useless" depending
+		// on if we are building with -m32 or -m64, so we need to silence the warning here.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 		auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
@@ -95,8 +95,10 @@ TEST(BreakpointHit) {
 	auto cb           = [&](const Event &e) -> EventStatus {
         printf("Debug event received: pid=%d tid=%d status=%d type=%d\n", e.pid, e.tid, e.status, static_cast<int>(e.type));
 
-        (void)e;
-        hit = true;
+        if (e.type == Event::Type::Stopped) {
+            hit = true;
+        }
+
         return EventStatus::Continue;
 	};
 
