@@ -74,7 +74,6 @@ TEST(BreakpointHit) {
 	try {
 		proc = dbg.attach(cpid);
 	} catch (const DebuggerError &e) {
-		// ptrace not permitted in this environment (e.g., YAMA/ptrace_scope)
 		kill(cpid, SIGKILL);
 		waitpid(cpid, nullptr, 0);
 		return;

@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sys/ptrace.h>
+#include <signal.h>
 
 namespace {
 
@@ -84,7 +85,6 @@ Breakpoint::Breakpoint(const Process *process, uint64_t address, TypeId type)
 	default:
 		__builtin_unreachable();
 	}
-
 }
 
 /**
@@ -104,7 +104,6 @@ void Breakpoint::enable() {
 	}
 
 	const int64_t r = process_->read_memory(address_, old_bytes_, size_);
-
 	if (r == -1) {
 		throw DebuggerError("Failed to read memory for process %d: %s", process_->pid(), strerror(errno));
 	}
@@ -115,11 +114,30 @@ void Breakpoint::enable() {
 
 	const int64_t w = process_->write_memory(address_, new_bytes_, size_);
 	if (w == -1) {
+		// If the tracee exited, treat as benign during teardown.
+		if (errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
 
+	if (w == 0) {
+		// pwrite/process_vm_writev may return 0 when the process no longer exists.
+		if (kill(process_->pid(), 0) == -1 && errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
+		throw DebuggerError("Failed to write memory for process %d: short write", process_->pid());
+	}
+
 	if (static_cast<size_t>(w) != size_) {
-		throw DebuggerError("Failed to write memory for process %d", process_->pid());
+		// If the process disappeared, treat as benign.
+		if (kill(process_->pid(), 0) == -1 && errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
+		throw DebuggerError("Failed to write memory for process %d: partial write", process_->pid());
 	}
 
 	enabled_ = true;
@@ -132,15 +150,31 @@ void Breakpoint::disable() {
 	if (!enabled_) {
 		return;
 	}
-
 	const int64_t w = process_->write_memory(address_, old_bytes_, size_);
 
 	if (w == -1) {
+		// If the tracee has already exited, treat as benign cleanup.
+		if (errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
 		throw DebuggerError("Failed to write memory for process %d: %s", process_->pid(), strerror(errno));
 	}
 
+	if (w == 0) {
+		if (kill(process_->pid(), 0) == -1 && errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
+		throw DebuggerError("Failed to write memory for process %d: short write", process_->pid());
+	}
+
 	if (static_cast<size_t>(w) != size_) {
-		throw DebuggerError("Failed to write memory for process %d", process_->pid());
+		if (kill(process_->pid(), 0) == -1 && errno == ESRCH) {
+			enabled_ = false;
+			return;
+		}
+		throw DebuggerError("Failed to write memory for process %d: partial write", process_->pid());
 	}
 
 	enabled_ = false;

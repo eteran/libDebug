@@ -26,6 +26,7 @@
 
 #include <fcntl.h>
 #include <sys/ptrace.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -242,16 +243,50 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
  * @return how many bytes actually read.
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
-#if 1
-	const int64_t ret = pread(memfd_, buffer, n, static_cast<off_t>(address));
-#else
-	const int64_t ret = read_memory_ptrace(address, buffer, n);
-#endif
+
+	int64_t ret = read_memory_iovec(address, buffer, n);
+	if (ret != static_cast<int64_t>(n)) {
+		ret = read_memory_pread(address, buffer, n);
+	}
+
+	if (ret != static_cast<int64_t>(n)) {
+		ret = read_memory_ptrace(address, buffer, n);
+	}
 
 	if (ret > 0) {
 		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
 	}
 	return ret;
+}
+
+int64_t Process::read_memory_iovec(uint64_t address, void *buffer, size_t n) const {
+	struct iovec local_iov;
+	struct iovec remote_iov;
+
+	local_iov.iov_base = buffer;
+	local_iov.iov_len  = n;
+
+	remote_iov.iov_base = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
+	remote_iov.iov_len  = n;
+
+	ssize_t ret = process_vm_readv(pid_, &local_iov, 1, &remote_iov, 1, 0);
+	if (ret > 0) {
+		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
+	}
+
+	return static_cast<int64_t>(ret);
+}
+
+/**
+ * @brief Reads bytes from the attached process using the `pread` syscall.
+ *
+ * @param address The address in the attached process to read from.
+ * @param buffer Where to store the bytes, must be at least `n` bytes big.
+ * @param n How many bytes to read.
+ * @return how many bytes actually read.
+ */
+int64_t Process::read_memory_pread(uint64_t address, void *buffer, size_t n) const {
+	return pread(memfd_, buffer, n, static_cast<off_t>(address));
 }
 
 /**
@@ -300,10 +335,48 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
 #if 1
-	return pwrite(memfd_, buffer, n, static_cast<off_t>(address));
-#else
-	return write_memory_ptrace(address, buffer, n);
+	if (write_memory_iovec(address, buffer, n) == static_cast<int64_t>(n)) {
+		return static_cast<int64_t>(n);
+	}
+
+	if (write_memory_pwrite(address, buffer, n) == static_cast<int64_t>(n)) {
+		return static_cast<int64_t>(n);
+	}
 #endif
+	return write_memory_ptrace(address, buffer, n);
+}
+
+/**
+ * @brief Writes bytes to the attached process using the `process_vm_writev` syscall.
+ *
+ * @param address The address in the attached process to write to.
+ * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
+ * @param n How many bytes to write.
+ * @return how many bytes actually written.
+ */
+int64_t Process::write_memory_iovec(uint64_t address, const void *buffer, size_t n) const {
+	// Try process_vm_writev first for a direct, efficient write into the
+	// tracee's address space. If it fails, fall back to /proc/<pid>/mem pwrite.
+	struct iovec local_iov;
+	struct iovec remote_iov;
+	local_iov.iov_base  = const_cast<void *>(buffer);
+	local_iov.iov_len   = n;
+	remote_iov.iov_base = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
+	remote_iov.iov_len  = n;
+
+	return process_vm_writev(pid_, &local_iov, 1, &remote_iov, 1, 0);
+}
+
+/**
+ * @brief Writes bytes to the attached process using the `pwrite` syscall.
+ *
+ * @param address The address in the attached process to write to.
+ * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
+ * @param n How many bytes to write.
+ * @return how many bytes actually written.
+ */
+int64_t Process::write_memory_pwrite(uint64_t address, const void *buffer, size_t n) const {
+	return pwrite(memfd_, buffer, n, static_cast<off_t>(address));
 }
 
 /**
