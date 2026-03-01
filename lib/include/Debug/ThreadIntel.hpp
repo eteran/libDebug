@@ -18,6 +18,8 @@ class Thread {
 		Running,
 	};
 
+	struct internal_t {};
+
 public:
 	using Flag                             = uint32_t;
 	static constexpr Flag Attach           = 1u << 0;
@@ -25,7 +27,8 @@ public:
 	static constexpr Flag KillOnTracerExit = 1u << 2;
 
 public:
-	Thread(Process *process, pid_t tid, Flag f);
+	// The constructor is private to force users to create Thread objects through the Process interface.
+	Thread(const internal_t &, Process *process, pid_t tid, Flag f);
 	Thread(const Thread &)            = delete;
 	Thread &operator=(const Thread &) = delete;
 	~Thread();

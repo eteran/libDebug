@@ -86,7 +86,7 @@ constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize;
  * @param tid The thread id to attach to.
  * @param f Controls the attach behavior of this constructor.
  */
-Thread::Thread(Process *process, pid_t tid, Flag f)
+Thread::Thread(const internal_t &, Process *process, pid_t tid, Flag f)
 	: process_(process), tid_(tid) {
 
 	assert(process);

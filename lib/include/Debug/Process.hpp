@@ -20,6 +20,8 @@ class Process {
 	friend class Debugger;
 	friend class Thread;
 
+	struct internal_t {};
+
 public:
 	using event_callback = std::function<EventStatus(const Event &)>;
 
@@ -32,7 +34,8 @@ public:
 	static constexpr Flag DisableLazyBinding = 1u << 4;
 
 public:
-	Process(pid_t pid, Flag flags);
+	// The constructor is private to force users to create Process objects through the Debugger interface.
+	Process(const internal_t &, pid_t pid, Flag flags);
 	Process(const Process &)            = delete;
 	Process &operator=(const Process &) = delete;
 	~Process();

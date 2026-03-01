@@ -8,6 +8,7 @@ add_executable(UnitTests
     unit_tests.cpp
     readwrite_tests.cpp
     process_events_tests.cpp
+    clone_exit_tests.cpp
     breakpoint_tests.cpp)
 
 

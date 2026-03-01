@@ -92,8 +92,6 @@ TEST(BreakpointHit) {
 
 	volatile bool hit = false;
 	auto cb           = [&](const Event &e) -> EventStatus {
-        printf("Debug event received: pid=%d tid=%d status=%d type=%d\n", e.pid, e.tid, e.status, static_cast<int>(e.type));
-
         if (e.type == Event::Type::Stopped) {
             hit = true;
         }

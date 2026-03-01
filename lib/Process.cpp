@@ -120,7 +120,7 @@ int open_memfd(pid_t pid) {
  * @param pid The process to attach to.
  * @param flags Controls the attach behavior of this constructor.
  */
-Process::Process(pid_t pid, Flag flags)
+Process::Process(const internal_t &, pid_t pid, Flag flags)
 	: pid_(pid) {
 
 	if (flags & Process::Attach) {
@@ -135,7 +135,7 @@ Process::Process(pid_t pid, Flag flags)
 					continue;
 				}
 
-				auto new_thread = std::make_shared<Thread>(this, tid, Thread::Attach | Thread::KillOnTracerExit);
+				auto new_thread = std::make_shared<Thread>(Thread::internal_t(), this, tid, Thread::Attach | Thread::KillOnTracerExit);
 				threads_.emplace(tid, new_thread);
 
 				if (!active_thread_) {
@@ -150,7 +150,7 @@ Process::Process(pid_t pid, Flag flags)
 			}
 		}
 	} else {
-		auto threads = std::make_shared<Thread>(this, pid, Thread::NoAttach | Thread::KillOnTracerExit);
+		auto threads = std::make_shared<Thread>(Thread::internal_t(), this, pid, Thread::NoAttach | Thread::KillOnTracerExit);
 		threads_.emplace(pid, threads);
 	}
 
@@ -563,13 +563,13 @@ void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
 
 void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
-	(void)callback;
-
 	unsigned long message;
 	if (ptrace(PTRACE_GETEVENTMSG, ctx.tid, 0L, &message) != -1) {
 
+		printf("Clone event: new thread tid=%lu\n", message);
+
 		auto new_tid    = static_cast<pid_t>(message);
-		auto new_thread = std::make_shared<Thread>(this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
+		auto new_thread = std::make_shared<Thread>(Thread::internal_t(), this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);
 		threads_.emplace(new_tid, new_thread);
 
 		new_thread->wstatus_ = 0;
@@ -722,8 +722,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 	while (true) {
 		const pid_t tid = waitpid(-1, &ctx.wstatus, __WALL | WNOHANG);
 
-		std::printf("waitpid returned: tid=%d status=%d\n", tid, ctx.wstatus);
-
 		if (tid == -1) {
 			std::perror("waitpid");
 			break;
@@ -759,8 +757,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 		ctx.address = ctx.current_thread->get_instruction_pointer();
 
-		std::printf("Stopped at: %016" PRIx64 "\n", ctx.address);
-
 		if (WIFSIGNALED(ctx.wstatus)) {
 			handle_signal_event(ctx, callback);
 			continue;
@@ -788,8 +784,6 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 			/* Load siginfo for stopped events so callbacks can inspect it. */
 			(void)ctx.current_thread->load_signal_info();
-
-			std::printf("Stopped Status: %d\n", ctx.current_thread->stop_status());
 
 			if (is_trap_event(ctx.wstatus)) {
 				if (is_exit_trace_event(ctx.wstatus)) {
