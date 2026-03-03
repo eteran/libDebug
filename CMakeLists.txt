@@ -4,7 +4,6 @@ project(Debug CXX)
 enable_testing()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(TARGET_ARCH "-m64")
 
 option(ENABLE_COVERAGE "Enable compilation with coverage flags" OFF)
 if(ENABLE_COVERAGE)

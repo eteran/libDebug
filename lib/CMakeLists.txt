@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
-add_library(Debug
+
+set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Breakpoint.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/BreakpointIntel.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Context.hpp
@@ -21,19 +22,22 @@ add_library(Debug
     ThreadIntel.cpp
 )
 
-target_include_directories(Debug
+# 64-bit library target
+add_library(Debug64 ${SOURCES})
+
+target_include_directories(Debug64
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # Apply target properties and optional coverage flags
-set_target_properties(Debug
+set_target_properties(Debug64
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
 )
 
 # Always apply architecture compile option
-target_compile_options(Debug
-    PRIVATE ${TARGET_ARCH}
+target_compile_options(Debug64
+    PRIVATE -m64
     PUBLIC -pedantic
            -W
            -Wall
@@ -52,10 +56,51 @@ target_compile_options(Debug
 )
 
 if(ENABLE_COVERAGE)
-    target_compile_options(Debug PRIVATE -g -O0 --coverage)
-    set(LIB_LINK_FLAGS "${TARGET_ARCH} --coverage")
+    target_compile_options(Debug64 PRIVATE -g -O0 --coverage)
+    set(LIB_LINK_FLAGS "-m64 --coverage")
 else()
-    set(LIB_LINK_FLAGS "${TARGET_ARCH}")
+    set(LIB_LINK_FLAGS "-m64")
 endif()
-set_target_properties(Debug PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")
+set_target_properties(Debug64 PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")
 
+
+# 32-bit library target
+add_library(Debug32 ${SOURCES})
+
+target_include_directories(Debug32
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# Apply target properties and optional coverage flags
+set_target_properties(Debug32
+    PROPERTIES CXX_STANDARD 17
+               CXX_EXTENSIONS OFF
+)
+
+# Always apply architecture compile option
+target_compile_options(Debug32
+    PRIVATE -m32
+    PUBLIC -pedantic
+           -W
+           -Wall
+           -Wcast-align
+           -Wconversion
+           -Wformat=2
+           -Wnarrowing
+           -Wnon-virtual-dtor
+           -Wnull-dereference
+           -Wold-style-cast
+           -Woverloaded-virtual
+           -Wshadow
+           -Wsign-conversion
+           -Wunused
+           -Wuseless-cast
+)
+
+if(ENABLE_COVERAGE)
+    target_compile_options(Debug32 PRIVATE -g -O0 --coverage)
+    set(LIB_LINK_FLAGS "-m32 --coverage")
+else()
+    set(LIB_LINK_FLAGS "-m32")
+endif()
+set_target_properties(Debug32 PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")

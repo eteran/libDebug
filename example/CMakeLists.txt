@@ -1,20 +1,25 @@
 cmake_minimum_required(VERSION 3.15)
 
-add_executable(Debugger main.cpp)
 
-target_link_libraries(Debugger PUBLIC Debug)
+# This CMakeLists.txt defines the build configuration for the example debugger application and test applications.
+
+
+# 64-bit Debugger executable
+add_executable(Debugger64 main.cpp)
+
+target_link_libraries(Debugger64 PUBLIC Debug64)
 
 set_target_properties(
-    Debugger
+    Debugger64
     PROPERTIES CXX_STANDARD 17
                CXX_EXTENSIONS OFF
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-               COMPILE_OPTIONS ${TARGET_ARCH}
-               LINK_FLAGS ${TARGET_ARCH}
+               COMPILE_OPTIONS -m64
+               LINK_FLAGS -m64
 )
 
 target_compile_options(
-    Debugger
+    Debugger64
     PUBLIC -pedantic
            -W
            -Wall
