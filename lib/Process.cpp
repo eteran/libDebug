@@ -358,8 +358,13 @@ std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
 	return nullptr;
 }
 
+/**
+ * @brief Reports an exit event to the callback and removes the thread from tracking.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
 void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
-	// Report an Exited event to the callback before removing the thread
 
 	Event e = {
 		{},
@@ -382,6 +387,12 @@ void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
 	}
 }
 
+/**
+ * @brief Reports a clone event to the callback and adds the new thread to tracking.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
 void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
 	unsigned long message;
@@ -413,6 +424,14 @@ void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 	}
 }
 
+/**
+ * @brief Reports an exit trace event to the callback and removes the thread from tracking.
+ * An exit trace event is a special ptrace event that is triggered when a thread is about to exit,
+ * but before it has fully exited.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
 void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback) {
 
 	// Thread is about to exit — report as a Terminated event.
@@ -438,6 +457,15 @@ void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback
 	}
 }
 
+/**
+ * @brief Reports a signal event to the callback and removes the thread from tracking.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ *
+ * @note A signal event is triggered when a thread is terminated by a signal.
+ * This is different from a normal exit event because the thread was not able to clean up and exit normally.
+ */
 void Process::handle_signal_event(EventContext &ctx, event_callback callback) {
 #if 0
 	if (std::exchange(ctx.first_stop, false)) {
@@ -471,12 +499,24 @@ void Process::handle_signal_event(EventContext &ctx, event_callback callback) {
 	}
 }
 
+/**
+ * @brief Reports a continue event to the callback. A continue event is triggered when a thread is continued after being stopped.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
 void Process::handle_continue_event(EventContext &ctx, event_callback callback) {
 	(void)ctx;
 	(void)callback;
 	// NOTE(eteran): Not sure under what circumstances we would get a continue event, but we handle it just in case.
 }
 
+/**
+ * @brief Reports a trap event to the callback. A trap event is triggered when a thread hits a breakpoint or finishes a single step.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
 void Process::handle_trap_event(EventContext &ctx, event_callback callback) {
 
 	(void)callback;
@@ -498,6 +538,15 @@ void Process::handle_trap_event(EventContext &ctx, event_callback callback) {
 	}
 }
 
+/**
+ * @brief Reports an unknown event to the callback. This is a catch-all for events that we don't have specific handlers for.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ *
+ * @note This is used to catch things like our "alt-breakpoints" which are breakpoints that don't use an actual breakpoint instruction
+ * and thus don't trigger a trap event, but we can still detect them by checking if the instruction at the current RIP matches a known breakpoint pattern.
+ */
 void Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
 	(void)callback;
 
@@ -644,16 +693,16 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 				break;
 			case SIGSEGV:
-				std::printf("Thread %d got a SIGSEGV at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				std::printf("Thread %d got a SIGSEGV at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
 				break;
 			case SIGFPE:
-				std::printf("Thread %d got a SIGFPE at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				std::printf("Thread %d got a SIGFPE at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
 				break;
 			case SIGILL:
-				std::printf("Thread %d got a SIGILL at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				std::printf("Thread %d got a SIGILL at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
 				break;
 			case SIGBUS:
-				std::printf("Thread %d got a SIGBUS at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				std::printf("Thread %d got a SIGBUS at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
 				break;
 			default:
 				handle_unknown_event(ctx, callback);

@@ -7,7 +7,7 @@
 #include <csignal>
 
 struct Event {
-	enum Type {
+	enum class Type {
 		Exited,     // exited normally
 		Terminated, // terminated by event
 		Stopped,    // normal event
@@ -15,12 +15,12 @@ struct Event {
 		Unknown,
 	};
 
-	siginfo_t siginfo = {};
-	pid_t pid         = 0;
-	pid_t tid         = 0;
-	int status        = 0;
-	Type type         = Type::Unknown;
-	pid_t new_tid     = 0; // for clone events, the TID of the new thread/process
+	siginfo_t siginfo = {};            // signal info for signal events, empty for non-signal events
+	pid_t pid         = 0;             // PID of the process that generated the event
+	pid_t tid         = 0;             // TID of the thread that generated the event
+	int status        = 0;             // wait status from waitpid, can be used to further inspect the event
+	Type type         = Type::Unknown; // type of the event
+	pid_t new_tid     = 0;             // for clone events, the TID of the new thread/process
 };
 
 #endif
