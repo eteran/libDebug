@@ -15,6 +15,7 @@
 #include <sys/types.h>
 
 class Thread;
+class Memory;
 
 class Process {
 	friend class Debugger;
@@ -104,20 +105,16 @@ private:
 	void handle_unknown_event(EventContext &ctx, event_callback callback);
 
 private:
-	int64_t read_memory_ptrace(uint64_t address, void *buffer, size_t n) const;
-	int64_t write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const;
-	int64_t read_memory_pread(uint64_t address, void *buffer, size_t n) const;
-	int64_t write_memory_pwrite(uint64_t address, const void *buffer, size_t n) const;
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;
 
 private:
 	pid_t pid_     = 0;
-	int memfd_     = -1;
 	bool all_stop_ = true;
 	std::shared_ptr<Thread> active_thread_;
 	std::unordered_map<pid_t, std::shared_ptr<Thread>> threads_;
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
 	std::unordered_set<int> ignored_signals_;
+	std::unique_ptr<Memory> memory_;
 };
 
 #endif

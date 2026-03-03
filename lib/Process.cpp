@@ -7,6 +7,7 @@
 #include "Debug/Breakpoint.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Event.hpp"
+#include "Debug/Memory.hpp"
 #include "Debug/Proc.hpp"
 #include "Debug/Thread.hpp"
 
@@ -102,18 +103,6 @@ bool is_exit_trace_event(int status) {
 	return is_ptrace_event(status, PTRACE_EVENT_EXIT);
 }
 
-/**
- * @brief Opens the /proc/<pid>/mem file descriptor for the given pid.
- *
- * @param pid The pid to open the memory file descriptor for.
- * @return The file descriptor for the memory file, or -1 on error.
- */
-int open_memfd(pid_t pid) {
-	char path[PATH_MAX];
-	std::snprintf(path, sizeof(path), "/proc/%d/mem", pid);
-	return open(path, O_RDWR);
-}
-
 }
 
 /**
@@ -157,9 +146,10 @@ Process::Process(const internal_t &, pid_t pid, Flag flags)
 		threads_.emplace(pid, threads);
 	}
 
-	memfd_ = open_memfd(pid_);
-	if (memfd_ == -1) {
-		throw DebuggerError("Failed to open memory file descriptor for process %d: %s", pid_, strerror(errno));
+	try {
+		memory_ = std::make_unique<ProcMemory>(pid);
+	} catch (const DebuggerError &) {
+		memory_ = std::make_unique<PtraceMemory>(pid);
 	}
 
 	report();
@@ -204,12 +194,7 @@ void Process::report() const {
  * @brief Destroy the Process object and detaches the debugger from the associated process.
  */
 Process::~Process() {
-
 	detach();
-
-	if (memfd_ != -1) {
-		close(memfd_);
-	}
 }
 
 /**
@@ -247,64 +232,12 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 
-	int64_t ret = read_memory_pread(address, buffer, n);
-
-	if (ret != static_cast<int64_t>(n)) {
-		ret = read_memory_ptrace(address, buffer, n);
-	}
+	int64_t ret = memory_->read(address, buffer, n);
 
 	if (ret > 0) {
 		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
 	}
 	return ret;
-}
-
-/**
- * @brief Reads bytes from the attached process using the `pread` syscall.
- *
- * @param address The address in the attached process to read from.
- * @param buffer Where to store the bytes, must be at least `n` bytes big.
- * @param n How many bytes to read.
- * @return how many bytes actually read.
- */
-int64_t Process::read_memory_pread(uint64_t address, void *buffer, size_t n) const {
-	return pread(memfd_, buffer, n, static_cast<off_t>(address));
-}
-
-/**
- * @brief Reads bytes from the attached process using the `ptrace` syscall.
- *
- * @param address The address in the attached process to read from.
- * @param buffer Where to store the bytes, must be at least `n` bytes big.
- * @param n How many bytes to read.
- * @return how many bytes actually read.
- */
-int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) const {
-	auto ptr      = static_cast<uint8_t *>(buffer);
-	int64_t total = 0;
-
-	while (n > 0) {
-		errno          = 0;
-		const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-		if (ret == -1 && errno != 0) {
-			// we just ignore ESRCH because it means the process
-			// was terminated while we were trying to read
-			if (errno == ESRCH) {
-				return 0;
-			}
-			break;
-		}
-
-		const size_t count = std::min(n, sizeof(ret));
-		std::memcpy(ptr, &ret, count);
-
-		address += count;
-		ptr += count;
-		total += static_cast<int64_t>(count);
-		n -= count;
-	}
-
-	return total;
 }
 
 /**
@@ -316,79 +249,7 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  * @return how many bytes actually written.
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
-	// NOTE(eteran): we don't use `process_vm_writev` here because it doesn't allow for writing to read-only pages
-	// which is necessary for implementing breakpoints. We try `pwrite` first because it's faster,
-	// but if it fails we fall back to `ptrace` which is more likely to succeed.
-#if 1
-	if (write_memory_pwrite(address, buffer, n) == static_cast<int64_t>(n)) {
-		return static_cast<int64_t>(n);
-	}
-#endif
-	return write_memory_ptrace(address, buffer, n);
-}
-
-/**
- * @brief Writes bytes to the attached process using the `pwrite` syscall.
- *
- * @param address The address in the attached process to write to.
- * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
- * @param n How many bytes to write.
- * @return how many bytes actually written.
- */
-int64_t Process::write_memory_pwrite(uint64_t address, const void *buffer, size_t n) const {
-	return pwrite(memfd_, buffer, n, static_cast<off_t>(address));
-}
-
-/**
- * @brief Writes bytes to the attached process using the `ptrace` syscall.
- *
- * @param address The address in the attached process to write to.
- * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
- * @param n How many bytes to write.
- * @return how many bytes actually written.
- */
-int64_t Process::write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const {
-	auto ptr      = static_cast<const uint8_t *>(buffer);
-	int64_t total = 0;
-
-	while (n > 0) {
-		const size_t count = std::min(n, sizeof(long));
-
-		alignas(long) uint8_t data[sizeof(long)] = {};
-		std::memcpy(data, ptr, count);
-
-		if (count < sizeof(long)) {
-			errno          = 0;
-			const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-			if (ret == -1 && errno != 0) {
-				// we just ignore ESRCH because it means the process
-				// was terminated while we were trying to read
-				if (errno == ESRCH) {
-					return 0;
-				}
-				throw DebuggerError("Failed to read memory for process %d: %s", pid_, strerror(errno));
-			}
-
-			std::memcpy(
-				data + count,
-				reinterpret_cast<const uint8_t *>(&ret) + count,
-				sizeof(long) - count);
-		}
-
-		long data_value;
-		std::memcpy(&data_value, data, sizeof(long));
-
-		if (ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
-			throw DebuggerError("Failed to write memory for process %d: %s", pid_, strerror(errno));
-		}
-
-		address += count;
-		ptr += count;
-		total += static_cast<int64_t>(count);
-		n -= count;
-	}
-
-	return total;
+	return memory_->write(address, buffer, n);
 }
 
 /**

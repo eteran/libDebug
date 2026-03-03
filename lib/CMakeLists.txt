@@ -8,6 +8,7 @@ set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/DebuggerError.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Event.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/EventStatus.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Memory.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Proc.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Process.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
@@ -16,6 +17,7 @@ set(SOURCES
     BreakpointIntel.cpp
     ContextIntel.cpp
     Debugger.cpp
+    Memory.cpp
     Proc.cpp
     Process.cpp
     ThreadIntel.cpp
