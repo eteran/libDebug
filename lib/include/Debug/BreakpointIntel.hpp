@@ -2,17 +2,18 @@
 #ifndef BREAKPOINT_INTEL_HPP_
 #define BREAKPOINT_INTEL_HPP_
 
-#include "Process.hpp"
 #include <atomic>
 #include <cstdint>
 #include <memory>
+
+class Process;
 
 // TODO(eteran): make this platform agnostic.
 
 class Breakpoint {
 public:
-	static constexpr size_t minBreakpointSize = 1;
-	static constexpr size_t maxBreakpointSize = 2;
+	static constexpr size_t MinBreakpointSize = 1;
+	static constexpr size_t MaxBreakpointSize = 2;
 
 public:
 	enum class TypeId : int {

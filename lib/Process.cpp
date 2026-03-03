@@ -482,7 +482,7 @@ int Process::wait() const {
  * @return The breakpoint if found, otherwise nullptr.
  */
 std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
-	for (uint64_t i = Breakpoint::minBreakpointSize; i <= Breakpoint::maxBreakpointSize; ++i) {
+	for (uint64_t i = Breakpoint::MinBreakpointSize; i <= Breakpoint::MaxBreakpointSize; ++i) {
 		if (address < i) {
 			continue;
 		}
@@ -842,10 +842,10 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
  *
  * @param address The address to add the breakpoint at.
  */
-void Process::add_breakpoint(uint64_t address) {
+void Process::add_breakpoint(uint64_t address, Breakpoint::TypeId type) {
 	// Construct the breakpoint first
 	// so we can use its actual size for precise overlap checks.
-	auto bp = std::make_shared<Breakpoint>(this, address);
+	auto bp = std::make_shared<Breakpoint>(this, address, type);
 	assert(bp->size() > 0);
 
 	const uint64_t new_start = bp->address();

@@ -1,3 +1,4 @@
+#include "Debug/Breakpoint.hpp"
 #include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Event.hpp"
@@ -6,10 +7,127 @@
 #include "Debug/Process.hpp"
 #include "Test.hpp"
 
+#include <array>
 #include <sys/mman.h>
 #include <sys/wait.h>
 
 using namespace std::chrono_literals;
+
+namespace {
+
+struct AltBreakpointCase {
+	Breakpoint::TypeId type;
+	const char *name;
+	int expected_signal;
+	int alternate_expected_signal;
+};
+
+void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
+
+	int addr_pipe[2];
+	int sync_pipe[2];
+	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
+	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
+
+	pid_t cpid = fork();
+	CHECK_MSG(cpid >= 0, "fork() failed");
+
+	if (cpid == 0) {
+		close(addr_pipe[0]);
+		close(sync_pipe[1]);
+
+		const size_t page = 4096;
+		void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		if (mem == MAP_FAILED) {
+			perror("mmap");
+			_exit(1);
+		}
+
+		auto code = static_cast<unsigned char *>(mem);
+
+		code[0] = 0x90; // NOP
+		code[1] = 0x90; // NOP
+		code[2] = 0xc3; // RET
+
+		// NOTE(eteran): This cast is only circumstantially "useless" depending
+		// on if we are building with -m32 or -m64, so we need to silence the warning here.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+		auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
+#pragma GCC diagnostic pop
+
+		ssize_t wrote = write(addr_pipe[1], &addr, sizeof(addr));
+		if (wrote != static_cast<ssize_t>(sizeof(addr))) {
+			_exit(1);
+		}
+
+		char ready;
+		if (read(sync_pipe[0], &ready, 1) != 1) {
+			_exit(1);
+		}
+
+		int (*fn)() = reinterpret_cast<int (*)()>(code);
+		fn();
+		_exit(0);
+	}
+
+	close(addr_pipe[1]);
+	close(sync_pipe[0]);
+
+	uint64_t code_addr = 0;
+	ssize_t rr         = read(addr_pipe[0], &code_addr, sizeof(code_addr));
+	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(code_addr)), "failed to read code address from pipe");
+
+	Debugger dbg;
+	std::shared_ptr<Process> proc;
+	try {
+		proc = dbg.attach(cpid);
+	} catch (const DebuggerError &) {
+		kill(cpid, SIGKILL);
+		waitpid(cpid, nullptr, 0);
+		CHECK_MSG(false, "dbg.attach() failed");
+		return;
+	}
+	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
+
+	proc->add_breakpoint(code_addr, test_case.type);
+
+	char one = 1;
+	if (write(sync_pipe[1], &one, 1) != 1) {
+		_exit(1);
+	}
+
+	proc->resume();
+
+	bool observed_stop = false;
+	bool signal_ok     = false;
+
+	auto cb = [&](const Event &e) -> EventStatus {
+		if (e.type == Event::Type::Stopped && e.tid == cpid) {
+			observed_stop = true;
+			if (e.siginfo.si_signo == test_case.expected_signal ||
+				(test_case.alternate_expected_signal != 0 && e.siginfo.si_signo == test_case.alternate_expected_signal)) {
+				signal_ok = true;
+			}
+			return EventStatus::Stop;
+		}
+
+		return EventStatus::Continue;
+	};
+
+	const auto deadline = std::chrono::steady_clock::now() + 5s;
+	while (std::chrono::steady_clock::now() < deadline && !observed_stop) {
+		(void)proc->next_debug_event(std::chrono::milliseconds(200), cb);
+	}
+
+	CHECK_MSG(observed_stop, test_case.name);
+	CHECK_MSG(signal_ok, test_case.name);
+
+	proc->kill();
+	proc->wait();
+}
+
+}
 
 TEST(BreakpointHit) {
 
@@ -118,4 +236,17 @@ TEST(BreakpointHit) {
 
 	proc->kill();
 	proc->wait();
+}
+
+TEST(AltBreakpointTypesReported) {
+	constexpr std::array<AltBreakpointCase, 4> TestCases = {
+		AltBreakpointCase{Breakpoint::TypeId::INT1, "INT1 did not report expected SIGTRAP", SIGTRAP, 0},
+		AltBreakpointCase{Breakpoint::TypeId::UD2, "UD2 did not report expected SIGILL", SIGILL, 0},
+		AltBreakpointCase{Breakpoint::TypeId::UD0, "UD0 did not report expected SIGILL", SIGILL, 0},
+		AltBreakpointCase{Breakpoint::TypeId::HLT, "HLT did not report expected SIGSEGV/SIGILL", SIGSEGV, SIGILL},
+	};
+
+	for (auto const &test_case : TestCases) {
+		run_alt_breakpoint_case(test_case);
+	}
 }

@@ -1,14 +1,15 @@
 
 #include "Debug/BreakpointIntel.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Process.hpp"
 
 #include <cassert>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <sys/ptrace.h>
 #include <signal.h>
+#include <sys/ptrace.h>
 
 namespace {
 

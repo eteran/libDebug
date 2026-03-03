@@ -2,6 +2,7 @@
 #ifndef PROCESS_HPP_
 #define PROCESS_HPP_
 
+#include "Breakpoint.hpp"
 #include "Event.hpp"
 #include "EventStatus.hpp"
 
@@ -14,7 +15,6 @@
 #include <sys/types.h>
 
 class Thread;
-class Breakpoint;
 
 class Process {
 	friend class Debugger;
@@ -62,7 +62,7 @@ public:
 
 public:
 	// breakpoint API
-	void add_breakpoint(uint64_t address);
+	void add_breakpoint(uint64_t address, Breakpoint::TypeId type = Breakpoint::TypeId::Automatic);
 	void remove_breakpoint(uint64_t address);
 	[[nodiscard]] std::shared_ptr<Breakpoint> find_breakpoint(uint64_t address) const;
 	[[nodiscard]] std::shared_ptr<Breakpoint> search_breakpoint(uint64_t address) const;
