@@ -27,11 +27,10 @@ set_target_properties(UnitTests64 PROPERTIES
 target_compile_options(UnitTests64 PRIVATE -m64)
 if(ENABLE_COVERAGE)
     target_compile_options(UnitTests64 PRIVATE -g -O0 --coverage)
-    set(TEST_LINK_FLAGS "-m64 --coverage")
+    set_target_properties(UnitTests64 PROPERTIES LINK_FLAGS "-m64 --coverage")
 else()
-    set(TEST_LINK_FLAGS "-m64")
+    set_target_properties(UnitTests64 PROPERTIES LINK_FLAGS "-m64")
 endif()
-set_target_properties(UnitTests64 PROPERTIES LINK_FLAGS "${TEST_LINK_FLAGS}")
 
 add_test(NAME UnitTests64 COMMAND UnitTests64)
 
@@ -50,10 +49,9 @@ set_target_properties(UnitTests32 PROPERTIES
 target_compile_options(UnitTests32 PRIVATE -m32)
 if(ENABLE_COVERAGE)
     target_compile_options(UnitTests32 PRIVATE -g -O0 --coverage)
-    set(TEST_LINK_FLAGS "-m32 --coverage")
+    set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32 --coverage")
 else()
-    set(TEST_LINK_FLAGS "-m32")
+    set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32")
 endif()
-set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "${TEST_LINK_FLAGS}")
 
 add_test(NAME UnitTests32 COMMAND UnitTests32)
