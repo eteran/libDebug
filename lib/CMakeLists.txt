@@ -60,11 +60,10 @@ target_compile_options(Debug64
 
 if(ENABLE_COVERAGE)
     target_compile_options(Debug64 PRIVATE -g -O0 --coverage)
-    set(LIB_LINK_FLAGS "-m64 --coverage")
+    set_target_properties(Debug64 PROPERTIES LINK_FLAGS "-m64 --coverage")
 else()
-    set(LIB_LINK_FLAGS "-m64")
+    set_target_properties(Debug64 PROPERTIES LINK_FLAGS "-m64")
 endif()
-set_target_properties(Debug64 PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")
 
 
 # 32-bit library target
@@ -88,8 +87,8 @@ target_compile_options(Debug32
 
 if(ENABLE_COVERAGE)
     target_compile_options(Debug32 PRIVATE -g -O0 --coverage)
-    set(LIB_LINK_FLAGS "-m32 --coverage")
+    set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32 --coverage")
 else()
-    set(LIB_LINK_FLAGS "-m32")
+    set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32")
 endif()
-set_target_properties(Debug32 PROPERTIES LINK_FLAGS "${LIB_LINK_FLAGS}")
+
