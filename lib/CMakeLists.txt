@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
 
-
 set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Breakpoint.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/BreakpointIntel.hpp
@@ -22,6 +21,24 @@ set(SOURCES
     ThreadIntel.cpp
 )
 
+set(COMPILER_FLAGS
+    -pedantic
+    -W
+    -Wall
+    -Wcast-align
+    -Wconversion
+    -Wformat=2
+    -Wnarrowing
+    -Wnon-virtual-dtor
+    -Wnull-dereference
+    -Wold-style-cast
+    -Woverloaded-virtual
+    -Wshadow
+    -Wsign-conversion
+    -Wunused
+    -Wuseless-cast
+)
+
 # 64-bit library target
 add_library(Debug64 ${SOURCES})
 
@@ -38,21 +55,7 @@ set_target_properties(Debug64
 # Always apply architecture compile option
 target_compile_options(Debug64
     PRIVATE -m64
-    PUBLIC -pedantic
-           -W
-           -Wall
-           -Wcast-align
-           -Wconversion
-           -Wformat=2
-           -Wnarrowing
-           -Wnon-virtual-dtor
-           -Wnull-dereference
-           -Wold-style-cast
-           -Woverloaded-virtual
-           -Wshadow
-           -Wsign-conversion
-           -Wunused
-           -Wuseless-cast
+    PUBLIC ${COMPILER_FLAGS}
 )
 
 if(ENABLE_COVERAGE)
@@ -80,21 +83,7 @@ set_target_properties(Debug32
 # Always apply architecture compile option
 target_compile_options(Debug32
     PRIVATE -m32
-    PUBLIC -pedantic
-           -W
-           -Wall
-           -Wcast-align
-           -Wconversion
-           -Wformat=2
-           -Wnarrowing
-           -Wnon-virtual-dtor
-           -Wnull-dereference
-           -Wold-style-cast
-           -Woverloaded-virtual
-           -Wshadow
-           -Wsign-conversion
-           -Wunused
-           -Wuseless-cast
+    PUBLIC ${COMPILER_FLAGS}
 )
 
 if(ENABLE_COVERAGE)
