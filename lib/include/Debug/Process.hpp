@@ -106,8 +106,6 @@ private:
 private:
 	int64_t read_memory_ptrace(uint64_t address, void *buffer, size_t n) const;
 	int64_t write_memory_ptrace(uint64_t address, const void *buffer, size_t n) const;
-	int64_t read_memory_iovec(uint64_t address, void *buffer, size_t n) const;
-	int64_t write_memory_iovec(uint64_t address, const void *buffer, size_t n) const;
 	int64_t read_memory_pread(uint64_t address, void *buffer, size_t n) const;
 	int64_t write_memory_pwrite(uint64_t address, const void *buffer, size_t n) const;
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;

@@ -38,14 +38,6 @@ enum FeatureBit : uint64_t {
 	FEATURE_AVX512 = FEATURE_K | FEATURE_ZMM_H | FEATURE_ZMM,
 };
 
-#if 0
-	// Possible sizes of X86_XSTATE
-	static constexpr size_t BNDREGS_SIZE           = 1024;
-	static constexpr size_t BNDCFG_SIZE            = 1088;
-	static constexpr size_t AVX512_SIZE            = 2688;
-	static constexpr size_t MAX_SIZE               = 2688;
-#endif
-
 constexpr long TraceOptions = PTRACE_O_TRACECLONE |
 							  PTRACE_O_TRACEFORK |
 							  PTRACE_O_TRACEEXIT;
@@ -233,9 +225,9 @@ void Thread::resume(int signal) {
 		// If the wait did not result in the single-step we expected, forward the
 		// event (signal/exit) back to the event loop by continuing with the
 		// appropriate signal and returning without re-enabling the breakpoint.
-		if (!WIFSTOPPED(wstatus_) || WSTOPSIG(wstatus_) != SIGTRAP) {
+		if (!is_stopped() || stop_status() != SIGTRAP) {
 			// If the thread exited or was signaled, nothing to continue here.
-			if (WIFEXITED(wstatus_) || WIFSIGNALED(wstatus_)) {
+			if (is_exited() || is_signaled()) {
 				return;
 			}
 

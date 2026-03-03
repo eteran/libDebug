@@ -247,10 +247,7 @@ void Process::filter_breakpoints(uint64_t address, void *buffer, size_t n) const
  */
 int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 
-	int64_t ret = read_memory_iovec(address, buffer, n);
-	if (ret != static_cast<int64_t>(n)) {
-		ret = read_memory_pread(address, buffer, n);
-	}
+	int64_t ret = read_memory_pread(address, buffer, n);
 
 	if (ret != static_cast<int64_t>(n)) {
 		ret = read_memory_ptrace(address, buffer, n);
@@ -260,24 +257,6 @@ int64_t Process::read_memory(uint64_t address, void *buffer, size_t n) const {
 		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
 	}
 	return ret;
-}
-
-int64_t Process::read_memory_iovec(uint64_t address, void *buffer, size_t n) const {
-	struct iovec local_iov;
-	struct iovec remote_iov;
-
-	local_iov.iov_base = buffer;
-	local_iov.iov_len  = n;
-
-	remote_iov.iov_base = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
-	remote_iov.iov_len  = n;
-
-	ssize_t ret = process_vm_readv(pid_, &local_iov, 1, &remote_iov, 1, 0);
-	if (ret > 0) {
-		filter_breakpoints(address, buffer, static_cast<size_t>(ret));
-	}
-
-	return static_cast<int64_t>(ret);
 }
 
 /**
@@ -337,37 +316,15 @@ int64_t Process::read_memory_ptrace(uint64_t address, void *buffer, size_t n) co
  * @return how many bytes actually written.
  */
 int64_t Process::write_memory(uint64_t address, const void *buffer, size_t n) const {
+	// NOTE(eteran): we don't use `process_vm_writev` here because it doesn't allow for writing to read-only pages
+	// which is necessary for implementing breakpoints. We try `pwrite` first because it's faster,
+	// but if it fails we fall back to `ptrace` which is more likely to succeed.
 #if 1
-	if (write_memory_iovec(address, buffer, n) == static_cast<int64_t>(n)) {
-		return static_cast<int64_t>(n);
-	}
-
 	if (write_memory_pwrite(address, buffer, n) == static_cast<int64_t>(n)) {
 		return static_cast<int64_t>(n);
 	}
 #endif
 	return write_memory_ptrace(address, buffer, n);
-}
-
-/**
- * @brief Writes bytes to the attached process using the `process_vm_writev` syscall.
- *
- * @param address The address in the attached process to write to.
- * @param buffer A buffer containing the bytes to write must be at least `n` bytes big.
- * @param n How many bytes to write.
- * @return how many bytes actually written.
- */
-int64_t Process::write_memory_iovec(uint64_t address, const void *buffer, size_t n) const {
-	// Try process_vm_writev first for a direct, efficient write into the
-	// tracee's address space. If it fails, fall back to /proc/<pid>/mem pwrite.
-	struct iovec local_iov;
-	struct iovec remote_iov;
-	local_iov.iov_base  = const_cast<void *>(buffer);
-	local_iov.iov_len   = n;
-	remote_iov.iov_base = reinterpret_cast<void *>(static_cast<uintptr_t>(address));
-	remote_iov.iov_len  = n;
-
-	return process_vm_writev(pid_, &local_iov, 1, &remote_iov, 1, 0);
 }
 
 /**
@@ -621,10 +578,11 @@ void Process::handle_exit_trace_event(EventContext &ctx, event_callback callback
 }
 
 void Process::handle_signal_event(EventContext &ctx, event_callback callback) {
+#if 0
 	if (std::exchange(ctx.first_stop, false)) {
 		active_thread_ = ctx.current_thread;
 	}
-
+#endif
 	std::printf("Thread %d was terminated by signal %d\n", ctx.tid, WTERMSIG(ctx.wstatus));
 
 	// Report a Terminated event so callers can observe the terminating signal.
@@ -786,20 +744,59 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 			}
 
 			/* Load siginfo for stopped events so callbacks can inspect it. */
-			(void)ctx.current_thread->load_signal_info();
+			if (!ctx.current_thread->load_signal_info()) {
+				// Can't proceed without valid signal info—resume and continue to next event
+				ctx.current_thread->resume(stop_sig);
+				continue;
+			}
 
-			if (is_trap_event(ctx.wstatus)) {
+			switch (ctx.current_thread->siginfo_.si_signo) {
+			case SIGTRAP:
+
+				switch (ctx.current_thread->siginfo_.si_code) {
+				case SI_KERNEL:
+				case TRAP_BRKPT:
+					handle_trap_event(ctx, callback);
+					break;
+				case TRAP_TRACE:
+					std::printf("Hit a trace trap\n");
+					break;
+				case TRAP_BRANCH:
+					std::printf("Hit a branch trap\n");
+					break;
+				case TRAP_HWBKPT:
+					std::printf("Hit a hardware breakpoint/watchpoint trap\n");
+					break;
+				case TRAP_UNK:
+				default:
+					std::printf("Hit an unknown trap: si_code=%d\n", ctx.current_thread->siginfo_.si_code);
+					break;
+				}
+
 				if (is_exit_trace_event(ctx.wstatus)) {
 					handle_exit_trace_event(ctx, callback);
 					continue;
 				} else if (is_clone_event(ctx.wstatus)) {
 					handle_clone_event(ctx, callback);
 					continue;
-				} else {
-					handle_trap_event(ctx, callback);
 				}
-			} else {
+
+				break;
+			case SIGSEGV:
+				std::printf("Thread %d got a SIGSEGV at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				break;
+			case SIGFPE:
+				std::printf("Thread %d got a SIGFPE at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				break;
+			case SIGILL:
+				std::printf("Thread %d got a SIGILL at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				break;
+			case SIGBUS:
+				std::printf("Thread %d got a SIGBUS at address 0x%" PRIx64 "\n", tid, ctx.current_thread->siginfo_.si_addr);
+				break;
+			default:
 				handle_unknown_event(ctx, callback);
+				break;
 			}
 
 			Event e = {

@@ -123,7 +123,7 @@ void Breakpoint::enable() {
 	}
 
 	if (w == 0) {
-		// pwrite/process_vm_writev may return 0 when the process no longer exists.
+		// pwrite may return 0 when the process no longer exists.
 		if (kill(process_->pid(), 0) == -1 && errno == ESRCH) {
 			enabled_ = false;
 			return;
