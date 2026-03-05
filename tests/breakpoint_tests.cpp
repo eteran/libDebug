@@ -1,14 +1,11 @@
 #include "Debug/Breakpoint.hpp"
-#include "Debug/Debugger.hpp"
-#include "Debug/DebuggerError.hpp"
 #include "Debug/Event.hpp"
 #include "Debug/EventStatus.hpp"
-#include "Debug/Proc.hpp"
-#include "Debug/Process.hpp"
+#include "Debug/Thread.hpp"
 #include "Test.hpp"
+#include "TestHelpers.hpp"
 
 #include <array>
-#include <sys/mman.h>
 #include <sys/wait.h>
 
 using namespace std::chrono_literals;
@@ -23,219 +20,75 @@ struct AltBreakpointCase {
 };
 
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
+	with_attached_child_with_address(
+		child_run_basic_executable_buffer,
+		[&](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address, test_case.type);
 
-	int addr_pipe[2];
-	int sync_pipe[2];
-	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
-	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
 
-	pid_t cpid = fork();
-	CHECK_MSG(cpid >= 0, "fork() failed");
+			bool observed_stop = false;
+			bool signal_ok     = false;
 
-	if (cpid == 0) {
-		close(addr_pipe[0]);
-		close(sync_pipe[1]);
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.type == Event::Type::Stopped && e.tid == ctx.child_pid) {
+					observed_stop = true;
+					if (e.siginfo.si_signo == test_case.expected_signal ||
+						(test_case.alternate_expected_signal != 0 && e.siginfo.si_signo == test_case.alternate_expected_signal)) {
+						signal_ok = true;
+					}
+					return EventStatus::Stop;
+				}
 
-		const size_t page = 4096;
-		void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		if (mem == MAP_FAILED) {
-			perror("mmap");
-			_exit(1);
-		}
+				return EventStatus::Continue;
+			};
 
-		auto code = static_cast<unsigned char *>(mem);
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return observed_stop; });
 
-		code[0] = 0x90; // NOP
-		code[1] = 0x90; // NOP
-		code[2] = 0xc3; // RET
+			CHECK_MSG(observed, test_case.name);
+			CHECK_MSG(signal_ok, test_case.name);
 
-		// NOTE(eteran): This cast is only circumstantially "useless" depending
-		// on if we are building with -m32 or -m64, so we need to silence the warning here.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-		auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
-#pragma GCC diagnostic pop
-
-		ssize_t wrote = write(addr_pipe[1], &addr, sizeof(addr));
-		if (wrote != static_cast<ssize_t>(sizeof(addr))) {
-			_exit(1);
-		}
-
-		char ready;
-		if (read(sync_pipe[0], &ready, 1) != 1) {
-			_exit(1);
-		}
-
-		int (*fn)() = reinterpret_cast<int (*)()>(code);
-		fn();
-		_exit(0);
-	}
-
-	close(addr_pipe[1]);
-	close(sync_pipe[0]);
-
-	uint64_t code_addr = 0;
-	ssize_t rr         = read(addr_pipe[0], &code_addr, sizeof(code_addr));
-	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(code_addr)), "failed to read code address from pipe");
-
-	Debugger dbg;
-	std::shared_ptr<Process> proc;
-	try {
-		proc = dbg.attach(cpid);
-	} catch (const DebuggerError &) {
-		kill(cpid, SIGKILL);
-		waitpid(cpid, nullptr, 0);
-		CHECK_MSG(false, "dbg.attach() failed");
-		return;
-	}
-	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
-
-	proc->add_breakpoint(code_addr, test_case.type);
-
-	char one = 1;
-	if (write(sync_pipe[1], &one, 1) != 1) {
-		_exit(1);
-	}
-
-	proc->resume();
-
-	bool observed_stop = false;
-	bool signal_ok     = false;
-
-	auto cb = [&](const Event &e) -> EventStatus {
-		if (e.type == Event::Type::Stopped && e.tid == cpid) {
-			observed_stop = true;
-			if (e.siginfo.si_signo == test_case.expected_signal ||
-				(test_case.alternate_expected_signal != 0 && e.siginfo.si_signo == test_case.alternate_expected_signal)) {
-				signal_ok = true;
-			}
-			return EventStatus::Stop;
-		}
-
-		return EventStatus::Continue;
-	};
-
-	const auto deadline = std::chrono::steady_clock::now() + 5s;
-	while (std::chrono::steady_clock::now() < deadline && !observed_stop) {
-		(void)proc->next_debug_event(std::chrono::milliseconds(200), cb);
-	}
-
-	CHECK_MSG(observed_stop, test_case.name);
-	CHECK_MSG(signal_ok, test_case.name);
-
-	proc->kill();
-	proc->wait();
+			ctx.process->kill();
+			ctx.process->wait();
+		},
+		true);
 }
 
 }
 
 TEST(BreakpointHit) {
+	with_attached_child_with_address(
+		child_run_basic_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
 
-	int addr_pipe[2];
-	int sync_pipe[2];
-	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
-	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
+			bool hit = false;
+			auto cb  = [&](const Event &e) -> EventStatus {
+                if (e.type == Event::Type::Stopped) {
+                    hit = true;
+                }
+                return EventStatus::Continue;
+			};
 
-	pid_t cpid = fork();
-	CHECK_MSG(cpid >= 0, "fork() failed");
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return hit; });
 
-	if (cpid == 0) {
-		close(addr_pipe[0]);
-		close(sync_pipe[1]);
-
-		const size_t page = 4096;
-		void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		if (mem == MAP_FAILED) {
-			perror("mmap");
-			_exit(1);
-		}
-
-		auto code = static_cast<unsigned char *>(mem);
-
-		code[0] = 0x90; // NOP
-		code[1] = 0x90; // NOP
-		code[2] = 0xc3; // RET
-
-		// NOTE(eteran): This cast is only circumstantially "useless" depending
-		// on if we are building with -m32 or -m64, so we need to silence the warning here.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-		auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
-#pragma GCC diagnostic pop
-
-		ssize_t wrote = write(addr_pipe[1], &addr, sizeof(addr));
-		if (wrote != static_cast<ssize_t>(sizeof(addr))) {
-			_exit(1);
-		}
-
-		// wait for parent to signal it's ready
-		char ready;
-		if (read(sync_pipe[0], &ready, 1) != 1) {
-			_exit(1);
-		}
-
-		int (*fn)() = reinterpret_cast<int (*)()>(code);
-		fn();
-		_exit(0);
-	}
-
-	// Parent: receive address, attach, set breakpoint, then allow child to continue.
-	close(addr_pipe[1]);
-	close(sync_pipe[0]);
-
-	uint64_t code_addr = 0;
-	ssize_t rr         = read(addr_pipe[0], &code_addr, sizeof(code_addr));
-	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(code_addr)), "failed to read code address from pipe");
-
-	Debugger dbg;
-	std::shared_ptr<Process> proc;
-	try {
-		proc = dbg.attach(cpid);
-	} catch (const DebuggerError &e) {
-		kill(cpid, SIGKILL);
-		waitpid(cpid, nullptr, 0);
-		return;
-	}
-	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
-
-	proc->add_breakpoint(code_addr);
-
-	// signal child to continue
-	char one = 1;
-	if (write(sync_pipe[1], &one, 1) != 1) {
-		_exit(1);
-	}
-
-	proc->resume();
-
-	volatile bool hit = false;
-	auto cb           = [&](const Event &e) -> EventStatus {
-        if (e.type == Event::Type::Stopped) {
-            hit = true;
-        }
-
-        return EventStatus::Continue;
-	};
-
-	// Some SIGCHLDs may wake the wait without delivering a trace event
-	// for our thread; poll next_debug_event until we observe the breakpoint
-	// or until a total timeout elapses.
-	const auto deadline = std::chrono::steady_clock::now() + 5s;
-	bool observed       = false;
-	while (std::chrono::steady_clock::now() < deadline) {
-		if (proc->next_debug_event(std::chrono::milliseconds(200), cb)) {
-			if (hit) {
-				observed = true;
-				break;
-			}
-
-			printf("Spurious debug event observed, waiting for breakpoint...\n");
-		}
-	}
-	CHECK_MSG(observed, "did not observe expected breakpoint event");
-
-	proc->kill();
-	proc->wait();
+			CHECK_MSG(observed, "did not observe expected breakpoint event");
+			ctx.process->kill();
+			ctx.process->wait();
+		});
 }
 
 TEST(AltBreakpointTypesReported) {
@@ -249,4 +102,63 @@ TEST(AltBreakpointTypesReported) {
 	for (auto const &test_case : TestCases) {
 		run_alt_breakpoint_case(test_case);
 	}
+}
+
+TEST(HardwareExecuteBreakpointHit) {
+	with_attached_child_with_address(
+		child_run_basic_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			auto thread = ctx.process->active_thread();
+			CHECK_MSG(thread != nullptr, "proc->active_thread() returned null");
+
+			Context context;
+			thread->get_context(&context);
+			CHECK_MSG(context.is_set(), "thread->get_context did not populate context");
+
+			context[RegisterId::DR0] = ctx.address;
+			context[RegisterId::DR6] = static_cast<uint64_t>(0);
+
+			uint64_t dr7 = context[RegisterId::DR7].as<uint64_t>();
+			dr7 &= ~(0xfULL << 16); // RW0/LEN0 for bp0: execute, len=1
+			dr7 |= 0x1ULL;          // local enable for bp0
+			context[RegisterId::DR7] = dr7;
+
+			thread->set_context(&context);
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			bool observed_stop    = false;
+			bool observed_hwbkpt  = false;
+			bool observed_sigtrap = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.type == Event::Type::Stopped && e.tid == ctx.child_pid) {
+					observed_stop    = true;
+					observed_sigtrap = (e.siginfo.si_signo == SIGTRAP);
+#ifdef TRAP_HWBKPT
+					observed_hwbkpt = (e.siginfo.si_code == TRAP_HWBKPT);
+#endif
+					return EventStatus::Stop;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return observed_stop; });
+
+			CHECK_MSG(observed, "did not observe stop for hardware breakpoint");
+			CHECK_MSG(observed_sigtrap, "hardware breakpoint did not report SIGTRAP");
+#ifdef TRAP_HWBKPT
+			CHECK_MSG(observed_hwbkpt, "hardware breakpoint did not report TRAP_HWBKPT");
+#endif
+
+			ctx.process->kill();
+			ctx.process->wait();
+		});
 }

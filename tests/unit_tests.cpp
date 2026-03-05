@@ -2,6 +2,7 @@
 #include "Debug/Region.hpp"
 #include "Debug/RegisterRef.hpp"
 #include "Test.hpp"
+#include "TestHelpers.hpp"
 
 #include <cassert>
 #include <cstdio>
@@ -56,6 +57,10 @@ TEST(EnumerateProcesses) {
 	CHECK_MSG(!procs.empty(), "enumerate_processes returned empty list");
 
 	bool found = false;
-	for (auto p : procs) if (p == self) { found = true; break; }
+	for (auto p : procs)
+		if (p == self) {
+			found = true;
+			break;
+		}
 	CHECK_MSG(found, "enumerate_processes did not include current pid");
 }

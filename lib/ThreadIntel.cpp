@@ -56,6 +56,17 @@ long create_ptrace_options(Thread::Flag f) {
 	return options;
 }
 
+/**
+ * @brief Helper function to calculate the offset of debug registers in the user struct for ptrace PEEKUSER calls.
+ *
+ * @param idx The index of the debug register (0-7).
+ * @return The offset of the debug register in the user struct.
+ */
+size_t dr_offset(size_t idx) {
+	assert(idx < 8);
+	return offsetof(struct user, u_debugreg) + idx * sizeof(long);
+}
+
 // Common register size/count constants used throughout this file.
 constexpr size_t FpuRegisterCount = 8;
 constexpr size_t FpuRegisterSize  = 16;
@@ -850,14 +861,10 @@ void Thread::get_debug_registers(Context *ctx) const {
 void Thread::get_debug_registers64(Context *ctx) const {
 	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
 	// There isn't really any harm in this since the debug registers will just appear to have some large value.
-	ctx->ctx_64_.debug_regs[0] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-	ctx->ctx_64_.debug_regs[1] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-	ctx->ctx_64_.debug_regs[2] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-	ctx->ctx_64_.debug_regs[3] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-	ctx->ctx_64_.debug_regs[4] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-	ctx->ctx_64_.debug_regs[5] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-	ctx->ctx_64_.debug_regs[6] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-	ctx->ctx_64_.debug_regs[7] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+
+	for (size_t i = 0; i < 8; ++i) {
+		ctx->ctx_64_.debug_regs[i] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L));
+	}
 }
 
 /**
@@ -868,14 +875,9 @@ void Thread::get_debug_registers64(Context *ctx) const {
 void Thread::get_debug_registers32(Context *ctx) const {
 	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
 	// There isn't really any harm in this since the debug registers will just appear to have some large value.
-	ctx->ctx_32_.debug_regs[0] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[0]), 0L));
-	ctx->ctx_32_.debug_regs[1] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[1]), 0L));
-	ctx->ctx_32_.debug_regs[2] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[2]), 0L));
-	ctx->ctx_32_.debug_regs[3] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[3]), 0L));
-	ctx->ctx_32_.debug_regs[4] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[4]), 0L));
-	ctx->ctx_32_.debug_regs[5] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[5]), 0L));
-	ctx->ctx_32_.debug_regs[6] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[6]), 0L));
-	ctx->ctx_32_.debug_regs[7] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, u_debugreg[7]), 0L));
+	for (size_t i = 0; i < 8; ++i) {
+		ctx->ctx_32_.debug_regs[i] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L));
+	}
 }
 
 /**
