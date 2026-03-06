@@ -11,6 +11,7 @@ struct Event {
 		Exited,     // exited normally
 		Terminated, // terminated by event
 		Stopped,    // normal event
+		Fault,      // fault event, such as SIGSEGV, SIGFPE, etc.
 		Clone,      // clone/fork/vfork event
 		Unknown,
 	};

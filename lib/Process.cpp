@@ -693,16 +693,10 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 				break;
 			case SIGSEGV:
-				std::printf("Thread %d got a SIGSEGV at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
-				break;
 			case SIGFPE:
-				std::printf("Thread %d got a SIGFPE at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
-				break;
 			case SIGILL:
-				std::printf("Thread %d got a SIGILL at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
-				break;
 			case SIGBUS:
-				std::printf("Thread %d got a SIGBUS at address 0x%" PRIx64 "\n", tid, reinterpret_cast<uint64_t>(ctx.current_thread->siginfo_.si_addr));
+				std::printf("Thread %d received signal %d (%s)\n", tid, ctx.current_thread->siginfo_.si_signo, strsignal(ctx.current_thread->siginfo_.si_signo));
 				break;
 			default:
 				handle_unknown_event(ctx, callback);
