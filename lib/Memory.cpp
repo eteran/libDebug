@@ -32,6 +32,9 @@ ProcMemory::ProcMemory(pid_t pid) {
 	if (memfd_ == -1) {
 		throw DebuggerError("Failed to open memory file descriptor for process %d: %s", pid, strerror(errno));
 	}
+
+	// TODO(eteran): we should test if this fd works for reading and writing memory
+	// and if it doesn't throw an error to fall back to ptrace-based memory access.
 }
 
 /**

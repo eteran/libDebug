@@ -54,6 +54,10 @@ struct timespec duration_to_timespec(std::chrono::milliseconds msecs) {
  *
  * @param timeout How long to wait for the SIGCHLD signal in milliseconds.
  * @return true if a SIGCHLD was encountered, false if a timeout occurred.
+ *
+ * @note This function assumes that the signal is blocked in the current thread, so that it can be reliably received by `sigtimedwait`.
+ * This is the case for us because the only way to create a Process object is through the Debugger interface, which blocks SIGCHLD in
+ * the constructor before creating the Process object.
  */
 bool wait_for_sigchild(std::chrono::milliseconds timeout) {
 
@@ -86,6 +90,12 @@ bool is_ptrace_event(int status, int event) {
 	return is_trap_event(status) && (((status >> 16) & 0xffff) == event);
 }
 
+/**
+ * @brief Checks if the given status is a clone event.
+ *
+ * @param status The status to check.
+ * @return true if the status is a clone event, false otherwise.
+ */
 bool is_clone_event(int status) {
 	// Treat CLONE, FORK and VFORK ptrace events as equivalent "clone"-style events
 	return is_ptrace_event(status, PTRACE_EVENT_CLONE) ||
@@ -156,7 +166,8 @@ Process::Process(const internal_t &, pid_t pid, Flag flags)
 }
 
 /**
- * @brief
+ * @brief Prints a report about the current state of the process, including all threads and their contexts.
+ * This is useful for debugging and testing purposes.
  */
 void Process::report() const {
 
