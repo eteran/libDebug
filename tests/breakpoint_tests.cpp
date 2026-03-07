@@ -19,6 +19,76 @@ struct AltBreakpointCase {
 	int alternate_expected_signal;
 };
 
+struct FaultSignalCase {
+	int signal;
+	const char *failure_message;
+	void (*child_trigger)();
+};
+
+void trigger_sigsegv_fault() {
+	volatile int *ptr = nullptr;
+	*ptr              = 1;
+	_exit(1);
+}
+
+void trigger_sigill_fault() {
+	raise(SIGILL);
+	_exit(1);
+}
+
+void trigger_sigfpe_fault() {
+	raise(SIGFPE);
+	_exit(1);
+}
+
+void run_fault_signal_case(const FaultSignalCase &test_case) {
+	with_attached_child_sync(
+		[&](int sync_read_fd) {
+			char ready;
+			if (read(sync_read_fd, &ready, 1) != 1) {
+				_exit(1);
+			}
+
+			test_case.child_trigger();
+			_exit(1);
+		},
+		[&](const AttachedChildContext &ctx) {
+			ctx.process->resume();
+			notify_child_start(ctx.sync_write_fd);
+
+			bool observed_fault = false;
+			bool signal_ok      = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Fault) {
+					observed_fault = true;
+					signal_ok      = (e.siginfo.si_signo == test_case.signal);
+					return EventStatus::Stop;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return observed_fault; });
+
+			CHECK_MSG(observed, test_case.failure_message);
+			CHECK_MSG(signal_ok, test_case.failure_message);
+
+			ctx.process->kill();
+			ctx.process->wait();
+		},
+		true);
+}
+
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 	with_attached_child_with_address(
 		child_run_basic_executable_buffer,
@@ -161,4 +231,16 @@ TEST(HardwareExecuteBreakpointHit) {
 			ctx.process->kill();
 			ctx.process->wait();
 		});
+}
+
+TEST(FaultSignalsReported) {
+	constexpr std::array<FaultSignalCase, 3> TestCases = {
+		FaultSignalCase{SIGSEGV, "did not observe expected SIGSEGV fault event", trigger_sigsegv_fault},
+		FaultSignalCase{SIGILL, "did not observe expected SIGILL fault event", trigger_sigill_fault},
+		FaultSignalCase{SIGFPE, "did not observe expected SIGFPE fault event", trigger_sigfpe_fault},
+	};
+
+	for (const auto &test_case : TestCases) {
+		run_fault_signal_case(test_case);
+	}
 }
