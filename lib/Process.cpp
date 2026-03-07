@@ -526,15 +526,12 @@ void Process::handle_trap_event(EventContext &ctx, event_callback callback) {
 	// * processes stopped
 	// * a breakpoint
 	if (auto bp = search_breakpoint(ctx.address)) {
-		std::printf("Breakpoint!\n");
-
 		bp->hit();
 
 		ctx.address -= bp->size();
 		ctx.current_thread->set_instruction_pointer(ctx.address);
 
 		// BREAKPOINT!
-		// TODO(eteran): report as a trap event
 	}
 }
 
@@ -547,19 +544,142 @@ void Process::handle_trap_event(EventContext &ctx, event_callback callback) {
  * @note This is used to catch things like our "alt-breakpoints" which are breakpoints that don't use an actual breakpoint instruction
  * and thus don't trigger a trap event, but we can still detect them by checking if the instruction at the current RIP matches a known breakpoint pattern.
  */
-void Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
+bool Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
 	(void)callback;
 
 	if (auto bp = find_breakpoint(ctx.address)) {
-		std::printf("Alt-Breakpoint!\n");
-
 		bp->hit();
 
 		// NOTE(eteran): no need to rewind here because the instruction used for the BP
 		// didn't advance the instruction pointer
 
 		// ALT-BREAKPOINT!
-		// TODO(eteran): report as a trap event
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * @brief Reports a stop event to the callback. A stop event is triggered when a thread is stopped by a signal or by the user.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ */
+void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
+	if (std::exchange(ctx.first_stop, false)) {
+		active_thread_ = ctx.current_thread;
+	}
+
+	/*
+	 * If this is a signal-stop (i.e. not a SIGTRAP), and the signal
+	 * is configured to be ignored for this Process, resume the thread
+	 * and do not report an event to the callback.
+	 *
+	 * For non-ignored stops we load the `siginfo` so event handlers
+	 * always receive valid signal information.
+	 */
+	const int stop_sig = WSTOPSIG(ctx.wstatus);
+	if (stop_sig != SIGTRAP && is_ignoring_signal(stop_sig)) {
+		std::printf("Signal %d is being ignored, resuming thread %d\n", stop_sig, ctx.tid);
+		ctx.current_thread->resume(stop_sig);
+		return;
+	}
+
+	/* Load siginfo for stopped events so callbacks can inspect it. */
+	if (!ctx.current_thread->load_signal_info()) {
+		// Can't proceed without valid signal info—resume and continue to next event
+		ctx.current_thread->resume(stop_sig);
+		return;
+	}
+
+	switch (ctx.current_thread->siginfo_.si_signo) {
+	case SIGTRAP:
+
+		switch (ctx.current_thread->siginfo_.si_code) {
+		case SI_KERNEL:
+		case TRAP_BRKPT:
+			handle_trap_event(ctx, callback);
+			break;
+		case TRAP_TRACE:
+			std::printf("Hit a trace trap\n");
+			break;
+		case TRAP_BRANCH:
+			std::printf("Hit a branch trap\n");
+			break;
+		case TRAP_HWBKPT:
+			std::printf("Hit a hardware breakpoint/watchpoint trap\n");
+			break;
+		case TRAP_UNK:
+		default:
+			std::printf("Hit an unknown trap: si_code=%d\n", ctx.current_thread->siginfo_.si_code);
+			break;
+		}
+
+		if (is_exit_trace_event(ctx.wstatus)) {
+			handle_exit_trace_event(ctx, callback);
+			return;
+		} else if (is_clone_event(ctx.wstatus)) {
+			handle_clone_event(ctx, callback);
+			return;
+		}
+
+		break;
+	case SIGSEGV:
+	case SIGFPE:
+	case SIGILL:
+	case SIGBUS:
+
+		// TODO(eteran): first check if this is due to a breakpoint (e.g. an "alt-breakpoint" that doesn't use an actual breakpoint instruction
+		// and thus doesn't trigger a trap event), and if so handle it as a breakpoint event instead of a signal event
+		if (handle_unknown_event(ctx, callback)) {
+			break;
+		}
+
+		process_stop_event(ctx, callback, Event::Type::Fault);
+		return;
+	default:
+		handle_unknown_event(ctx, callback);
+		break;
+	}
+
+	process_stop_event(ctx, callback, Event::Type::Stopped);
+}
+
+/**
+ * @brief Reports a stop event to the callback and takes action based on the callback's return value.
+ *
+ * @param ctx The context of the event.
+ * @param callback The callback to report the event to.
+ * @param stop_type The type of stop event to report (e.g. normal stop, signal stop, etc.)
+ */
+void Process::process_stop_event(EventContext &ctx, event_callback callback, Event::Type stop_type) {
+	Event e = {
+		ctx.current_thread->siginfo_,
+		pid_,
+		ctx.tid,
+		ctx.wstatus,
+		stop_type,
+	};
+
+	const EventStatus status = callback(e);
+	switch (status) {
+	case EventStatus::Stop:
+		// do nothing, the debugger will instigate the next event
+		break;
+	case EventStatus::Continue:
+		ctx.current_thread->resume();
+		break;
+	case EventStatus::ContinueStep:
+		ctx.current_thread->step();
+		break;
+	case EventStatus::ExceptionNotHandled:
+		ctx.current_thread->resume(e.siginfo.si_signo);
+		break;
+	case EventStatus::NextHandler:
+		// pass the event to the next handler
+		// TODO(eteran): implement
+		break;
 	}
 }
 
@@ -579,8 +699,6 @@ void Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
  *
  */
 bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback callback) {
-
-	// TODO(eteran): handle ignored exceptions
 
 	if (!wait_for_sigchild(timeout)) {
 		return false;
@@ -634,103 +752,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		}
 
 		if (WIFSTOPPED(ctx.wstatus)) {
-			if (std::exchange(ctx.first_stop, false)) {
-				active_thread_ = ctx.current_thread;
-			}
-
-			/*
-			 * If this is a signal-stop (i.e. not a SIGTRAP), and the signal
-			 * is configured to be ignored for this Process, resume the thread
-			 * and do not report an event to the callback.
-			 *
-			 * For non-ignored stops we load the `siginfo` so event handlers
-			 * always receive valid signal information.
-			 */
-			const int stop_sig = WSTOPSIG(ctx.wstatus);
-			if (stop_sig != SIGTRAP && is_ignoring_signal(stop_sig)) {
-				std::printf("Signal %d is being ignored, resuming thread %d\n", stop_sig, tid);
-				ctx.current_thread->resume(stop_sig);
-				continue;
-			}
-
-			/* Load siginfo for stopped events so callbacks can inspect it. */
-			if (!ctx.current_thread->load_signal_info()) {
-				// Can't proceed without valid signal info—resume and continue to next event
-				ctx.current_thread->resume(stop_sig);
-				continue;
-			}
-
-			switch (ctx.current_thread->siginfo_.si_signo) {
-			case SIGTRAP:
-
-				switch (ctx.current_thread->siginfo_.si_code) {
-				case SI_KERNEL:
-				case TRAP_BRKPT:
-					handle_trap_event(ctx, callback);
-					break;
-				case TRAP_TRACE:
-					std::printf("Hit a trace trap\n");
-					break;
-				case TRAP_BRANCH:
-					std::printf("Hit a branch trap\n");
-					break;
-				case TRAP_HWBKPT:
-					std::printf("Hit a hardware breakpoint/watchpoint trap\n");
-					break;
-				case TRAP_UNK:
-				default:
-					std::printf("Hit an unknown trap: si_code=%d\n", ctx.current_thread->siginfo_.si_code);
-					break;
-				}
-
-				if (is_exit_trace_event(ctx.wstatus)) {
-					handle_exit_trace_event(ctx, callback);
-					continue;
-				} else if (is_clone_event(ctx.wstatus)) {
-					handle_clone_event(ctx, callback);
-					continue;
-				}
-
-				break;
-			case SIGSEGV:
-			case SIGFPE:
-			case SIGILL:
-			case SIGBUS:
-				std::printf("Thread %d received signal %d (%s)\n", tid, ctx.current_thread->siginfo_.si_signo, strsignal(ctx.current_thread->siginfo_.si_signo));
-				break;
-			default:
-				handle_unknown_event(ctx, callback);
-				break;
-			}
-
-			Event e = {
-				ctx.current_thread->siginfo_,
-				pid_,
-				tid,
-				ctx.wstatus,
-				Event::Type::Stopped,
-			};
-
-			const EventStatus status = callback(e);
-			switch (status) {
-			case EventStatus::Stop:
-				// do nothing, the debugger will instigate the next event
-				break;
-			case EventStatus::Continue:
-				ctx.current_thread->resume();
-				break;
-			case EventStatus::ContinueStep:
-				ctx.current_thread->step();
-				break;
-			case EventStatus::ExceptionNotHandled:
-				ctx.current_thread->resume(e.siginfo.si_signo);
-				break;
-			case EventStatus::NextHandler:
-				// pass the event to the next handler
-				// TODO(eteran): implement
-				break;
-			}
-
+			handle_stop_event(ctx, callback);
 			continue;
 		}
 

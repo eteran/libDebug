@@ -102,7 +102,9 @@ private:
 	void handle_signal_event(EventContext &ctx, event_callback callback);
 	void handle_continue_event(EventContext &ctx, event_callback callback);
 	void handle_trap_event(EventContext &ctx, event_callback callback);
-	void handle_unknown_event(EventContext &ctx, event_callback callback);
+	bool handle_unknown_event(EventContext &ctx, event_callback callback);
+	void handle_stop_event(EventContext &ctx, event_callback callback);
+	void process_stop_event(EventContext &ctx, event_callback callback, Event::Type stop_type);
 
 private:
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;

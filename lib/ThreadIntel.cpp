@@ -1365,7 +1365,11 @@ uint64_t Thread::get_instruction_pointer() const {
 	if (ret == -1 && errno != 0) {
 		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(errno));
 	}
-	return static_cast<uint64_t>(ret);
+
+	// NOTE(eteran): we need to be very careful here because if the thread is 64-bit but we're using a 32-bit debugger,
+	// the value we get from PTRACE_PEEKUSER will be truncated to 32 bits. We want to avoid sign-extending it when
+	// converting to uint64_t, so we first cast to uint32_t to truncate it, and then to uint64_t to zero-extend it.
+	return static_cast<uint64_t>(static_cast<uint32_t>(ret));
 #endif
 }
 
