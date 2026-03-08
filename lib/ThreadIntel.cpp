@@ -233,6 +233,8 @@ void Thread::resume(int signal) {
 		// through so that the thread stops again at with the event during the `next_debug_event` loop.
 		wait();
 
+		bp->enable();
+
 		// If the wait did not result in the single-step we expected, forward the
 		// event (signal/exit) back to the event loop by continuing with the
 		// appropriate signal and returning without re-enabling the breakpoint.
@@ -252,8 +254,6 @@ void Thread::resume(int signal) {
 			}
 			return;
 		}
-
-		bp->enable();
 	}
 
 	if (ptrace(PTRACE_CONT, tid_, 0L, signal) == -1) {

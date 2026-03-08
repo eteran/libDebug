@@ -299,12 +299,75 @@ void Process::resume() {
 }
 
 /**
+ * @brief Stops all running threads except the specified one.
+ *
+ * @param except_tid The thread to exclude from stopping (0 to stop all threads).
+ * @return The thread IDs of the threads that were asked to stop.
+ */
+std::vector<pid_t> Process::stop_all_threads(pid_t except_tid) {
+	std::vector<pid_t> target_tids;
+	target_tids.reserve(threads_.size());
+
+	for (auto &[tid, thread] : threads_) {
+		if (tid != except_tid && thread->state_ == Thread::State::Running) {
+			target_tids.push_back(tid);
+			thread->stop();
+		}
+	}
+
+	return target_tids;
+}
+
+/**
+ * @brief Waits until all target threads are no longer running.
+ *
+ * @param target_tids The thread IDs that were asked to stop.
+ *
+ * @note This is a synchronization barrier used in all-stop mode to guarantee no other thread is
+ * running while breakpoint fixups (disable -> step -> re-enable) are performed.
+ */
+void Process::all_stop_barrier(const std::vector<pid_t> &target_tids) {
+	for (const pid_t target_tid : target_tids) {
+		auto it = threads_.find(target_tid);
+		if (it == threads_.end()) {
+			continue;
+		}
+
+		while (true) {
+			int status      = 0;
+			const pid_t tid = waitpid(target_tid, &status, __WALL);
+
+			if (tid == -1) {
+				if (errno == EINTR) {
+					continue;
+				}
+
+				std::perror("waitpid");
+				break;
+			}
+
+			auto thread_it = threads_.find(tid);
+			if (thread_it == threads_.end()) {
+				break;
+			}
+
+			auto &thread     = thread_it->second;
+			thread->wstatus_ = status;
+			thread->state_   = Thread::State::Stopped;
+
+			if (WIFSTOPPED(status) || WIFEXITED(status) || WIFSIGNALED(status)) {
+				break;
+			}
+		}
+	}
+}
+
+/**
  * @brief Stops the current active thread. If there is no current active thread,
  * one is selected at random to become the active thread from the set of currently
  * attached, running threads.
  *
- * @note This is enough to stop the whole process if desired because the event
- * handler will stop all other threads if in "all-stop" mode.
+ * @note To stop all threads (all-stop mode), use stop_all_threads(0) instead.
  */
 void Process::stop() {
 
@@ -385,6 +448,8 @@ void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
 		Event::Type::Exited,
 	};
 
+	// Report the event, but ignore the callback's return value because the thread is
+	// already exiting and there's nothing the callback can do to change that.
 	(void)callback(e);
 
 	// Remove from tracking and select a new active thread if needed
@@ -428,6 +493,9 @@ void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
 		};
 
+		// For now, we unconditionally resume the new thread, but we could potentially let the callback
+		// decide whether to resume it or not by checking the return value of the callback and resuming
+		// the thread only if the return value is `Continue` or `ContinueStep`.
 		(void)callback(clone_event);
 
 		// TODO(eteran): start the new thread optionally
@@ -744,6 +812,14 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 		ctx.current_thread->wstatus_ = ctx.wstatus;
 		ctx.current_thread->state_   = Thread::State::Stopped;
 		ctx.address                  = 0;
+
+		// In all-stop mode, when we encounter the first significant stop event,
+		// immediately stop all other running threads before processing.
+		// This ensures breakpoint handling (disable → step → re-enable) is safe.
+		if (all_stop_ && ctx.first_stop && WIFSTOPPED(ctx.wstatus)) {
+			const auto target_tids = stop_all_threads(tid);
+			all_stop_barrier(target_tids);
+		}
 
 		if (WIFEXITED(ctx.wstatus)) {
 			handle_exit_event(ctx, callback);

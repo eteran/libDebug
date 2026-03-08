@@ -11,6 +11,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <sys/types.h>
 
@@ -105,6 +106,8 @@ private:
 	bool handle_unknown_event(EventContext &ctx, event_callback callback);
 	void handle_stop_event(EventContext &ctx, event_callback callback);
 	void process_stop_event(EventContext &ctx, event_callback callback, Event::Type stop_type);
+	std::vector<pid_t> stop_all_threads(pid_t except_tid);
+	void all_stop_barrier(const std::vector<pid_t> &target_tids);
 
 private:
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;
