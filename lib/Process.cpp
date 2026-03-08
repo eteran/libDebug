@@ -325,6 +325,7 @@ std::vector<pid_t> Process::stop_all_threads(pid_t except_tid) {
  *
  * @note This is a synchronization barrier used in all-stop mode to guarantee no other thread is
  * running while breakpoint fixups (disable -> step -> re-enable) are performed.
+ * Any exit or signal termination events encountered are queued for later dispatch.
  */
 void Process::all_stop_barrier(const std::vector<pid_t> &target_tids) {
 	for (const pid_t target_tid : target_tids) {
@@ -355,7 +356,12 @@ void Process::all_stop_barrier(const std::vector<pid_t> &target_tids) {
 			thread->wstatus_ = status;
 			thread->state_   = Thread::State::Stopped;
 
-			if (WIFSTOPPED(status) || WIFEXITED(status) || WIFSIGNALED(status)) {
+			if (WIFSTOPPED(status)) {
+				// Normal stop (SIGSTOP from all-stop or other signal) - barrier complete for this thread
+				break;
+			} else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+				// Thread exited or was killed - queue for later event dispatch
+				pending_events_.push_back({tid, status});
 				break;
 			}
 		}
@@ -786,6 +792,34 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 	EventContext ctx;
 	// First stop should be true so the first stopped thread becomes the active thread.
 	ctx.first_stop = true;
+
+	// Drain any pending events from the all-stop barrier before checking for new events
+	while (!pending_events_.empty()) {
+		const PendingEvent pending = pending_events_.front();
+		pending_events_.pop_front();
+
+		auto it = threads_.find(pending.tid);
+		if (it == threads_.end()) {
+			continue;
+		}
+
+		ctx.tid                      = pending.tid;
+		ctx.current_thread           = it->second;
+		ctx.current_thread->wstatus_ = pending.wstatus;
+		ctx.current_thread->state_   = Thread::State::Stopped;
+		ctx.wstatus                  = pending.wstatus;
+		ctx.address                  = 0;
+
+		if (WIFEXITED(ctx.wstatus)) {
+			handle_exit_event(ctx, callback);
+			continue;
+		}
+
+		if (WIFSIGNALED(ctx.wstatus)) {
+			handle_signal_event(ctx, callback);
+			continue;
+		}
+	}
 
 	while (true) {
 		const pid_t tid = waitpid(-1, &ctx.wstatus, __WALL | WNOHANG);

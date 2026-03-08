@@ -7,6 +7,7 @@
 #include "EventStatus.hpp"
 
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -97,6 +98,11 @@ private:
 		bool first_stop  = false;
 	};
 
+	struct PendingEvent {
+		pid_t tid;
+		int wstatus;
+	};
+
 	void handle_exit_event(EventContext &ctx, event_callback callback);
 	void handle_exit_trace_event(EventContext &ctx, event_callback callback);
 	void handle_clone_event(EventContext &ctx, event_callback callback);
@@ -120,6 +126,7 @@ private:
 	std::unordered_map<uint64_t, std::shared_ptr<Breakpoint>> breakpoints_;
 	std::unordered_set<int> ignored_signals_;
 	std::unique_ptr<Memory> memory_;
+	std::deque<PendingEvent> pending_events_;
 };
 
 #endif
