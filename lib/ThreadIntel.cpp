@@ -194,9 +194,6 @@ bool Thread::load_signal_info() {
  * eventually followed by a debug event when it stops again.
  */
 void Thread::step() {
-	// TODO(eteran): based on the current state of the thread, we may want to send a signal here instead of just resuming with no signal.
-	// For example, if the thread is currently stopped because it of a SEGFAULT, we may want to resume with SIGSEGV to trigger the
-	// appropriate signal handlers and events instead of just resuming with no signal which would skip over the signal handlers and events.
 	step(0);
 }
 
@@ -267,9 +264,6 @@ void Thread::resume(int signal) {
  * @brief Causes the thread to resume execution.
  */
 void Thread::resume() {
-	// TODO(eteran): based on the current state of the thread, we may want to send a signal here instead of just resuming with no signal.
-	// For example, if the thread is currently stopped because it of a SEGFAULT, we may want to resume with SIGSEGV to trigger the
-	// appropriate signal handlers and events instead of just resuming with no signal which would skip over the signal handlers and events.
 	resume(0);
 }
 
