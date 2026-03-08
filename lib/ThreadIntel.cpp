@@ -205,6 +205,7 @@ void Thread::step() {
  */
 void Thread::step(int signal) {
 	assert(state_ == State::Stopped);
+	pending_signal_ = 0;
 
 	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal) == -1) {
 		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(errno));
@@ -220,6 +221,7 @@ void Thread::step(int signal) {
  */
 void Thread::resume(int signal) {
 	assert(state_ == State::Stopped);
+	pending_signal_ = 0;
 
 	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
 		bp->disable();
@@ -242,13 +244,15 @@ void Thread::resume(int signal) {
 			}
 
 			int cont_sig = signal;
-			if (load_signal_info()) {
+			if (cont_sig == 0 && load_signal_info()) {
 				cont_sig = siginfo_.si_signo;
 			}
 
 			if (ptrace(PTRACE_CONT, tid_, 0L, cont_sig) == -1) {
 				throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
 			}
+
+			state_ = State::Running;
 			return;
 		}
 	}
@@ -840,7 +844,7 @@ void Thread::get_debug_registers(Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		printf("get_debug_registers called on 64-bit thread with 32-bit debugger\n");
+		std::printf("get_debug_registers called on 64-bit thread with 32-bit debugger\n");
 	} else {
 		get_debug_registers32(ctx);
 	}
@@ -1290,7 +1294,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		printf("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
+		std::printf("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
 	} else {
 		set_debug_registers32(ctx);
 	}
