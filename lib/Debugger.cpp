@@ -3,6 +3,7 @@
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Defer.hpp"
 #include "Debug/Process.hpp"
+#include "Debug/Ptrace.hpp"
 #include "Debug/Thread.hpp"
 
 #include <cerrno>
@@ -14,7 +15,6 @@
 
 #include <sys/mman.h>
 #include <sys/personality.h>
-#include <sys/ptrace.h>
 #include <unistd.h>
 #include <vector>
 
@@ -156,8 +156,8 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 			}
 		}
 
-		if (ptrace(PTRACE_TRACEME, 0L, 0L, 0L) == -1) {
-			std::snprintf(shared_mem, SharedMemSize, "Failed to enable tracing: %s", strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_TRACEME, 0L, 0L, 0L); ret.is_err()) {
+			std::snprintf(shared_mem, SharedMemSize, "Failed to enable tracing: %s", strerror(ret.error()));
 			std::abort();
 		}
 

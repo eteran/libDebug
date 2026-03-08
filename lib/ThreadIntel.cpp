@@ -4,6 +4,7 @@
 #include "Debug/Context.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Process.hpp"
+#include "Debug/Ptrace.hpp"
 
 #include <cassert>
 #include <cinttypes>
@@ -95,16 +96,16 @@ Thread::Thread(const internal_t &, Process *process, pid_t tid, Flag f)
 	assert(process);
 
 	if (f & Thread::Attach) {
-		if (ptrace(PTRACE_ATTACH, tid, 0L, 0L) == -1) {
-			throw DebuggerError("Failed to attach to thread %d: %s", tid, strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_ATTACH, tid, 0L, 0L); ret.is_err()) {
+			throw DebuggerError("Failed to attach to thread %d: %s", tid, strerror(ret.error()));
 		}
 	}
 
 	wait();
 
 	const long options = create_ptrace_options(f);
-	if (ptrace(PTRACE_SETOPTIONS, tid, 0L, options) == -1) {
-		throw DebuggerError("Failed to set ptrace options for thread %d: %s", tid, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_SETOPTIONS, tid, 0L, options); ret.is_err()) {
+		throw DebuggerError("Failed to set ptrace options for thread %d: %s", tid, strerror(ret.error()));
 	}
 
 	is_64_bit_ = detect_64_bit();
@@ -129,8 +130,8 @@ bool Thread::detect_64_bit() const {
 	// determine if this thread is 64-bit or 32-bit
 	alignas(Context::BufferAlign) char buffer[Context::BufferSize];
 	struct iovec iov = {buffer, sizeof(buffer)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		throw DebuggerError("Failed to get register set for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to get register set for thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	switch (iov.iov_len) {
@@ -168,7 +169,7 @@ void Thread::detach() {
 		// thread has already exited or is in some other weird state.
 		// The destructor should never throw, and we don't want to leak resources
 		// just because the thread is in a bad state.
-		(void)ptrace(PTRACE_DETACH, tid_, 0L, 0L);
+		(void)do_ptrace(PTRACE_DETACH, tid_, 0L, 0L);
 		tid_ = -1;
 	}
 }
@@ -181,8 +182,7 @@ void Thread::detach() {
  * @return true if the signal info was successfully loaded, false otherwise.
  */
 bool Thread::load_signal_info() {
-	if (ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_) == -1) {
-		std::perror("ptrace(PTRACE_GETSIGINFO)");
+	if (auto ret = do_ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_); ret.is_err()) {
 		siginfo_ = {};
 		return false;
 	}
@@ -207,8 +207,8 @@ void Thread::step(int signal) {
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
 
-	if (ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal) == -1) {
-		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal); ret.is_err()) {
+		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	state_ = State::Running;
@@ -248,8 +248,8 @@ void Thread::resume(int signal) {
 				cont_sig = siginfo_.si_signo;
 			}
 
-			if (ptrace(PTRACE_CONT, tid_, 0L, cont_sig) == -1) {
-				throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
+			if (auto ret = do_ptrace(PTRACE_CONT, tid_, 0L, cont_sig); ret.is_err()) {
+				throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(ret.error()));
 			}
 
 			state_ = State::Running;
@@ -257,8 +257,8 @@ void Thread::resume(int signal) {
 		}
 	}
 
-	if (ptrace(PTRACE_CONT, tid_, 0L, signal) == -1) {
-		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_CONT, tid_, 0L, signal); ret.is_err()) {
+		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	state_ = State::Running;
@@ -386,8 +386,8 @@ void Thread::get_registers64(Context *ctx) const {
 	// 64-bit GETREGS is always 64-bit even if the thread is 32-bit
 	// We don't use NT_PRSTATUS because this API correctly normalizes the
 	// registers to 64-bit even if the thread is 32-bit.
-	if (ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
-		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_GETREGS, tid_, 0, &ctx->ctx_64_.regs); ret.is_err()) {
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
 	}
 }
 
@@ -407,8 +407,8 @@ void Thread::get_registers32(Context *ctx) const {
 		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
 	}
 
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
 	}
 }
 
@@ -439,8 +439,8 @@ void Thread::get_xstate64(Context *ctx) const {
 	auto xsave       = &ctx->ctx_64_xstate_;
 	struct iovec iov = {xsave, sizeof(Context_x86_64_xstate)};
 
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to get xstate for thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	const size_t returned = static_cast<size_t>(iov.iov_len);
@@ -591,8 +591,8 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 	auto xsave = &ctx->ctx_32_xstate_;
 
 	struct iovec iov = {xsave, sizeof(Context_x86_32_xstate)};
-	if (ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_X86_XSTATE, &iov); ret.is_err()) {
+		return ret.error();
 	}
 
 	const size_t returned = static_cast<size_t>(iov.iov_len);
@@ -723,8 +723,8 @@ int Thread::get_xstate32_legacy(Context *ctx) const {
 
 	// Try to get SSE/MMX state using PTRACE_GETFPXREGS first
 	Context_x86_32_xstate fpxregs = {};
-	if (ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_GETFPXREGS, tid_, 0, &fpxregs); ret.is_err()) {
+		return ret.error();
 	}
 
 	// Extract x87 state from fpxregs
@@ -782,8 +782,8 @@ int Thread::get_xstate32_fallback(Context *ctx) const {
 	user_fpregs_struct_32 fpregs = {};
 
 	// PTRACE_GETFPXREGS failed, try legacy PTRACE_GETFPREGS for basic x87 state
-	if (ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_GETFPREGS, tid_, 0, &fpregs); ret.is_err()) {
+		return ret.error();
 	}
 
 	// Extract x87 state from fpregs
@@ -857,11 +857,13 @@ void Thread::get_debug_registers(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers64(Context *ctx) const {
-	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
-	// There isn't really any harm in this since the debug registers will just appear to have some large value.
 
 	for (size_t i = 0; i < 8; ++i) {
-		ctx->ctx_64_.debug_regs[i] = static_cast<uint64_t>(ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L));
+		if (auto ret = do_ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L); ret.is_err()) {
+			ctx->ctx_64_.debug_regs[i] = static_cast<uint64_t>(-1);
+		} else {
+			ctx->ctx_64_.debug_regs[i] = static_cast<uint64_t>(ret.value());
+		}
 	}
 }
 
@@ -871,10 +873,12 @@ void Thread::get_debug_registers64(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers32(Context *ctx) const {
-	// NOTE(eteran): if there is an error reading debug registers, this will return -1 which will be cast to a large unsigned value.
-	// There isn't really any harm in this since the debug registers will just appear to have some large value.
 	for (size_t i = 0; i < 8; ++i) {
-		ctx->ctx_32_.debug_regs[i] = static_cast<uint32_t>(ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L));
+		if (auto ret = do_ptrace(PTRACE_PEEKUSER, tid_, dr_offset(i), 0L); ret.is_err()) {
+			ctx->ctx_32_.debug_regs[i] = static_cast<uint32_t>(-1);
+		} else {
+			ctx->ctx_32_.debug_regs[i] = static_cast<uint32_t>(ret.value());
+		}
 	}
 }
 
@@ -907,8 +911,7 @@ uint32_t Thread::get_segment_base32(Context *ctx, RegisterId reg) const {
 	const uint32_t index = (segment >> 3) & 0x1fff; // 13-bit index
 
 	struct user_desc desc;
-	if (ptrace(PTRACE_GET_THREAD_AREA, tid_, index, &desc) == -1) {
-		std::perror("ptrace(PTRACE_GET_THREAD_AREA)");
+	if (auto ret = do_ptrace(PTRACE_GET_THREAD_AREA, tid_, index, &desc); ret.is_err()) {
 		return 0;
 	}
 
@@ -959,8 +962,8 @@ void Thread::get_context(Context *ctx) const {
  */
 void Thread::set_registers64(const Context *ctx) const {
 	// See get_registers64
-	if (ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs) == -1) {
-		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_SETREGS, tid_, 0, &ctx->ctx_64_.regs); ret.is_err()) {
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(ret.error()));
 	}
 }
 
@@ -979,8 +982,8 @@ void Thread::set_registers32(const Context *ctx) const {
 		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
 	}
 
-	if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(ret.error()));
 	}
 }
 
@@ -1060,8 +1063,8 @@ void Thread::set_xstate64(const Context *ctx) const {
 
 	// Write the xsave buffer back to the process
 	struct iovec iov = {xsave, sizeof(Context_x86_64_xstate)};
-	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to set xstate for thread %d: %s", tid_, strerror(ret.error()));
 	}
 }
 
@@ -1119,8 +1122,8 @@ int Thread::set_xstate32_modern(const Context *ctx) const {
 
 	// Use NT_X86_XSTATE for full AVX support on 32-bit
 	struct iovec iov = {xsave, sizeof(Context_x86_32_xstate)};
-	if (ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_X86_XSTATE, &iov); ret.is_err()) {
+		return ret.error();
 	}
 
 	return 0;
@@ -1171,8 +1174,8 @@ int Thread::set_xstate32_legacy(const Context *ctx) const {
 	}
 
 	// Use PTRACE_SETFPXREGS to set the extended FP state (x87 + SSE)
-	if (ptrace(PTRACE_SETFPXREGS, tid_, 0, &fpxregs) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_SETFPXREGS, tid_, 0, &fpxregs); ret.is_err()) {
+		return ret.error();
 	}
 
 	return 0;
@@ -1210,8 +1213,8 @@ int Thread::set_xstate32_fallback(const Context *ctx) const {
 	}
 
 	// Use PTRACE_SETFPREGS to set the basic x87 FP state only
-	if (ptrace(PTRACE_SETFPREGS, tid_, 0, &fpregs) == -1) {
-		return errno;
+	if (auto ret = do_ptrace(PTRACE_SETFPREGS, tid_, 0, &fpregs); ret.is_err()) {
+		return ret.error();
 	}
 
 	return 0;
@@ -1243,7 +1246,7 @@ void Thread::set_xstate32(const Context *ctx) const {
 void Thread::set_debug_registers64(const Context *ctx) const {
 
 	for (size_t i = 0; i < 8; ++i) {
-		ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_64_.debug_regs[i]);
+		(void)do_ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_64_.debug_regs[i]);
 	}
 }
 
@@ -1255,7 +1258,7 @@ void Thread::set_debug_registers64(const Context *ctx) const {
 void Thread::set_debug_registers32(const Context *ctx) const {
 
 	for (size_t i = 0; i < 8; ++i) {
-		ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_32_.debug_regs[i]);
+		(void)do_ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_32_.debug_regs[i]);
 	}
 }
 
@@ -1327,12 +1330,13 @@ void Thread::set_context(const Context *ctx) const {
  */
 uint64_t Thread::get_instruction_pointer() const {
 #if defined(__x86_64__)
-	errno    = 0;
-	long ret = ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.rip), 0L);
-	if (ret == -1 && errno != 0) {
-		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(errno));
+
+	auto ret = do_ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.rip), 0L);
+	if (ret.is_err()) {
+		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(ret.error()));
 	}
-	return static_cast<uint64_t>(ret);
+
+	return static_cast<uint64_t>(ret.value());
 #elif defined(__i386__)
 
 	// NOTE(eteran): unfortunately, PTRACE_PEEKUSER still gets 32-bit values when is_64_bit_ is true
@@ -1344,29 +1348,29 @@ uint64_t Thread::get_instruction_pointer() const {
 		iov.iov_base = &ctx;
 		iov.iov_len  = sizeof(ctx);
 
-		if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-			throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+			throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
 		}
 
 		return ctx.rip;
 	}
-	errno    = 0;
-	long ret = ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.eip), 0L);
-	if (ret == -1 && errno != 0) {
-		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(errno));
+
+	auto ret = do_ptrace(PTRACE_PEEKUSER, tid_, offsetof(struct user, regs.eip), 0L);
+	if (ret.is_err()) {
+		throw DebuggerError("Failed to get instruction pointer for thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	// NOTE(eteran): we need to be very careful here because if the thread is 64-bit but we're using a 32-bit debugger,
 	// the value we get from PTRACE_PEEKUSER will be truncated to 32 bits. We want to avoid sign-extending it when
 	// converting to uint64_t, so we first cast to uint32_t to truncate it, and then to uint64_t to zero-extend it.
-	return static_cast<uint64_t>(static_cast<uint32_t>(ret));
+	return static_cast<uint64_t>(static_cast<uint32_t>(ret.value()));
 #endif
 }
 
 void Thread::set_instruction_pointer(uint64_t ip) const {
 #if defined(__x86_64__)
-	if (ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.rip), ip) == -1) {
-		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.rip), ip); ret.is_err()) {
+		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(ret.error()));
 	}
 #elif defined(__i386__)
 
@@ -1381,20 +1385,20 @@ void Thread::set_instruction_pointer(uint64_t ip) const {
 		iov.iov_base = &ctx;
 		iov.iov_len  = sizeof(ctx);
 
-		if (ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-			throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+			throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
 		}
 
 		ctx.rip = ip;
 
-		if (ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov) == -1) {
-			throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+			throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(ret.error()));
 		}
 
 		return;
 	}
-	if (ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.eip), static_cast<uint32_t>(ip)) == -1) {
-		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(errno));
+	if (auto ret = do_ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, regs.eip), static_cast<uint32_t>(ip)); ret.is_err()) {
+		throw DebuggerError("Failed to set instruction pointer for thread %d: %s", tid_, strerror(ret.error()));
 	}
 #endif
 }

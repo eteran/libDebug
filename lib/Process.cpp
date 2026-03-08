@@ -10,6 +10,7 @@
 #include "Debug/Memory.hpp"
 #include "Debug/Proc.hpp"
 #include "Debug/Thread.hpp"
+#include "Debug/Ptrace.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -480,7 +481,7 @@ void Process::handle_exit_event(EventContext &ctx, event_callback callback) {
 void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 
 	unsigned long message;
-	if (ptrace(PTRACE_GETEVENTMSG, ctx.tid, 0L, &message) != -1) {
+	if (do_ptrace(PTRACE_GETEVENTMSG, ctx.tid, 0L, &message).ok()) {
 
 		printf("Clone event: new thread tid=%lu\n", message);
 

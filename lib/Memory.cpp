@@ -5,6 +5,7 @@
 
 #include "Debug/Memory.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Ptrace.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -13,7 +14,6 @@
 
 #include <fcntl.h>
 #include <linux/limits.h>
-#include <sys/ptrace.h>
 #include <unistd.h>
 
 // NOTE(eteran): we don't use `process_vm_writev` here because it doesn't allow for writing to read-only pages
@@ -89,19 +89,21 @@ int64_t PtraceMemory::read(uint64_t address, void *buffer, size_t size) {
 	int64_t total = 0;
 
 	while (size > 0) {
-		errno          = 0;
-		const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-		if (ret == -1 && errno != 0) {
+
+		auto ret = do_ptrace(PTRACE_PEEKDATA, pid_, reinterpret_cast<void *>(address), nullptr);
+		if (ret.is_err()) {
 			// we just ignore ESRCH because it means the process
 			// was terminated while we were trying to read
-			if (errno == ESRCH) {
+			if (ret.error() == ESRCH) {
 				return 0;
 			}
-			break;
+			throw DebuggerError("Failed to read memory for process %d: %s", pid_, strerror(ret.error()));
 		}
 
-		const size_t count = std::min(size, sizeof(ret));
-		std::memcpy(ptr, &ret, count);
+		auto value = ret.value();
+
+		const size_t count = std::min(size, sizeof(value));
+		std::memcpy(ptr, &value, count);
 
 		address += count;
 		ptr += count;
@@ -131,15 +133,15 @@ int64_t PtraceMemory::write(uint64_t address, const void *buffer, size_t size) {
 		std::memcpy(data, ptr, count);
 
 		if (count < sizeof(long)) {
-			errno          = 0;
-			const long ret = ptrace(PTRACE_PEEKDATA, pid_, address, 0L);
-			if (ret == -1 && errno != 0) {
+
+			auto ret = do_ptrace(PTRACE_PEEKDATA, pid_, reinterpret_cast<void *>(address), nullptr);
+			if (ret.is_err()) {
 				// we just ignore ESRCH because it means the process
 				// was terminated while we were trying to read
-				if (errno == ESRCH) {
+				if (ret.error() == ESRCH) {
 					return 0;
 				}
-				throw DebuggerError("Failed to read memory for process %d: %s", pid_, strerror(errno));
+				throw DebuggerError("Failed to read memory for process %d: %s", pid_, strerror(ret.error()));
 			}
 
 			std::memcpy(
@@ -151,8 +153,8 @@ int64_t PtraceMemory::write(uint64_t address, const void *buffer, size_t size) {
 		long data_value;
 		std::memcpy(&data_value, data, sizeof(long));
 
-		if (ptrace(PTRACE_POKEDATA, pid_, address, data_value) == -1) {
-			throw DebuggerError("Failed to write memory for process %d: %s", pid_, strerror(errno));
+		if (auto ret = do_ptrace(PTRACE_POKEDATA, pid_, reinterpret_cast<void *>(address), data_value); ret.is_err()) {
+			throw DebuggerError("Failed to write memory for process %d: %s", pid_, strerror(ret.error()));
 		}
 
 		address += count;

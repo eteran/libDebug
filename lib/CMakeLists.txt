@@ -14,6 +14,7 @@ set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/RegisterRef.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/ThreadIntel.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Ptrace.hpp
     BreakpointIntel.cpp
     ContextIntel.cpp
     Debugger.cpp
