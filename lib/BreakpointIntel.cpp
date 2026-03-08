@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
-#include <sys/ptrace.h>
 
 namespace {
 

@@ -1241,14 +1241,10 @@ void Thread::set_xstate32(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_debug_registers64(const Context *ctx) const {
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_64_.debug_regs[0]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_64_.debug_regs[1]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_64_.debug_regs[2]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_64_.debug_regs[3]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_64_.debug_regs[4]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_64_.debug_regs[5]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_64_.debug_regs[6]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_64_.debug_regs[7]);
+
+	for (size_t i = 0; i < 8; ++i) {
+		ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_64_.debug_regs[i]);
+	}
 }
 
 /**
@@ -1257,14 +1253,10 @@ void Thread::set_debug_registers64(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_debug_registers32(const Context *ctx) const {
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[0]), ctx->ctx_32_.debug_regs[0]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[1]), ctx->ctx_32_.debug_regs[1]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[2]), ctx->ctx_32_.debug_regs[2]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[3]), ctx->ctx_32_.debug_regs[3]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[4]), ctx->ctx_32_.debug_regs[4]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[5]), ctx->ctx_32_.debug_regs[5]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[6]), ctx->ctx_32_.debug_regs[6]);
-	ptrace(PTRACE_POKEUSER, tid_, offsetof(struct user, u_debugreg[7]), ctx->ctx_32_.debug_regs[7]);
+
+	for (size_t i = 0; i < 8; ++i) {
+		ptrace(PTRACE_POKEUSER, tid_, dr_offset(i), ctx->ctx_32_.debug_regs[i]);
+	}
 }
 
 /**
