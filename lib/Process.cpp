@@ -293,7 +293,9 @@ void Process::resume() {
 	for (auto [tid, thread] : threads_) {
 		(void)tid;
 		if (thread->state_ == Thread::State::Stopped) {
-			thread->resume();
+			const int signal = thread->pending_signal_;
+			thread->resume(signal);
+			thread->pending_signal_ = 0; // Clear after delivering
 		}
 	}
 }
@@ -750,16 +752,24 @@ void Process::process_stop_event(EventContext &ctx, event_callback callback, Eve
 	const EventStatus status = callback(e);
 	switch (status) {
 	case EventStatus::Stop:
-		// do nothing, the debugger will instigate the next event
+		// Thread remains stopped - save pending signal for later resume
+		if (stop_type == Event::Type::Fault || stop_type == Event::Type::Stopped) {
+			ctx.current_thread->pending_signal_ = e.siginfo.si_signo;
+		}
 		break;
 	case EventStatus::Continue:
+		ctx.current_thread->pending_signal_ = 0;
 		ctx.current_thread->resume();
 		break;
 	case EventStatus::ContinueStep:
+		ctx.current_thread->pending_signal_ = 0;
 		ctx.current_thread->step();
 		break;
 	case EventStatus::ExceptionNotHandled:
+		// User chose to deliver the signal - set pending and resume with it
+		ctx.current_thread->pending_signal_ = e.siginfo.si_signo;
 		ctx.current_thread->resume(e.siginfo.si_signo);
+		ctx.current_thread->pending_signal_ = 0; // Delivered, clear it
 		break;
 	case EventStatus::NextHandler:
 		// pass the event to the next handler
