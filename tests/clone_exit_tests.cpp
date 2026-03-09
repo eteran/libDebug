@@ -16,12 +16,11 @@
 using namespace std::chrono_literals;
 
 TEST(CloneEvent) {
-	with_attached_child_sync(
-		[](int sync_read_fd) {
-			char buf;
-			if (read(sync_read_fd, &buf, 1) != 1) {
-				_exit(1);
-			}
+	with_attached_child(
+		[](int addr_write_fd, int sync_read_fd) {
+			send_dummy_address(addr_write_fd);
+			child_wait_ready(sync_read_fd);
+
 			std::this_thread::sleep_for(50ms);
 
 			auto thread = std::thread([]() {
@@ -31,7 +30,7 @@ TEST(CloneEvent) {
 
 			_exit(0);
 		},
-		[](const AttachedChildContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->resume();
 
 			ctx.process->next_debug_event(500ms, [&](const Event &e) {
@@ -64,16 +63,15 @@ TEST(CloneEvent) {
 }
 
 TEST(ExitTraceEvent) {
-	with_attached_child_sync(
-		[](int sync_read_fd) {
-			char buf;
-			if (read(sync_read_fd, &buf, 1) != 1) {
-				_exit(1);
-			}
+	with_attached_child(
+		[](int addr_write_fd, int sync_read_fd) {
+			send_dummy_address(addr_write_fd);
+			child_wait_ready(sync_read_fd);
+
 			std::this_thread::sleep_for(50ms);
 			_exit(77);
 		},
-		[](const AttachedChildContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->resume();
 
 			ctx.process->next_debug_event(500ms, [&](const Event &e) {

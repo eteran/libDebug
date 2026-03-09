@@ -13,14 +13,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-struct AttachedChildContext {
+struct AttachedContext {
+	uint64_t address  = 0;
 	pid_t child_pid   = -1;
 	int sync_write_fd = -1;
 	std::shared_ptr<Process> process;
-};
-
-struct AttachedChildAddressContext : AttachedChildContext {
-	uint64_t address = 0;
 };
 
 /**
@@ -38,6 +35,12 @@ inline void child_wait_ready(int sync_read_fd) {
 	CHECK_MSG(rr == 1, "failed to read ready byte from child");
 }
 
+inline void send_dummy_address(int addr_write_fd) {
+	uint64_t dummy_addr = 0xdeadbeef;
+	ssize_t wrote       = write(addr_write_fd, &dummy_addr, sizeof(dummy_addr));
+	CHECK_MSG(wrote == static_cast<ssize_t>(sizeof(dummy_addr)), "failed to write code address to pipe");
+}
+
 /**
  * @brief Runs a child function in a separate process, attaches to it with the debugger,
  * and then runs a parent function with the attached process context.
@@ -45,12 +48,12 @@ inline void child_wait_ready(int sync_read_fd) {
  * @param child_fn The function to run in the child process.
  * It will be passed a file descriptor to write an address to and a file descriptor for synchronization.
  * @param parent_fn The function to run in the parent process.
- * It will be passed an AttachedChildAddressContext containing the child process id, synchronization file descriptor, attached process, and the address read from the child.
+ * It will be passed an AttachedContext containing the child process id, synchronization file descriptor, attached process, and the address read from the child.
  * @param attach_required If true, the function will check that attaching to the child process succeeds.
  * If false, it will not check and will simply return if attaching fails.
  */
 template <class ChildFn, class ParentFn>
-void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
+void with_attached_child(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
 	int addr_pipe[2];
 	int sync_pipe[2];
 	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
@@ -90,7 +93,7 @@ void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &p
 
 	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
 
-	AttachedChildAddressContext ctx;
+	AttachedContext ctx;
 	ctx.child_pid     = cpid;
 	ctx.sync_write_fd = sync_pipe[1];
 	ctx.process       = proc;
@@ -99,59 +102,6 @@ void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &p
 	parent_fn(ctx);
 
 	close(addr_pipe[0]);
-	close(sync_pipe[1]);
-}
-
-/**
- * @brief Runs a child function in a separate process, attaches to it with the debugger,
- * and then runs a parent function with the attached process context.
- *
- * @param child_fn The function to run in the child process.
- * It will be passed a file descriptor for synchronization.
- * @param parent_fn The function to run in the parent process.
- * It will be passed an AttachedChildContext containing the child process id, synchronization file descriptor, and attached process.
- * @param attach_required If true, the function will check that attaching to the child process succeeds.
- * If false, it will not check and will simply return if attaching fails.
- */
-template <class ChildFn, class ParentFn>
-void with_attached_child_sync(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
-	int sync_pipe[2];
-	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
-
-	const pid_t cpid = fork();
-	CHECK_MSG(cpid >= 0, "fork() failed");
-
-	if (cpid == 0) {
-		close(sync_pipe[1]);
-		child_fn(sync_pipe[0]);
-		_exit(0);
-	}
-
-	close(sync_pipe[0]);
-
-	Debugger dbg;
-	std::shared_ptr<Process> proc;
-	try {
-		proc = dbg.attach(cpid);
-	} catch (const DebuggerError &) {
-		kill(cpid, SIGKILL);
-		waitpid(cpid, nullptr, 0);
-		if (attach_required) {
-			CHECK_MSG(false, "dbg.attach() failed");
-		}
-		close(sync_pipe[1]);
-		return;
-	}
-
-	CHECK_MSG(proc != nullptr, "dbg.attach() returned null");
-
-	AttachedChildContext ctx;
-	ctx.child_pid     = cpid;
-	ctx.sync_write_fd = sync_pipe[1];
-	ctx.process       = proc;
-
-	parent_fn(ctx);
-
 	close(sync_pipe[1]);
 }
 

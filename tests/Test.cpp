@@ -47,6 +47,7 @@ void run_test(test_type &test, bool capture_output = true) {
 		exit(EXIT_FAILURE);
 	default: {
 		printf("Running Test %-20s: ", test.name);
+		fflush(stdout);
 		int status;
 		int ret = waitpid(cpid, &status, 0);
 		if (ret == -1) {

@@ -68,9 +68,7 @@ void child_run_executable_buffer(int addr_write_fd, int sync_read_fd) {
 #pragma GCC diagnostic pop
 
 	ssize_t wrote = write(addr_write_fd, &addr, sizeof(addr));
-	if (wrote != static_cast<ssize_t>(sizeof(addr))) {
-		_exit(1);
-	}
+	CHECK_MSG(wrote == static_cast<ssize_t>(sizeof(addr)), "failed to write code address to pipe");
 
 	child_wait_ready(sync_read_fd);
 
@@ -82,13 +80,15 @@ void child_run_executable_buffer(int addr_write_fd, int sync_read_fd) {
 }
 
 void run_fault_signal_case(const FaultSignalCase &test_case) {
-	with_attached_child_sync(
-		[&](int sync_read_fd) {
+	with_attached_child(
+		[&](int addr_write_fd, int sync_read_fd) {
+			send_dummy_address(addr_write_fd);
 			child_wait_ready(sync_read_fd);
+
 			test_case.child_trigger();
 			_exit(1);
 		},
-		[&](const AttachedChildContext &ctx) {
+		[&](const AttachedContext &ctx) {
 			ctx.process->resume();
 			notify_child_start(ctx.sync_write_fd);
 
@@ -126,9 +126,9 @@ void run_fault_signal_case(const FaultSignalCase &test_case) {
 }
 
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<1>,
-		[&](const AttachedChildAddressContext &ctx) {
+		[&](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address, test_case.type);
 
 			notify_child_start(ctx.sync_write_fd);
@@ -169,9 +169,9 @@ void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 }
 
 TEST(BreakpointHit) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<1>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 			notify_child_start(ctx.sync_write_fd);
 			ctx.process->resume();
@@ -198,9 +198,9 @@ TEST(BreakpointHit) {
 }
 
 TEST(DisabledBreakpointDoesNotStop) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<1>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
 			auto bp = ctx.process->find_breakpoint(ctx.address);
@@ -244,9 +244,9 @@ TEST(DisabledBreakpointDoesNotStop) {
 }
 
 TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<3>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
 			notify_child_start(ctx.sync_write_fd);
@@ -323,9 +323,9 @@ TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
 }
 
 TEST(EnabledBreakpointCanBeContinuedFromThenHitAgain) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<3>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
 			notify_child_start(ctx.sync_write_fd);
@@ -373,9 +373,9 @@ TEST(EnabledBreakpointCanBeContinuedFromThenHitAgain) {
 }
 
 TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<3>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
 			notify_child_start(ctx.sync_write_fd);
@@ -448,9 +448,9 @@ TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
 }
 
 TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<3>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
 			notify_child_start(ctx.sync_write_fd);
@@ -536,9 +536,9 @@ TEST(AltBreakpointTypesReported) {
 }
 
 TEST(HardwareExecuteBreakpointHit) {
-	with_attached_child_with_address(
+	with_attached_child(
 		child_run_executable_buffer<1>,
-		[](const AttachedChildAddressContext &ctx) {
+		[](const AttachedContext &ctx) {
 			auto thread = ctx.process->active_thread();
 			CHECK_MSG(thread != nullptr, "proc->active_thread() returned null");
 

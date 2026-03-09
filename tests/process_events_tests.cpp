@@ -11,13 +11,15 @@
 using namespace std::chrono_literals;
 
 TEST(IgnoreSignal) {
-	with_attached_child_sync(
-		[](int sync_read_fd) {
+	with_attached_child(
+		[](int addr_write_fd, int sync_read_fd) {
+			send_dummy_address(addr_write_fd);
 			child_wait_ready(sync_read_fd);
+
 			std::this_thread::sleep_for(500ms);
 			_exit(42);
 		},
-		[](const AttachedChildContext &ctx) {
+		[](const AttachedContext &ctx) {
 			ctx.process->resume();
 			ctx.process->ignore_signal(SIGUSR1);
 
