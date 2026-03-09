@@ -206,8 +206,20 @@ void Thread::step() {
 void Thread::step(int signal) {
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
+	pending_step_breakpoint_.reset();
+
+	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
+		bp->disable();
+		pending_step_breakpoint_ = bp->address();
+	}
 
 	if (auto ret = do_ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal); ret.is_err()) {
+		if (pending_step_breakpoint_.has_value()) {
+			if (auto bp = process_->find_breakpoint(*pending_step_breakpoint_); bp) {
+				bp->enable();
+			}
+			pending_step_breakpoint_.reset();
+		}
 		throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(ret.error()));
 	}
 

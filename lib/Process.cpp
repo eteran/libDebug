@@ -9,8 +9,8 @@
 #include "Debug/Event.hpp"
 #include "Debug/Memory.hpp"
 #include "Debug/Proc.hpp"
-#include "Debug/Thread.hpp"
 #include "Debug/Ptrace.hpp"
+#include "Debug/Thread.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -657,6 +657,14 @@ bool Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
 void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
 	if (std::exchange(ctx.first_stop, false)) {
 		active_thread_ = ctx.current_thread;
+	}
+
+	if (ctx.current_thread->pending_step_breakpoint_.has_value()) {
+		if (auto bp = find_breakpoint(*ctx.current_thread->pending_step_breakpoint_); bp) {
+			bp->enable();
+		}
+
+		ctx.current_thread->pending_step_breakpoint_.reset();
 	}
 
 	/*
