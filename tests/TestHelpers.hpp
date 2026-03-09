@@ -35,11 +35,29 @@ inline void child_wait_ready(int sync_read_fd) {
 	CHECK_MSG(rr == 1, "failed to read ready byte from child");
 }
 
+template <class Ptr>
+void send_address(int addr_write_fd, Ptr address) {
+
+    static_assert(sizeof(Ptr) <= sizeof(uint64_t), "Pointer size is larger than uint64_t, cannot send address through pipe");
+
+	// NOTE(eteran): This cast is only circumstantially "useless" depending
+	// on if we are building with -m32 or -m64, so we need to silence the warning here.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+	auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(address));
+#pragma GCC diagnostic pop
+
+	ssize_t wrote = write(addr_write_fd, &addr, sizeof(addr));
+	CHECK_MSG(wrote == static_cast<ssize_t>(sizeof(addr)), "failed to write code address to pipe");
+}
+
 inline void send_dummy_address(int addr_write_fd) {
-	uint64_t dummy_addr = 0xdeadbeef;
+	uint64_t dummy_addr = 0xdeadbeeffeedface;
 	ssize_t wrote       = write(addr_write_fd, &dummy_addr, sizeof(dummy_addr));
 	CHECK_MSG(wrote == static_cast<ssize_t>(sizeof(dummy_addr)), "failed to write code address to pipe");
 }
+
+
 
 /**
  * @brief Runs a child function in a separate process, attaches to it with the debugger,

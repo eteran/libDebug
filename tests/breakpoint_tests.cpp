@@ -45,8 +45,8 @@ void trigger_sigfpe_fault() {
  * @brief Maps an executable memory page, writes a simple function that returns immediately, and returns the address of the mapped page.
  */
 uint8_t *map_executable_page() {
-	const size_t page = 4096;
-	void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	constexpr size_t PageSize = 4096;
+	void *mem                 = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 	CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate executable page");
 
 	auto code = static_cast<uint8_t *>(mem);
@@ -61,14 +61,7 @@ template <size_t Count>
 void child_run_executable_buffer(int addr_write_fd, int sync_read_fd) {
 
 	uint8_t *code = map_executable_page();
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-	auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
-#pragma GCC diagnostic pop
-
-	ssize_t wrote = write(addr_write_fd, &addr, sizeof(addr));
-	CHECK_MSG(wrote == static_cast<ssize_t>(sizeof(addr)), "failed to write code address to pipe");
+	send_address(addr_write_fd, code);
 
 	child_wait_ready(sync_read_fd);
 
