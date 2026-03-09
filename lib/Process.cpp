@@ -663,7 +663,7 @@ void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
 		active_thread_ = ctx.current_thread;
 	}
 
-	if (ctx.current_thread->pending_step_breakpoint_.has_value()) {
+	if (ctx.current_thread->pending_step_breakpoint_) {
 		if (auto bp = find_breakpoint(*ctx.current_thread->pending_step_breakpoint_); bp) {
 			bp->enable();
 		}
