@@ -35,6 +35,7 @@ public:
 	static constexpr Flag KillOnTracerExit   = 1u << 2;
 	static constexpr Flag DisableAslr        = 1u << 3;
 	static constexpr Flag DisableLazyBinding = 1u << 4;
+	static constexpr Flag DisableProcMem     = 1u << 5;
 
 public:
 	// The constructor is private to force users to create Process objects through the Debugger interface.

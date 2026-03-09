@@ -27,11 +27,13 @@ public:
 public:
 	void set_disable_lazy_binding(bool value) noexcept;
 	void set_disable_aslr(bool value) noexcept;
+	void set_disable_proc_mem(bool value) noexcept { disableProcMem_ = value; }
 
 private:
 	std::shared_ptr<Process> process_;
 	std::thread::id ctor_thread_id_;
 	bool disableLazyBinding_ = true;
+	bool disableProcMem_     = false;
 	bool disableASLR_        = true;
 };
 

@@ -157,10 +157,14 @@ Process::Process(const internal_t &, pid_t pid, Flag flags)
 		threads_.emplace(pid, threads);
 	}
 
-	try {
-		memory_ = std::make_unique<ProcMemory>(pid);
-	} catch (const DebuggerError &) {
+	if (flags & Process::DisableProcMem) {
 		memory_ = std::make_unique<PtraceMemory>(pid);
+	} else {
+		try {
+			memory_ = std::make_unique<ProcMemory>(pid);
+		} catch (const DebuggerError &) {
+			memory_ = std::make_unique<PtraceMemory>(pid);
+		}
 	}
 
 	report();

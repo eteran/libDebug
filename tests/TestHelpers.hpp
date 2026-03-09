@@ -70,8 +70,12 @@ inline void send_dummy_address(int addr_write_fd) {
  * @param attach_required If true, the function will check that attaching to the child process succeeds.
  * If false, it will not check and will simply return if attaching fails.
  */
-template <class ChildFn, class ParentFn>
-void with_attached_child(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
+template <class ChildFn, class ParentFn, class ConfigureFn = void (*)(Debugger &)>
+void with_attached_child(
+	const ChildFn &child_fn,
+	const ParentFn &parent_fn,
+	bool attach_required = false,
+	ConfigureFn configure_debugger = [](Debugger &) {}) {
 	int addr_pipe[2];
 	int sync_pipe[2];
 	CHECK_MSG(pipe(addr_pipe) == 0, "pipe(addr_pipe) failed");
@@ -95,6 +99,7 @@ void with_attached_child(const ChildFn &child_fn, const ParentFn &parent_fn, boo
 	CHECK_MSG(rr == static_cast<ssize_t>(sizeof(address)), "failed to read address from pipe");
 
 	Debugger dbg;
+	configure_debugger(dbg);
 	std::shared_ptr<Process> proc;
 	try {
 		proc = dbg.attach(cpid);

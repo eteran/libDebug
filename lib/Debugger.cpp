@@ -98,7 +98,7 @@ void Debugger::set_disable_aslr(bool value) noexcept {
  * @throws DebuggerError if the process could not be attached.
  */
 std::shared_ptr<Process> Debugger::attach(pid_t pid) {
-	process_ = std::make_shared<Process>(Process::internal_t(), pid, Process::Attach);
+	process_ = std::make_shared<Process>(Process::internal_t(), pid, Process::Attach | (disableProcMem_ ? Process::DisableProcMem : 0));
 	return process_;
 }
 
@@ -208,7 +208,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	case -1:
 		return nullptr;
 	default:
-		process_ = std::make_shared<Process>(Process::internal_t(), cpid, Process::NoAttach);
+		process_ = std::make_shared<Process>(Process::internal_t(), cpid, Process::NoAttach | (disableProcMem_ ? Process::DisableProcMem : 0));
 
 		auto thread = process_->find_thread(cpid);
 		if (!thread) {
