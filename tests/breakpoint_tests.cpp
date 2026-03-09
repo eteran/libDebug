@@ -57,7 +57,7 @@ uint8_t *map_executable_page() {
 	return code;
 }
 
-template <size_t Count = 1>
+template <size_t Count>
 void child_run_executable_buffer(int addr_write_fd, int sync_read_fd) {
 
 	uint8_t *code = map_executable_page();
@@ -85,7 +85,6 @@ void run_fault_signal_case(const FaultSignalCase &test_case) {
 	with_attached_child_sync(
 		[&](int sync_read_fd) {
 			child_wait_ready(sync_read_fd);
-
 			test_case.child_trigger();
 			_exit(1);
 		},
@@ -128,7 +127,7 @@ void run_fault_signal_case(const FaultSignalCase &test_case) {
 
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 	with_attached_child_with_address(
-		child_run_executable_buffer,
+		child_run_executable_buffer<1>,
 		[&](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address, test_case.type);
 
@@ -171,7 +170,7 @@ void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 
 TEST(BreakpointHit) {
 	with_attached_child_with_address(
-		child_run_executable_buffer,
+		child_run_executable_buffer<1>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 			notify_child_start(ctx.sync_write_fd);
@@ -200,7 +199,7 @@ TEST(BreakpointHit) {
 
 TEST(DisabledBreakpointDoesNotStop) {
 	with_attached_child_with_address(
-		child_run_executable_buffer,
+		child_run_executable_buffer<1>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -538,7 +537,7 @@ TEST(AltBreakpointTypesReported) {
 
 TEST(HardwareExecuteBreakpointHit) {
 	with_attached_child_with_address(
-		child_run_executable_buffer,
+		child_run_executable_buffer<1>,
 		[](const AttachedChildAddressContext &ctx) {
 			auto thread = ctx.process->active_thread();
 			CHECK_MSG(thread != nullptr, "proc->active_thread() returned null");
