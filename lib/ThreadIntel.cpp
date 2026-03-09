@@ -494,7 +494,7 @@ void Thread::get_xstate64(Context *ctx) const {
 	// it looks as if the registers have always been zero. Thus we should provide the same
 	// illusion to the user.
 
-	if (x87_present && have_fpu) {
+	if (x87_present) {
 		ctx->xstate_.x87.status_word       = xsave->swd;
 		ctx->xstate_.x87.control_word      = xsave->cwd;
 		ctx->xstate_.x87.tag_word          = xsave->ftw;
@@ -529,7 +529,7 @@ void Thread::get_xstate64(Context *ctx) const {
 	// may return a truncated iovec. Only read fields if the returned buffer
 	// contains them; otherwise initialize to safe defaults.
 	// SSE/XMM area: if we returned the whole XMM region we can copy them in one shot
-	if (sse_present && have_xmm_full) {
+	if (sse_present) {
 		ctx->xstate_.simd.mxcsr      = xsave->mxcsr;
 		ctx->xstate_.simd.mxcsr_mask = xsave->mxcr_mask;
 
@@ -560,7 +560,7 @@ void Thread::get_xstate64(Context *ctx) const {
 		// AVX state starts after the legacy area (576 bytes) in the xsave buffer
 		// Each YMM register's upper 128 bits are stored sequentially
 
-		if (avx_present && have_avx_upper) {
+		if (avx_present) {
 			const uint8_t *avx_upper_data = reinterpret_cast<const uint8_t *>(xsave) + AvxStateOffset;
 			for (size_t n = 0; n < 16; ++n) {
 				std::memcpy(ctx->xstate_.simd.registers[n].data + SseRegisterSize, avx_upper_data + AvxUpperSize * n, AvxUpperSize);
@@ -584,7 +584,7 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		const uint8_t *xsave_data = reinterpret_cast<const uint8_t *>(xsave);
 
-		if (zmm_present && have_zmm_hi && have_hi16) {
+		if (zmm_present) {
 			const uint8_t *zmm_upper_data = xsave_data + ZmmHi256StateOffset;
 			for (size_t n = 0; n < 16; ++n) {
 				std::memcpy(ctx->xstate_.simd.registers[n].data + AvxRegisterSize, zmm_upper_data + ZmmUpperSize * n, ZmmUpperSize);
