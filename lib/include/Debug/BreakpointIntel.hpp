@@ -45,6 +45,7 @@ public:
 	void enable();
 	void disable();
 	void hit();
+	[[nodiscard]] bool enabled() const { return enabled_; }
 	[[nodiscard]] TypeId type() const { return type_; }
 	[[nodiscard]] uint8_t *old_bytes() { return old_bytes_; }
 	[[nodiscard]] uint8_t *new_bytes() { return new_bytes_; }

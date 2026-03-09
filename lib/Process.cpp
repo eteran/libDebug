@@ -432,7 +432,7 @@ std::shared_ptr<Breakpoint> Process::search_breakpoint(uint64_t address) const {
 		}
 		const uint64_t candidate = address - i;
 		if (auto bp = find_breakpoint(candidate)) {
-			if (bp->size() == i) {
+			if (bp->enabled() && bp->size() == i) {
 				return bp;
 			}
 		}
@@ -636,6 +636,10 @@ bool Process::handle_unknown_event(EventContext &ctx, event_callback callback) {
 	(void)callback;
 
 	if (auto bp = find_breakpoint(ctx.address)) {
+		if (!bp->enabled()) {
+			return false;
+		}
+
 		bp->hit();
 
 		// NOTE(eteran): no need to rewind here because the instruction used for the BP

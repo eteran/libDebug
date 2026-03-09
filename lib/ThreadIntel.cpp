@@ -234,10 +234,18 @@ void Thread::step(int signal) {
 void Thread::resume(int signal) {
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
+	pending_step_breakpoint_.reset();
 
 	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp) {
 		bp->disable();
-		step();
+
+		if (auto ret = do_ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal); ret.is_err()) {
+			bp->enable();
+			throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(ret.error()));
+		}
+
+		state_ = State::Running;
+
 		// NOTE(eteran): We need to check if the wait resulted in a single step event or some other event
 		// (e.g. breakpoint hit by another thread) and handle that accordingly instead of assuming it was
 		// a single step event. if it wasn't a single step event, we need continue, but pass the signal
