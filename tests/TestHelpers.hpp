@@ -23,12 +23,32 @@ struct AttachedChildAddressContext : AttachedChildContext {
 	uint64_t address = 0;
 };
 
+/**
+ * @brief Notifies the child process to start by writing a byte to the provided file descriptor.
+ */
 inline void notify_child_start(int sync_write_fd) {
 	char one            = 1;
 	const ssize_t wrote = write(sync_write_fd, &one, 1);
 	CHECK_MSG(wrote == 1, "failed to notify child to start");
 }
 
+inline void child_wait_ready(int sync_read_fd) {
+	char ready;
+	const ssize_t rr = read(sync_read_fd, &ready, 1);
+	CHECK_MSG(rr == 1, "failed to read ready byte from child");
+}
+
+/**
+ * @brief Runs a child function in a separate process, attaches to it with the debugger,
+ * and then runs a parent function with the attached process context.
+ *
+ * @param child_fn The function to run in the child process.
+ * It will be passed a file descriptor to write an address to and a file descriptor for synchronization.
+ * @param parent_fn The function to run in the parent process.
+ * It will be passed an AttachedChildAddressContext containing the child process id, synchronization file descriptor, attached process, and the address read from the child.
+ * @param attach_required If true, the function will check that attaching to the child process succeeds.
+ * If false, it will not check and will simply return if attaching fails.
+ */
 template <class ChildFn, class ParentFn>
 void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
 	int addr_pipe[2];
@@ -82,6 +102,17 @@ void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &p
 	close(sync_pipe[1]);
 }
 
+/**
+ * @brief Runs a child function in a separate process, attaches to it with the debugger,
+ * and then runs a parent function with the attached process context.
+ *
+ * @param child_fn The function to run in the child process.
+ * It will be passed a file descriptor for synchronization.
+ * @param parent_fn The function to run in the parent process.
+ * It will be passed an AttachedChildContext containing the child process id, synchronization file descriptor, and attached process.
+ * @param attach_required If true, the function will check that attaching to the child process succeeds.
+ * If false, it will not check and will simply return if attaching fails.
+ */
 template <class ChildFn, class ParentFn>
 void with_attached_child_sync(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
 	int sync_pipe[2];
@@ -124,6 +155,18 @@ void with_attached_child_sync(const ChildFn &child_fn, const ParentFn &parent_fn
 	close(sync_pipe[1]);
 }
 
+/**
+ * @brief Polls for debug events from the process until a done condition is met or a timeout occurs.
+ *
+ * @param process The process to poll for debug events from.
+ * @param total_timeout The total amount of time to wait for the done condition to be met before giving up.
+ * @param poll_interval The amount of time to wait between polls for debug events.
+ * @param callback The function to call with each debug event that occurs.
+ * It should return an EventStatus indicating whether to continue polling or stop.
+ * @param done The function to call after each poll to check if the done condition has been met.
+ * It should return true if we are done and can stop polling, or false if we should keep polling.
+ * @return true if the done condition was met within the total timeout, or false if the total timeout was reached without the done condition being met.
+ */
 template <class CallbackFn, class DoneFn>
 bool poll_debug_events_until(
 	const std::shared_ptr<Process> &process,
@@ -141,39 +184,6 @@ bool poll_debug_events_until(
 	}
 
 	return done();
-}
-
-inline void child_run_basic_executable_buffer(int addr_write_fd, int sync_read_fd) {
-	const size_t page = 4096;
-	void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	if (mem == MAP_FAILED) {
-		perror("mmap");
-		_exit(1);
-	}
-
-	auto code = static_cast<unsigned char *>(mem);
-	code[0]   = 0x90;
-	code[1]   = 0x90;
-	code[2]   = 0xc3;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
-	auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
-#pragma GCC diagnostic pop
-
-	ssize_t wrote = write(addr_write_fd, &addr, sizeof(addr));
-	if (wrote != static_cast<ssize_t>(sizeof(addr))) {
-		_exit(1);
-	}
-
-	char ready;
-	if (read(sync_read_fd, &ready, 1) != 1) {
-		_exit(1);
-	}
-
-	int (*fn)() = reinterpret_cast<int (*)()>(code);
-	fn();
-	_exit(0);
 }
 
 #endif

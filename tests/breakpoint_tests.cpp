@@ -41,18 +41,26 @@ void trigger_sigfpe_fault() {
 	_exit(1);
 }
 
-void child_run_repeated_executable_buffer(int addr_write_fd, int sync_read_fd) {
+/**
+ * @brief Maps an executable memory page, writes a simple function that returns immediately, and returns the address of the mapped page.
+ */
+uint8_t *map_executable_page() {
 	const size_t page = 4096;
 	void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	if (mem == MAP_FAILED) {
-		perror("mmap");
-		_exit(1);
-	}
+	CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate executable page");
 
-	auto code = static_cast<unsigned char *>(mem);
-	code[0]   = 0x90;
-	code[1]   = 0x90;
-	code[2]   = 0xc3;
+	auto code = static_cast<uint8_t *>(mem);
+	code[0]   = 0x90; // NOP
+	code[1]   = 0x90; // NOP
+	code[2]   = 0xc3; // RET
+
+	return code;
+}
+
+template <size_t Count = 1>
+void child_run_executable_buffer(int addr_write_fd, int sync_read_fd) {
+
+	uint8_t *code = map_executable_page();
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuseless-cast"
@@ -64,26 +72,19 @@ void child_run_repeated_executable_buffer(int addr_write_fd, int sync_read_fd) {
 		_exit(1);
 	}
 
-	char ready;
-	if (read(sync_read_fd, &ready, 1) != 1) {
-		_exit(1);
-	}
+	child_wait_ready(sync_read_fd);
 
 	int (*fn)() = reinterpret_cast<int (*)()>(code);
-	for (int i = 0; i < 3; ++i) {
+	for (size_t i = 0; i < Count; ++i) {
 		fn();
 	}
-
 	_exit(0);
 }
 
 void run_fault_signal_case(const FaultSignalCase &test_case) {
 	with_attached_child_sync(
 		[&](int sync_read_fd) {
-			char ready;
-			if (read(sync_read_fd, &ready, 1) != 1) {
-				_exit(1);
-			}
+			child_wait_ready(sync_read_fd);
 
 			test_case.child_trigger();
 			_exit(1);
@@ -127,7 +128,7 @@ void run_fault_signal_case(const FaultSignalCase &test_case) {
 
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 	with_attached_child_with_address(
-		child_run_basic_executable_buffer,
+		child_run_executable_buffer,
 		[&](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address, test_case.type);
 
@@ -170,7 +171,7 @@ void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 
 TEST(BreakpointHit) {
 	with_attached_child_with_address(
-		child_run_basic_executable_buffer,
+		child_run_executable_buffer,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 			notify_child_start(ctx.sync_write_fd);
@@ -199,7 +200,7 @@ TEST(BreakpointHit) {
 
 TEST(DisabledBreakpointDoesNotStop) {
 	with_attached_child_with_address(
-		child_run_basic_executable_buffer,
+		child_run_executable_buffer,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -245,7 +246,7 @@ TEST(DisabledBreakpointDoesNotStop) {
 
 TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
 	with_attached_child_with_address(
-		child_run_repeated_executable_buffer,
+		child_run_executable_buffer<3>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -254,16 +255,16 @@ TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-				if (e.tid != ctx.child_pid) {
-					return EventStatus::Continue;
-				}
+                if (e.tid != ctx.child_pid) {
+                    return EventStatus::Continue;
+                }
 
-				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-					first_breakpoint_stop = true;
-					return EventStatus::Stop;
-				}
+                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+                    first_breakpoint_stop = true;
+                    return EventStatus::Stop;
+                }
 
-				return EventStatus::Continue;
+                return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -324,7 +325,7 @@ TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
 
 TEST(EnabledBreakpointCanBeContinuedFromThenHitAgain) {
 	with_attached_child_with_address(
-		child_run_repeated_executable_buffer,
+		child_run_executable_buffer<3>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -374,7 +375,7 @@ TEST(EnabledBreakpointCanBeContinuedFromThenHitAgain) {
 
 TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
 	with_attached_child_with_address(
-		child_run_repeated_executable_buffer,
+		child_run_executable_buffer<3>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -383,16 +384,16 @@ TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-				if (e.tid != ctx.child_pid) {
-					return EventStatus::Continue;
-				}
+                if (e.tid != ctx.child_pid) {
+                    return EventStatus::Continue;
+                }
 
-				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-					first_breakpoint_stop = true;
-					return EventStatus::Stop;
-				}
+                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+                    first_breakpoint_stop = true;
+                    return EventStatus::Stop;
+                }
 
-				return EventStatus::Continue;
+                return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -449,7 +450,7 @@ TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
 
 TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
 	with_attached_child_with_address(
-		child_run_repeated_executable_buffer,
+		child_run_executable_buffer<3>,
 		[](const AttachedChildAddressContext &ctx) {
 			ctx.process->add_breakpoint(ctx.address);
 
@@ -458,16 +459,16 @@ TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-				if (e.tid != ctx.child_pid) {
-					return EventStatus::Continue;
-				}
+                if (e.tid != ctx.child_pid) {
+                    return EventStatus::Continue;
+                }
 
-				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-					first_breakpoint_stop = true;
-					return EventStatus::Stop;
-				}
+                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+                    first_breakpoint_stop = true;
+                    return EventStatus::Stop;
+                }
 
-				return EventStatus::Continue;
+                return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -537,7 +538,7 @@ TEST(AltBreakpointTypesReported) {
 
 TEST(HardwareExecuteBreakpointHit) {
 	with_attached_child_with_address(
-		child_run_basic_executable_buffer,
+		child_run_executable_buffer,
 		[](const AttachedChildAddressContext &ctx) {
 			auto thread = ctx.process->active_thread();
 			CHECK_MSG(thread != nullptr, "proc->active_thread() returned null");

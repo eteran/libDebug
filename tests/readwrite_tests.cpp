@@ -18,8 +18,8 @@ TEST(ReadWrite) {
 				ptr[i] = static_cast<uint8_t>(0xaa + i);
 			}
 
-			// NOTE(eteran): This cast is only circumstantially "useless" depending
-			// on if we are building with -m32 or -m64, so we need to silence the warning here.
+		// NOTE(eteran): This cast is only circumstantially "useless" depending
+		// on if we are building with -m32 or -m64, so we need to silence the warning here.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 			auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr));
@@ -30,10 +30,7 @@ TEST(ReadWrite) {
 				_exit(1);
 			}
 
-			char ready;
-			if (read(sync_read_fd, &ready, 1) != 1) {
-				_exit(1);
-			}
+			child_wait_ready(sync_read_fd);
 		},
 		[](const AttachedChildAddressContext &ctx) {
 			uint8_t buffer[32];

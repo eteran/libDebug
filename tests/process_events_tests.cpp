@@ -13,10 +13,7 @@ using namespace std::chrono_literals;
 TEST(IgnoreSignal) {
 	with_attached_child_sync(
 		[](int sync_read_fd) {
-			char ready;
-			if (read(sync_read_fd, &ready, 1) != 1) {
-				_exit(1);
-			}
+			child_wait_ready(sync_read_fd);
 			std::this_thread::sleep_for(500ms);
 			_exit(42);
 		},
@@ -29,9 +26,9 @@ TEST(IgnoreSignal) {
 
 			bool callback_called = false;
 			auto cb              = [&](const Event &e) -> EventStatus {
-				(void)e;
-				callback_called = true;
-				return EventStatus::Stop;
+                (void)e;
+                callback_called = true;
+                return EventStatus::Stop;
 			};
 
 			ctx.process->next_debug_event(500ms, cb);
