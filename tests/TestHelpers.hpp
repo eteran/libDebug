@@ -29,7 +29,7 @@ inline void notify_child_start(int sync_write_fd) {
 	CHECK_MSG(wrote == 1, "failed to notify child to start");
 }
 
-template <typename ChildFn, typename ParentFn>
+template <class ChildFn, class ParentFn>
 void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
 	int addr_pipe[2];
 	int sync_pipe[2];
@@ -82,7 +82,7 @@ void with_attached_child_with_address(const ChildFn &child_fn, const ParentFn &p
 	close(sync_pipe[1]);
 }
 
-template <typename ChildFn, typename ParentFn>
+template <class ChildFn, class ParentFn>
 void with_attached_child_sync(const ChildFn &child_fn, const ParentFn &parent_fn, bool attach_required = false) {
 	int sync_pipe[2];
 	CHECK_MSG(pipe(sync_pipe) == 0, "pipe(sync_pipe) failed");
@@ -124,7 +124,7 @@ void with_attached_child_sync(const ChildFn &child_fn, const ParentFn &parent_fn
 	close(sync_pipe[1]);
 }
 
-template <typename CallbackFn, typename DoneFn>
+template <class CallbackFn, class DoneFn>
 bool poll_debug_events_until(
 	const std::shared_ptr<Process> &process,
 	std::chrono::milliseconds total_timeout,

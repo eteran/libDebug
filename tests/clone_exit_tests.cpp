@@ -3,6 +3,7 @@
 #include "Test.hpp"
 #include "TestHelpers.hpp"
 
+#include <cassert>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -14,11 +15,6 @@
 
 using namespace std::chrono_literals;
 
-static void *sleeper(void *) {
-	std::this_thread::sleep_for(2s);
-	return nullptr;
-}
-
 TEST(CloneEvent) {
 	with_attached_child_sync(
 		[](int sync_read_fd) {
@@ -28,12 +24,11 @@ TEST(CloneEvent) {
 			}
 			std::this_thread::sleep_for(50ms);
 
-			pthread_t thread;
-			if (pthread_create(&thread, nullptr, &sleeper, nullptr) != 0) {
-				_exit(1);
-			}
+			auto thread = std::thread([]() {
+				std::this_thread::sleep_for(1s);
+			});
+			thread.join();
 
-			pthread_join(thread, nullptr);
 			_exit(0);
 		},
 		[](const AttachedChildContext &ctx) {
@@ -46,7 +41,7 @@ TEST(CloneEvent) {
 
 			notify_child_start(ctx.sync_write_fd);
 
-			bool saw_clone   = false;
+			bool saw_clone      = false;
 			const bool observed = poll_debug_events_until(
 				ctx.process,
 				5s,
@@ -88,7 +83,7 @@ TEST(ExitTraceEvent) {
 
 			notify_child_start(ctx.sync_write_fd);
 
-			bool saw_exit    = false;
+			bool saw_exit       = false;
 			const bool observed = poll_debug_events_until(
 				ctx.process,
 				5s,

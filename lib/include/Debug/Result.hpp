@@ -10,7 +10,7 @@
 #include <utility>
 #include <variant>
 
-template <typename T, typename E>
+template <class T, class E>
 class Result {
 public:
 	static Result Ok(T value) {
@@ -37,14 +37,14 @@ public:
 	E &&error() && { return std::get<1>(std::move(storage_)); }
 
 public:
-	template <typename U>
+	template <class U>
 	T value_or(U &&default_value) const {
 		if (ok()) return value();
 		return static_cast<T>(std::forward<U>(default_value));
 	}
 
 private:
-	template <std::size_t I, typename... Args>
+	template <std::size_t I, class... Args>
 	explicit Result(std::in_place_index_t<I>, Args &&...args)
 		: storage_(std::in_place_index<I>, std::forward<Args>(args)...) {}
 
@@ -52,7 +52,7 @@ private:
 };
 
 // Specialization for void result
-template <typename E>
+template <class E>
 class Result<void, E> {
 public:
 	static Result Ok() {

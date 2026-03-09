@@ -41,6 +41,42 @@ void trigger_sigfpe_fault() {
 	_exit(1);
 }
 
+void child_run_repeated_executable_buffer(int addr_write_fd, int sync_read_fd) {
+	const size_t page = 4096;
+	void *mem         = mmap(nullptr, page, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	if (mem == MAP_FAILED) {
+		perror("mmap");
+		_exit(1);
+	}
+
+	auto code = static_cast<unsigned char *>(mem);
+	code[0]   = 0x90;
+	code[1]   = 0x90;
+	code[2]   = 0xc3;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+	auto addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(code));
+#pragma GCC diagnostic pop
+
+	ssize_t wrote = write(addr_write_fd, &addr, sizeof(addr));
+	if (wrote != static_cast<ssize_t>(sizeof(addr))) {
+		_exit(1);
+	}
+
+	char ready;
+	if (read(sync_read_fd, &ready, 1) != 1) {
+		_exit(1);
+	}
+
+	int (*fn)() = reinterpret_cast<int (*)()>(code);
+	for (int i = 0; i < 3; ++i) {
+		fn();
+	}
+
+	_exit(0);
+}
+
 void run_fault_signal_case(const FaultSignalCase &test_case) {
 	with_attached_child_sync(
 		[&](int sync_read_fd) {
@@ -158,6 +194,331 @@ TEST(BreakpointHit) {
 			CHECK_MSG(observed, "did not observe expected breakpoint event");
 			ctx.process->kill();
 			ctx.process->wait();
+		});
+}
+
+TEST(DisabledBreakpointDoesNotStop) {
+	with_attached_child_with_address(
+		child_run_basic_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+
+			auto bp = ctx.process->find_breakpoint(ctx.address);
+			CHECK_MSG(bp != nullptr, "failed to find breakpoint after add_breakpoint");
+			bp->disable();
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			bool observed_stop = false;
+			bool observed_exit = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped || e.type == Event::Type::Fault) {
+					observed_stop = true;
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Exited || e.type == Event::Type::Terminated) {
+					observed_exit = true;
+					return EventStatus::Continue;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return observed_exit; });
+
+			CHECK_MSG(observed, "did not observe child exit with disabled breakpoint");
+			CHECK_MSG(!observed_stop, "disabled breakpoint unexpectedly stopped child");
+		});
+}
+
+TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
+	with_attached_child_with_address(
+		child_run_repeated_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			bool first_breakpoint_stop = false;
+			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool first_observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				wait_first_cb,
+				[&]() { return first_breakpoint_stop; });
+
+			CHECK_MSG(first_observed, "did not observe first breakpoint stop before step");
+
+			ctx.process->step();
+
+			bool second_breakpoint_stop = false;
+			bool observed_exit          = false;
+
+			auto wait_second_cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Exited || e.type == Event::Type::Terminated) {
+					observed_exit = true;
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					auto thread = ctx.process->find_thread(e.tid);
+					if (!thread) {
+						return EventStatus::Continue;
+					}
+
+					if (thread->get_instruction_pointer() == ctx.address) {
+						second_breakpoint_stop = true;
+						return EventStatus::Stop;
+					}
+
+					return EventStatus::Continue;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool second_observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				wait_second_cb,
+				[&]() { return second_breakpoint_stop || observed_exit; });
+
+			CHECK_MSG(second_observed, "did not observe events after stepping over breakpoint");
+			CHECK_MSG(second_breakpoint_stop, "did not hit enabled breakpoint again after step-over");
+
+			ctx.process->kill();
+			ctx.process->wait();
+		});
+}
+
+TEST(EnabledBreakpointCanBeContinuedFromThenHitAgain) {
+	with_attached_child_with_address(
+		child_run_repeated_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			int breakpoint_stops = 0;
+			bool observed_exit   = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Exited || e.type == Event::Type::Terminated) {
+					observed_exit = true;
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					++breakpoint_stops;
+					if (breakpoint_stops == 1) {
+						return EventStatus::Continue;
+					}
+					if (breakpoint_stops >= 2) {
+						return EventStatus::Stop;
+					}
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return breakpoint_stops >= 2 || observed_exit; });
+
+			CHECK_MSG(observed, "did not observe events after continuing from breakpoint");
+			CHECK_MSG(breakpoint_stops >= 2, "did not hit enabled breakpoint again after continue");
+
+			ctx.process->kill();
+			ctx.process->wait();
+		});
+}
+
+TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
+	with_attached_child_with_address(
+		child_run_repeated_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			bool first_breakpoint_stop = false;
+			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool first_observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				wait_first_cb,
+				[&]() { return first_breakpoint_stop; });
+
+			CHECK_MSG(first_observed, "did not observe first breakpoint stop before disabling");
+
+			auto bp = ctx.process->find_breakpoint(ctx.address);
+			CHECK_MSG(bp != nullptr, "failed to find breakpoint before disabling");
+			bp->disable();
+
+			ctx.process->step();
+
+			bool rehit_disabled_breakpoint = false;
+			bool observed_exit             = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Exited || e.type == Event::Type::Terminated) {
+					observed_exit = true;
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					auto thread = ctx.process->find_thread(e.tid);
+					if (thread && thread->get_instruction_pointer() == ctx.address) {
+						rehit_disabled_breakpoint = true;
+						return EventStatus::Stop;
+					}
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return rehit_disabled_breakpoint || observed_exit; });
+
+			CHECK_MSG(observed, "did not observe events after stepping disabled breakpoint");
+			CHECK_MSG(!rehit_disabled_breakpoint, "disabled breakpoint was re-armed and hit again after step");
+			CHECK_MSG(observed_exit, "child did not terminate after stepping over disabled breakpoint");
+		});
+}
+
+TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
+	with_attached_child_with_address(
+		child_run_repeated_executable_buffer,
+		[](const AttachedChildAddressContext &ctx) {
+			ctx.process->add_breakpoint(ctx.address);
+
+			notify_child_start(ctx.sync_write_fd);
+			ctx.process->resume();
+
+			bool first_breakpoint_stop = false;
+			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool first_observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				wait_first_cb,
+				[&]() { return first_breakpoint_stop; });
+
+			CHECK_MSG(first_observed, "did not observe first breakpoint stop before disabling");
+
+			auto bp = ctx.process->find_breakpoint(ctx.address);
+			CHECK_MSG(bp != nullptr, "failed to find breakpoint before disabling");
+			bp->disable();
+
+			ctx.process->resume();
+
+			bool rehit_disabled_breakpoint = false;
+			bool observed_exit             = false;
+
+			auto cb = [&](const Event &e) -> EventStatus {
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Exited || e.type == Event::Type::Terminated) {
+					observed_exit = true;
+					return EventStatus::Continue;
+				}
+
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					auto thread = ctx.process->find_thread(e.tid);
+					if (thread && thread->get_instruction_pointer() == ctx.address) {
+						rehit_disabled_breakpoint = true;
+						return EventStatus::Stop;
+					}
+				}
+
+				return EventStatus::Continue;
+			};
+
+			const bool observed = poll_debug_events_until(
+				ctx.process,
+				5s,
+				std::chrono::milliseconds(200),
+				cb,
+				[&]() { return rehit_disabled_breakpoint || observed_exit; });
+
+			CHECK_MSG(observed, "did not observe events after resuming from disabled breakpoint");
+			CHECK_MSG(!rehit_disabled_breakpoint, "disabled breakpoint was re-armed and hit again after resume");
+			CHECK_MSG(observed_exit, "child did not terminate after resuming from disabled breakpoint");
 		});
 }
 
