@@ -1,2 +1,5 @@
 .vscode/settings.json
 build/
+coverage-report
+coverage.filtered.info
+coverage.info

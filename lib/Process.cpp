@@ -298,9 +298,7 @@ void Process::resume() {
 	for (auto [tid, thread] : threads_) {
 		(void)tid;
 		if (thread->state_ == Thread::State::Stopped) {
-			const int signal = thread->pending_signal_;
-			thread->resume(signal);
-			thread->pending_signal_ = 0; // Clear after delivering
+			thread->resume(std::exchange(thread->pending_signal_, 0));
 		}
 	}
 }
@@ -733,9 +731,6 @@ void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
 	case SIGFPE:
 	case SIGILL:
 	case SIGBUS:
-
-		// TODO(eteran): first check if this is due to a breakpoint (e.g. an "alt-breakpoint" that doesn't use an actual breakpoint instruction
-		// and thus doesn't trigger a trap event), and if so handle it as a breakpoint event instead of a signal event
 		if (handle_unknown_event(ctx, callback)) {
 			break;
 		}
@@ -770,7 +765,7 @@ void Process::process_stop_event(EventContext &ctx, event_callback callback, Eve
 	switch (status) {
 	case EventStatus::Stop:
 		// Thread remains stopped - save pending signal for later resume
-		if (stop_type == Event::Type::Fault || stop_type == Event::Type::Stopped) {
+		if ((stop_type == Event::Type::Fault || stop_type == Event::Type::Stopped) && e.siginfo.si_signo != SIGSTOP) {
 			ctx.current_thread->pending_signal_ = e.siginfo.si_signo;
 		}
 		break;
@@ -783,10 +778,7 @@ void Process::process_stop_event(EventContext &ctx, event_callback callback, Eve
 		ctx.current_thread->step();
 		break;
 	case EventStatus::ExceptionNotHandled:
-		// User chose to deliver the signal - set pending and resume with it
-		ctx.current_thread->pending_signal_ = e.siginfo.si_signo;
-		ctx.current_thread->resume(e.siginfo.si_signo);
-		ctx.current_thread->pending_signal_ = 0; // Delivered, clear it
+		ctx.current_thread->resume(std::exchange(e.siginfo.si_signo, 0));
 		break;
 	case EventStatus::NextHandler:
 		// pass the event to the next handler

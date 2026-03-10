@@ -58,7 +58,7 @@ long create_ptrace_options(Thread::Flag f) {
 }
 
 /**
- * @brief Helper function to calculate the offset of debug registers in the user struct for ptrace PEEKUSER calls.
+ * @brief Helper function to calculate the offset of debug registers in the user struct.
  *
  * @param idx The index of the debug register (0-7).
  * @return The offset of the debug register in the user struct.
@@ -82,6 +82,8 @@ constexpr size_t AvxUpperSize        = AvxRegisterSize - SseRegisterSize;
 constexpr size_t ZmmHi256StateOffset = 1152;
 constexpr size_t Hi16ZmmStateOffset  = 1664;
 constexpr size_t ZmmUpperSize        = ZmmRegisterSize - AvxRegisterSize;
+
+constexpr uint32_t DefaultMxcsr = 0x1f80;
 }
 
 /**
@@ -544,7 +546,7 @@ void Thread::get_xstate64(Context *ctx) const {
 
 		ctx->xstate_.simd.sse_filled = true;
 	} else {
-		ctx->xstate_.simd.mxcsr      = 0x1f80; // Default MXCSR value
+		ctx->xstate_.simd.mxcsr      = DefaultMxcsr;
 		ctx->xstate_.simd.mxcsr_mask = 0;
 		for (size_t n = 0; n < SseRegisterCount; ++n) {
 			std::memset(ctx->xstate_.simd.registers[n].data, 0, sizeof(ctx->xstate_.simd.registers[n].data));
@@ -691,7 +693,7 @@ int Thread::get_xstate32_modern(Context *ctx) const {
 		ctx->xstate_.simd.sse_filled = true;
 	} else {
 		// SSE not present, initialize with zeros
-		ctx->xstate_.simd.mxcsr      = 0x1f80; // Default MXCSR value
+		ctx->xstate_.simd.mxcsr      = DefaultMxcsr;
 		ctx->xstate_.simd.mxcsr_mask = 0;
 
 		for (size_t n = 0; n < SseRegisterCount; ++n) {

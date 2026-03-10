@@ -10,6 +10,7 @@ set(SOURCES
     process_events_tests.cpp
     clone_exit_tests.cpp
     breakpoint_tests.cpp
+    sse_state_tests.cpp
 )
 
 
