@@ -603,6 +603,7 @@ void Thread::get_xstate64(Context *ctx) const {
 		}
 	}
 }
+
 /**
  * @brief Retrieves the thread xstate using NT_X86_XSTATE (32-bit).
  *

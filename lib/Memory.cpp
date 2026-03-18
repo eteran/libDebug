@@ -5,7 +5,9 @@
 
 #include "Debug/Memory.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Proc.hpp"
 #include "Debug/Ptrace.hpp"
+#include "Debug/Region.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -20,6 +22,64 @@
 // which is necessary for implementing breakpoints. We try `pwrite` first because it's faster,
 // but if it fails we fall back to `ptrace` which is more likely to succeed.
 
+namespace {
+
+/**
+ * @brief Validates that `/proc/<pid>/mem` supports both read and write.
+ *
+ * Performs a one-byte read and write-back on a readable+writable mapping.
+ * If no suitable mapping can be validated, throws `DebuggerError` so callers
+ * can fall back to ptrace-based access.
+ */
+void validate_proc_memory_fd(int memfd, pid_t pid) {
+	int last_read_errno  = 0;
+	int last_write_errno = 0;
+	bool attempted       = false;
+
+	const std::vector<Region> regions = enumerate_regions(pid);
+	for (const Region &region : regions) {
+		if (!region.is_readable() || !region.is_writable() || region.start() >= region.end()) {
+			continue;
+		}
+
+		attempted = true;
+
+		const uint64_t probe_address = region.start();
+		off_t offset                 = static_cast<off_t>(probe_address);
+
+		uint8_t original = 0;
+		const ssize_t nread = pread(memfd, &original, sizeof(original), offset);
+		if (nread != static_cast<ssize_t>(sizeof(original))) {
+			if (nread < 0) {
+				last_read_errno = errno;
+			}
+			continue;
+		}
+
+		const ssize_t nwritten = pwrite(memfd, &original, sizeof(original), offset);
+		if (nwritten != static_cast<ssize_t>(sizeof(original))) {
+			if (nwritten < 0) {
+				last_write_errno = errno;
+			}
+			continue;
+		}
+
+		return;
+	}
+
+	if (!attempted) {
+		throw DebuggerError("Failed to validate /proc/%d/mem for process %d: no readable+writable regions", pid, pid);
+	}
+
+	throw DebuggerError("Failed to validate /proc/%d/mem for process %d: last read error=%s, last write error=%s",
+						pid,
+						pid,
+						last_read_errno != 0 ? strerror(last_read_errno) : "none",
+						last_write_errno != 0 ? strerror(last_write_errno) : "none");
+}
+
+}
+
 /**
  * @brief Opens the memory file descriptor for the given process ID.
  *
@@ -33,8 +93,7 @@ ProcMemory::ProcMemory(pid_t pid) {
 		throw DebuggerError("Failed to open memory file descriptor for process %d: %s", pid, strerror(errno));
 	}
 
-	// TODO(eteran): we should test if this fd works for reading and writing memory
-	// and if it doesn't throw an error to fall back to ptrace-based memory access.
+	validate_proc_memory_fd(memfd_, pid);
 }
 
 /**
