@@ -1,7 +1,6 @@
 
 #include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
-#include "Debug/Defer.hpp"
 #include "Debug/Process.hpp"
 #include "Debug/Ptrace.hpp"
 #include "Debug/Thread.hpp"
@@ -12,6 +11,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+#include <gsl/util>
 
 #include <sys/mman.h>
 #include <sys/personality.h>
@@ -129,7 +130,7 @@ std::shared_ptr<Process> Debugger::spawn(const char *cwd, const char *argv[], co
 	auto shared_mem = static_cast<char *>(ptr);
 	std::memset(ptr, 0, SharedMemSize);
 
-	SCOPE_EXIT({
+	auto cleanup = gsl::finally([&] {
 		munmap(ptr, SharedMemSize);
 	});
 

@@ -68,6 +68,8 @@ else()
     set_target_properties(Debug64 PROPERTIES LINK_FLAGS "-m64")
 endif()
 
+target_link_libraries(Debug64 GSL)
+
 
 # 32-bit library target
 add_library(Debug32 ${SOURCES})
@@ -95,3 +97,4 @@ else()
     set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32")
 endif()
 
+target_link_libraries(Debug32 GSL)
