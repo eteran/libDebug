@@ -107,12 +107,12 @@ RegisterRef Context::get_64(RegisterId reg) const {
 	// clang-format off
 	switch (reg) {
 	// Segment Registers
-	case RegisterId::CS:		return make_register("cs", ctx_64_.regs.cs, 0);
-	case RegisterId::DS:		return make_register("ds", ctx_64_.regs.ds, 0);
-	case RegisterId::ES:		return make_register("es", ctx_64_.regs.es, 0);
-	case RegisterId::FS:		return make_register("fs", ctx_64_.regs.fs, 0);
-	case RegisterId::GS:		return make_register("gs", ctx_64_.regs.gs, 0);
-	case RegisterId::SS:		return make_register("ss", ctx_64_.regs.ss, 0);
+	case RegisterId::CS:		return make_register("cs", ctx_64_.regs.cs, 0, sizeof(uint16_t));
+	case RegisterId::DS:		return make_register("ds", ctx_64_.regs.ds, 0, sizeof(uint16_t));
+	case RegisterId::ES:		return make_register("es", ctx_64_.regs.es, 0, sizeof(uint16_t));
+	case RegisterId::FS:		return make_register("fs", ctx_64_.regs.fs, 0, sizeof(uint16_t));
+	case RegisterId::GS:		return make_register("gs", ctx_64_.regs.gs, 0, sizeof(uint16_t));
+	case RegisterId::SS:		return make_register("ss", ctx_64_.regs.ss, 0, sizeof(uint16_t));
 	case RegisterId::FS_BASE:	return make_register("fs_base", ctx_64_.regs.fs_base, 0);
 	case RegisterId::GS_BASE:	return make_register("gs_base", ctx_64_.regs.gs_base, 0);
 
@@ -324,15 +324,15 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::EDI:		return make_register("edi", ctx_32_.regs.edi, 0);
 	case RegisterId::ORIG_EAX:	return make_register("orig_eax", ctx_32_.regs.orig_eax, 0);
 	case RegisterId::EIP:		return make_register("eip", ctx_32_.regs.eip, 0);
-	case RegisterId::CS:		return make_register("cs", ctx_32_.regs.cs, 0);
+	case RegisterId::CS:		return make_register("cs", ctx_32_.regs.cs, 0, sizeof(uint16_t));
 	case RegisterId::EFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
 	case RegisterId::ESP:		return make_register("esp", ctx_32_.regs.esp, 0);
 	case RegisterId::EBP:		return make_register("ebp", ctx_32_.regs.ebp, 0);
-	case RegisterId::SS:		return make_register("ss", ctx_32_.regs.ss, 0);
-	case RegisterId::DS:		return make_register("ds", ctx_32_.regs.ds, 0);
-	case RegisterId::ES:		return make_register("es", ctx_32_.regs.es, 0);
-	case RegisterId::FS:		return make_register("fs", ctx_32_.regs.fs, 0);
-	case RegisterId::GS:		return make_register("gs", ctx_32_.regs.gs, 0);
+	case RegisterId::SS:		return make_register("ss", ctx_32_.regs.ss, 0, sizeof(uint16_t));
+	case RegisterId::DS:		return make_register("ds", ctx_32_.regs.ds, 0, sizeof(uint16_t));
+	case RegisterId::ES:		return make_register("es", ctx_32_.regs.es, 0, sizeof(uint16_t));
+	case RegisterId::FS:		return make_register("fs", ctx_32_.regs.fs, 0, sizeof(uint16_t));
+	case RegisterId::GS:		return make_register("gs", ctx_32_.regs.gs, 0, sizeof(uint16_t));
 
 	case RegisterId::FS_BASE:	return make_register("fs_base", ctx_32_.fs_base, 0);
 	case RegisterId::GS_BASE:	return make_register("gs_base", ctx_32_.gs_base, 0);
@@ -405,7 +405,7 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::XSP:		return make_register("esp", ctx_32_.regs.esp, 0);
 	case RegisterId::XFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
 	default:
-		Debugger::log("Unknown Register [32]: %d\n", static_cast<int>(reg));
+		Debugger::log("Unknown Register [32]: %d", static_cast<int>(reg));
 		return RegisterRef();
 	}
 	// clang-format on

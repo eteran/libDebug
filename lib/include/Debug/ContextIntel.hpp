@@ -152,6 +152,7 @@ enum class RegisterId {
 	XMM13,
 	XMM14,
 	XMM15,
+
 	YMM0,
 	YMM1,
 	YMM2,
@@ -168,6 +169,7 @@ enum class RegisterId {
 	YMM13,
 	YMM14,
 	YMM15,
+
 	ZMM0,
 	ZMM1,
 	ZMM2,

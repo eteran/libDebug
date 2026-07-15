@@ -1313,7 +1313,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		Debugger::log("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
+		Debugger::log("set_debug_registers called on 64-bit thread with 32-bit debugger");
 	} else {
 		set_debug_registers32(ctx);
 	}

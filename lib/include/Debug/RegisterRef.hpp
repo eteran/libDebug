@@ -94,6 +94,26 @@ public:
 		return *this;
 	}
 
+public:
+	[[nodiscard]] std::string to_string() const {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid read from '%s'", name_.c_str());
+		}
+
+		auto ptr = static_cast<const uint8_t *>(ptr_);
+
+		std::string str;
+		str.reserve(size_ * 2);
+
+		for (size_t i = size_; i > 0; --i) {
+			char buf[3];
+			std::snprintf(buf, sizeof(buf), "%02x", ptr[i - 1]);
+			str.append(buf);
+		}
+
+		return str;
+	}
+
 private:
 	template <class Op>
 	void apply_op(Op op) {
