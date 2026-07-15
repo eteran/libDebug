@@ -17,14 +17,12 @@
 template <class... Args>
 Result<long, int> do_ptrace(int request, pid_t pid, Args... args) {
 
-    using R = Result<long, int>;
-
 	errno             = 0;
 	const long result = ::ptrace(static_cast<__ptrace_request>(request), pid, std::forward<Args>(args)...);
 	if (result == -1 && errno != 0) {
-		return R::Err(errno);
+		return Err(errno);
 	}
-	return R::Ok(result);
+	return Ok(result);
 }
 
 #endif
