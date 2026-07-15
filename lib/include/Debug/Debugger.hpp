@@ -2,9 +2,10 @@
 #ifndef DEBUGGER_HPP_
 #define DEBUGGER_HPP_
 
+#include <functional>
 #include <memory>
-
 #include <signal.h>
+#include <string_view>
 #include <sys/types.h>
 #include <thread>
 
@@ -29,9 +30,13 @@ public:
 	void set_disable_aslr(bool value) noexcept;
 	void set_disable_proc_mem(bool value) noexcept { disableProcMem_ = value; }
 
+public:
+	static void set_logger(std::function<void(std::string_view)> logger) noexcept;
+	static void log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 private:
 	std::shared_ptr<Process> process_;
-	std::thread::id ctor_thread_id_;
+	std::thread::id thread_;
 	bool disableLazyBinding_ = true;
 	bool disableProcMem_     = false;
 	bool disableASLR_        = true;

@@ -2,6 +2,7 @@
 #include "Debug/ThreadIntel.hpp"
 #include "Debug/Breakpoint.hpp"
 #include "Debug/Context.hpp"
+#include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Process.hpp"
 #include "Debug/Ptrace.hpp"
@@ -867,7 +868,7 @@ void Thread::get_debug_registers(Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		std::printf("get_debug_registers called on 64-bit thread with 32-bit debugger\n");
+		Debugger::log("get_debug_registers called on 64-bit thread with 32-bit debugger");
 	} else {
 		get_debug_registers32(ctx);
 	}
@@ -1312,7 +1313,7 @@ void Thread::set_debug_registers(const Context *ctx) const {
 		// because the debug registers are 64-bit, but the ONLY way to
 		// retrieve them is through PTRACE_PEEKUSER which only works with 32-bit
 		// registers.
-		std::printf("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
+		Debugger::log("set_debug_registers called on 64-bit thread with 32-bit debugger\n");
 	} else {
 		set_debug_registers32(ctx);
 	}

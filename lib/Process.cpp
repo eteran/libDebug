@@ -5,6 +5,7 @@
 
 #include "Debug/Process.hpp"
 #include "Debug/Breakpoint.hpp"
+#include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Event.hpp"
 #include "Debug/Memory.hpp"
@@ -562,7 +563,7 @@ void Process::handle_signal_event(EventContext &ctx, event_callback callback) {
 		active_thread_ = ctx.current_thread;
 	}
 #endif
-	std::printf("Thread %d was terminated by signal %d\n", ctx.tid, WTERMSIG(ctx.wstatus));
+	Debugger::log("Thread %d was terminated by signal %d", ctx.tid, WTERMSIG(ctx.wstatus));
 
 	// Report a Terminated event so callers can observe the terminating signal.
 	Event e = {
@@ -683,7 +684,7 @@ void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
 	 */
 	const int stop_sig = WSTOPSIG(ctx.wstatus);
 	if (stop_sig != SIGTRAP && is_ignoring_signal(stop_sig)) {
-		std::printf("Signal %d is being ignored, resuming thread %d\n", stop_sig, ctx.tid);
+		Debugger::log("Signal %d is being ignored, resuming thread %d", stop_sig, ctx.tid);
 		ctx.current_thread->resume(stop_sig);
 		return;
 	}
@@ -704,17 +705,17 @@ void Process::handle_stop_event(EventContext &ctx, event_callback callback) {
 			handle_trap_event(ctx, callback);
 			break;
 		case TRAP_TRACE:
-			std::printf("Hit a trace trap\n");
+			Debugger::log("Hit a trace trap");
 			break;
 		case TRAP_BRANCH:
-			std::printf("Hit a branch trap\n");
+			Debugger::log("Hit a branch trap");
 			break;
 		case TRAP_HWBKPT:
-			std::printf("Hit a hardware breakpoint/watchpoint trap\n");
+			Debugger::log("Hit a hardware breakpoint/watchpoint trap");
 			break;
 		case TRAP_UNK:
 		default:
-			std::printf("Hit an unknown trap: si_code=%d\n", ctx.current_thread->siginfo_.si_code);
+			Debugger::log("Hit an unknown trap: si_code=%d", ctx.current_thread->siginfo_.si_code);
 			break;
 		}
 
@@ -855,7 +856,7 @@ bool Process::next_debug_event(std::chrono::milliseconds timeout, event_callback
 
 		auto it = threads_.find(tid);
 		if (it == threads_.end()) {
-			std::printf("Event for untraced thread occurred...ignoring\n");
+			Debugger::log("Event for untraced thread occurred...ignoring");
 			continue;
 		}
 

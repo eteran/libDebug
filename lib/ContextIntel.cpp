@@ -1,4 +1,6 @@
+
 #include "Debug/ContextIntel.hpp"
+#include "Debug/Debugger.hpp"
 #include <cinttypes>
 #include <cstdio>
 
@@ -298,7 +300,7 @@ RegisterRef Context::get_64(RegisterId reg) const {
 	case RegisterId::ZMM15:		return make_register("zmm15", xstate_.simd.registers[15].data, 0, 64);
 
 	default:
-		std::printf("Unknown Register [64]: %d\n", static_cast<int>(reg));
+		Debugger::log("Unknown Register [64]: %d", static_cast<int>(reg));
 		return RegisterRef();
 	}
 	// clang-format on
@@ -403,7 +405,7 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::XSP:		return make_register("esp", ctx_32_.regs.esp, 0);
 	case RegisterId::XFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
 	default:
-		std::printf("Unknown Register [32]: %d\n", static_cast<int>(reg));
+		Debugger::log("Unknown Register [32]: %d\n", static_cast<int>(reg));
 		return RegisterRef();
 	}
 	// clang-format on
@@ -415,7 +417,7 @@ RegisterRef Context::get_32(RegisterId reg) const {
  * @param reg The register to return a reference to.
  * @return A reference to the given register.
  */
-RegisterRef Context::get(RegisterId reg)const  {
+RegisterRef Context::get(RegisterId reg) const {
 
 #if defined(__x86_64__)
 	return get_64(reg);

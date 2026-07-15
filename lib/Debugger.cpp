@@ -24,6 +24,41 @@
 namespace {
 thread_local int DebuggerCount = 0;
 thread_local sigset_t PrevSigMask;
+
+std::function<void(std::string_view)> Logger = [](std::string_view msg) {
+	std::fprintf(stderr, "%.*s\n", static_cast<int>(msg.size()), msg.data());
+};
+
+}
+
+/**
+ * @brief Logs a message using the logger function.
+ *
+ * @param fmt The format string.
+ * @param ... The arguments to format.
+ */
+void Debugger::log(const char *fmt, ...) {
+
+	char buffer[1024];
+
+	va_list ap;
+	va_start(ap, fmt);
+	const int n = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+	va_end(ap);
+	if (n < 0 || static_cast<size_t>(n) >= sizeof(buffer)) {
+		printf("DebuggerError: message truncated because it was too long\n");
+	}
+
+	Logger(std::string_view(buffer, static_cast<size_t>(n)));
+}
+
+/**
+ * @brief Sets the logger function to be used for logging messages.
+ *
+ * @param logger The logger function to be used for logging messages.
+ */
+void Debugger::set_logger(std::function<void(std::string_view)> logger) noexcept {
+	Logger = std::move(logger);
 }
 
 /**
@@ -34,7 +69,7 @@ thread_local sigset_t PrevSigMask;
  */
 Debugger::Debugger() {
 
-	ctor_thread_id_ = std::this_thread::get_id();
+	thread_ = std::this_thread::get_id();
 
 	// Block SIGCHLD once per thread so waitpid usage is deterministic.
 	if (DebuggerCount == 0) {
@@ -61,7 +96,7 @@ Debugger::Debugger() {
 Debugger::~Debugger() {
 	// NOTE(eteran): Enforce that the Debugger is destroyed on the same thread it was
 	// constructed on. Restoring the signal mask must occur on that thread.
-	if (std::this_thread::get_id() != ctor_thread_id_) {
+	if (std::this_thread::get_id() != thread_) {
 		std::fprintf(stderr, "Debugger destroyed on a different thread than constructed\n");
 		std::abort();
 	}

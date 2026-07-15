@@ -52,13 +52,13 @@ public:
 
 private:
 	std::atomic<uint64_t> hit_count_{0};
-	const Process *process_ = nullptr;
-	uint64_t address_       = 0;
-	uint8_t old_bytes_[2]   = {};
-	uint8_t new_bytes_[2]   = {};
-	size_t size_            = 0;
-	TypeId type_            = TypeId::Automatic;
-	bool enabled_           = false;
+	const Process *process_               = nullptr;
+	uint64_t address_                     = 0;
+	uint8_t old_bytes_[MaxBreakpointSize] = {};
+	uint8_t new_bytes_[MaxBreakpointSize] = {};
+	size_t size_                          = 0;
+	TypeId type_                          = TypeId::Automatic;
+	bool enabled_                         = false;
 };
 
 #endif

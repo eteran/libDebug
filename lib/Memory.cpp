@@ -47,7 +47,7 @@ void validate_proc_memory_fd(int memfd, pid_t pid) {
 		const uint64_t probe_address = region.start();
 		off_t offset                 = static_cast<off_t>(probe_address);
 
-		uint8_t original = 0;
+		uint8_t original    = 0;
 		const ssize_t nread = pread(memfd, &original, sizeof(original), offset);
 		if (nread != static_cast<ssize_t>(sizeof(original))) {
 			if (nread < 0) {
@@ -68,11 +68,10 @@ void validate_proc_memory_fd(int memfd, pid_t pid) {
 	}
 
 	if (!attempted) {
-		throw DebuggerError("Failed to validate /proc/%d/mem for process %d: no readable+writable regions", pid, pid);
+		throw DebuggerError("Failed to validate /proc/%d/mem: no readable+writable regions", pid);
 	}
 
-	throw DebuggerError("Failed to validate /proc/%d/mem for process %d: last read error=%s, last write error=%s",
-						pid,
+	throw DebuggerError("Failed to validate /proc/%d/mem: last read error=%s, last write error=%s",
 						pid,
 						last_read_errno != 0 ? strerror(last_read_errno) : "none",
 						last_write_errno != 0 ? strerror(last_write_errno) : "none");
