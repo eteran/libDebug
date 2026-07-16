@@ -71,7 +71,7 @@ set_target_properties(
                LINK_FLAGS "-m64"
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
-target_link_libraries(TestApp64 -static)
+target_link_libraries(TestApp64)
 
 # 32-bit Test executable
 add_executable(TestApp32 test_app.cpp)
@@ -83,5 +83,5 @@ set_target_properties(
                LINK_FLAGS "-m32"
                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
-target_link_libraries(TestApp32 -static)
+target_link_libraries(TestApp32)
 
