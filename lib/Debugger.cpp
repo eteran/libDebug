@@ -46,7 +46,7 @@ void Debugger::log(const char *fmt, ...) {
 	const int n = vsnprintf(buffer, sizeof(buffer), fmt, ap);
 	va_end(ap);
 	if (n < 0 || static_cast<size_t>(n) >= sizeof(buffer)) {
-		printf("DebuggerError: message truncated because it was too long\n");
+		std::printf("DebuggerError: message truncated because it was too long\n");
 	}
 
 	Logger(std::string_view(buffer, static_cast<size_t>(n)));
