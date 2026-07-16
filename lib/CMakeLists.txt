@@ -6,18 +6,20 @@ set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Context.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Debugger.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/DebuggerError.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Elf.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Event.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/EventStatus.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Memory.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Proc.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Process.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Ptrace.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/RegisterRef.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/ThreadIntel.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Ptrace.hpp
     BreakpointIntel.cpp
     ContextIntel.cpp
     Debugger.cpp
+    Elf.cpp
     Memory.cpp
     Proc.cpp
     Process.cpp

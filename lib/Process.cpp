@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <climits>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -167,6 +168,24 @@ Process::Process(const internal_t &, pid_t pid, Flag flags)
 			memory_ = std::make_unique<PtraceMemory>(pid);
 		}
 	}
+
+#if 0
+	// Read auxv of the process to find the base address of the dynamic linker and resolve the address of _dl_debug_state
+	std::vector<AuxEntry> auxv = read_auxv(pid);
+	for (const auto &entry : auxv) {
+
+		if (entry.type == AT_BASE) {
+			void *addr = resolve_dl_debug_state(entry.value, pid_, [this](void *buf, uint64_t address, size_t size) {
+				return memory_->read(address, buf, size) == static_cast<int64_t>(size);
+			});
+
+			if (addr) {
+				Debugger::log("Resolved _dl_debug_state at %p", addr);
+			}
+			break;
+		}
+	}
+#endif
 
 	report();
 }
@@ -486,7 +505,7 @@ void Process::handle_clone_event(EventContext &ctx, event_callback callback) {
 	unsigned long message;
 	if (do_ptrace(PTRACE_GETEVENTMSG, ctx.tid, 0L, &message).ok()) {
 
-		printf("Clone event: new thread tid=%lu\n", message);
+		Debugger::log("Clone event: new thread tid=%lu", message);
 
 		auto new_tid    = static_cast<pid_t>(message);
 		auto new_thread = std::make_shared<Thread>(Thread::internal_t(), this, new_tid, Thread::NoAttach | Thread::KillOnTracerExit);

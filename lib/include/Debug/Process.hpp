@@ -7,6 +7,7 @@
 #include "EventStatus.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
