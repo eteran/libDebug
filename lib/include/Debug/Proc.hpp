@@ -7,11 +7,18 @@
 
 #include <sys/types.h>
 
+struct AuxEntry {
+	uint64_t type;
+	uint64_t value;
+};
+
 class Region;
 
 [[nodiscard]] std::vector<pid_t> enumerate_processes();
 [[nodiscard]] std::vector<pid_t> enumerate_threads(pid_t pid);
 [[nodiscard]] std::vector<Region> enumerate_regions(pid_t pid);
 [[nodiscard]] uint64_t hash_regions(pid_t pid);
+[[nodiscard]] std::vector<AuxEntry> read_auxv(pid_t pid);
+[[nodiscard]] bool is_64_bit_elf(pid_t pid);
 
 #endif

@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <dirent.h>
+#include <elf.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -141,6 +142,84 @@ uint64_t hash_regions(pid_t pid) {
 	close(fd);
 
 	return h.digest();
+}
+
+/**
+ * @brief Checks if the given process is a 64-bit ELF binary.
+ *
+ * @param pid The process to check.
+ * @return true if the process is a 64-bit ELF binary, false otherwise.
+ */
+bool is_64_bit_elf(pid_t pid) {
+	char path[PATH_MAX];
+	std::snprintf(path, sizeof(path), "/proc/%d/exe", pid);
+
+	int fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		throw DebuggerError("Failed to open exe: %s", strerror(errno));
+	}
+
+	unsigned char ident[16];
+	if (read(fd, ident, sizeof(ident)) != sizeof(ident)) {
+		close(fd);
+		throw DebuggerError("Failed to read ELF ident");
+	}
+
+	close(fd);
+
+	if (memcmp(ident, ELFMAG, SELFMAG) != 0) {
+		throw DebuggerError("Not an ELF binary");
+	}
+
+	return ident[EI_CLASS] == ELFCLASS64;
+}
+
+/**
+ * @brief Reads the auxiliary vector of a given process.
+ *
+ * @param pid The process to read the auxiliary vector of.
+ * @return A vector of auxiliary entries.
+ */
+std::vector<AuxEntry> read_auxv(pid_t pid) {
+
+	std::vector<AuxEntry> auxv;
+
+	char path[PATH_MAX];
+	std::snprintf(path, sizeof(path), "/proc/%d/auxv", pid);
+
+	const int fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		throw DebuggerError("Failed to open %s: %s", path, strerror(errno));
+	}
+
+	if (is_64_bit_elf(pid)) {
+		struct {
+			uint64_t a_type;
+			uint64_t a_val;
+		} raw;
+
+		while (read(fd, &raw, sizeof(raw)) == sizeof(raw)) {
+			AuxEntry aux_entry;
+			aux_entry.type  = raw.a_type;
+			aux_entry.value = raw.a_val;
+			auxv.push_back(aux_entry);
+		}
+	} else {
+		struct {
+			uint32_t a_type;
+			uint32_t a_val;
+		} raw;
+
+		while (read(fd, &raw, sizeof(raw)) == sizeof(raw)) {
+			AuxEntry aux_entry;
+			aux_entry.type  = raw.a_type;
+			aux_entry.value = raw.a_val;
+			auxv.push_back(aux_entry);
+		}
+	}
+
+	close(fd);
+	return auxv;
 }
 
 /**
