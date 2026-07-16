@@ -186,3 +186,14 @@ void Breakpoint::disable() {
 void Breakpoint::hit() {
 	hit_count_++;
 }
+
+/**
+ * @brief Toggles the breakpoint between enabled and disabled states.
+ */
+void Breakpoint::toggle() {
+	if (enabled_) {
+		disable();
+	} else {
+		enable();
+	}
+}

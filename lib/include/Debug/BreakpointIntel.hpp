@@ -44,11 +44,15 @@ public:
 	[[nodiscard]] size_t size() const { return size_; }
 	void enable();
 	void disable();
+	void toggle();
 	void hit();
+	void set_internal(bool value) { internal_ = value; }
+	[[nodiscard]] bool is_internal() const { return internal_; }
 	[[nodiscard]] bool enabled() const { return enabled_; }
 	[[nodiscard]] TypeId type() const { return type_; }
 	[[nodiscard]] uint8_t *old_bytes() { return old_bytes_; }
 	[[nodiscard]] uint8_t *new_bytes() { return new_bytes_; }
+	[[nodiscard]] uint64_t hit_count() const { return hit_count_.load(); }
 
 private:
 	std::atomic<uint64_t> hit_count_{0};
@@ -59,6 +63,7 @@ private:
 	size_t size_                          = 0;
 	TypeId type_                          = TypeId::Automatic;
 	bool enabled_                         = false;
+	bool internal_                        = false;
 };
 
 #endif
