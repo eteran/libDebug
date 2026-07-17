@@ -119,6 +119,7 @@ private:
 
 private:
 	void filter_breakpoints(uint64_t address, void *buffer, size_t n) const;
+	void queue_pending_event(pid_t tid, int wstatus);
 
 private:
 	pid_t pid_     = 0;

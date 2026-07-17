@@ -386,7 +386,7 @@ void Process::all_stop_barrier(const std::vector<pid_t> &target_tids) {
 				break;
 			} else if (WIFEXITED(status) || WIFSIGNALED(status)) {
 				// Thread exited or was killed - queue for later event dispatch
-				pending_events_.push_back({tid, status});
+				queue_pending_event(tid, status);
 				break;
 			}
 		}
@@ -1019,4 +1019,14 @@ void Process::unignore_signal(int signal) {
  */
 [[nodiscard]] bool Process::is_ignoring_signal(int signal) const {
 	return ignored_signals_.count(signal) > 0;
+}
+
+/**
+ * @brief Queues a pending event for later processing.
+ *
+ * @param tid The thread id of the event.
+ * @param wstatus The wait status of the event.
+ */
+void Process::queue_pending_event(pid_t tid, int wstatus) {
+	pending_events_.push_back({tid, wstatus});
 }
