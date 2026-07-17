@@ -61,11 +61,16 @@ public:
 	void kill() const;
 	void step();
 	void resume();
+	void resume_until_syscall();
 	void step(int signal);
 	void resume(int signal);
+	void resume_until_syscall(int signal);
 	void stop() const;
 	void detach();
 	void wait();
+
+private:
+	void resume_internal(int signal, bool until_syscall);
 
 public:
 	bool load_signal_info();

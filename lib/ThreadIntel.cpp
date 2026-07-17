@@ -216,6 +216,10 @@ void Thread::step(int signal) {
 		pending_step_breakpoint_ = bp->address();
 	}
 
+	// TODO(eteran): if we are sitting on a pushfd/pushf/pushfq instruction, we need to emulate the instruction
+	// So that we can filter out the TF flag. After which we can add a pending event to the process so it looks
+	// like a normal single step event. This is because the TF flag is SET by the kernel when we single step,
+	// and the pushfd/pushf/pushfq instructions will push the TF flag onto the stack, which is not what we want.
 	if (auto ret = do_ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal); ret.is_err()) {
 		if (pending_step_breakpoint_) {
 			if (auto bp = process_->find_breakpoint(*pending_step_breakpoint_); bp) {
@@ -235,13 +239,53 @@ void Thread::step(int signal) {
  * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
  */
 void Thread::resume(int signal) {
+	resume_internal(signal, false);
+}
+
+/**
+ * @brief Causes the thread to resume execution.
+ */
+void Thread::resume() {
+	resume(0);
+}
+
+/**
+ * @brief Causes the thread to resume execution until it enters or exits a system call.
+ */
+void Thread::resume_until_syscall() {
+	resume_until_syscall(0);
+}
+
+/**
+ * @brief Causes the thread to resume execution until it enters or exits a system call.
+ *
+ * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
+ */
+void Thread::resume_until_syscall(int signal) {
+	resume_internal(signal, true);
+}
+
+/**
+ * @brief Internal helper function to resume the thread with a signal and optionally until a syscall.
+ *
+ * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
+ * @param until_syscall If true, the thread will resume until it enters or exits a system call. If false, it will resume normally.
+ */
+void Thread::resume_internal(int signal, bool until_syscall) {
+
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
 	pending_step_breakpoint_.reset();
 
+	const int request = until_syscall ? PTRACE_SYSCALL : PTRACE_CONT;
+
 	if (auto bp = process_->find_breakpoint(get_instruction_pointer()); bp && bp->enabled()) {
 		bp->disable();
 
+		// TODO(eteran): if we are sitting on a pushfd/pushf/pushfq instruction, we need to emulate the instruction
+		// So that we can filter out the TF flag. After which we can add a pending event to the process so it looks
+		// like a normal single step event. This is because the TF flag is SET by the kernel when we single step,
+		// and the pushfd/pushf/pushfq instructions will push the TF flag onto the stack, which is not what we want.
 		if (auto ret = do_ptrace(PTRACE_SINGLESTEP, tid_, 0L, signal); ret.is_err()) {
 			bp->enable();
 			throw DebuggerError("Failed to step thread %d: %s", tid_, strerror(ret.error()));
@@ -271,7 +315,7 @@ void Thread::resume(int signal) {
 				cont_sig = siginfo_.si_signo;
 			}
 
-			if (auto ret = do_ptrace(PTRACE_CONT, tid_, 0L, cont_sig); ret.is_err()) {
+			if (auto ret = do_ptrace(request, tid_, 0L, cont_sig); ret.is_err()) {
 				throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(ret.error()));
 			}
 
@@ -280,18 +324,11 @@ void Thread::resume(int signal) {
 		}
 	}
 
-	if (auto ret = do_ptrace(PTRACE_CONT, tid_, 0L, signal); ret.is_err()) {
+	if (auto ret = do_ptrace(request, tid_, 0L, signal); ret.is_err()) {
 		throw DebuggerError("Failed to continue thread %d: %s", tid_, strerror(ret.error()));
 	}
 
 	state_ = State::Running;
-}
-
-/**
- * @brief Causes the thread to resume execution.
- */
-void Thread::resume() {
-	resume(0);
 }
 
 /**
