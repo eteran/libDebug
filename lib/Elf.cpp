@@ -32,6 +32,9 @@ void *resolve_dl_debug_state_internal(uint64_t ld_base, std::function<bool(void 
 	using Dyn  = typename Elf<N>::Dyn;
 	using Sym  = typename Elf<N>::Sym;
 
+	constexpr size_t MaxDynEntries = 256;
+	constexpr size_t MaxSymEntries = 4096;
+
 	// Read the ELF header of the dynamic linker to find the program headers
 	Ehdr eh;
 	if (!read_memory(&eh, ld_base, sizeof(eh))) {
@@ -62,7 +65,7 @@ void *resolve_dl_debug_state_internal(uint64_t ld_base, std::function<bool(void 
 	}
 
 	std::vector<Dyn> dyns;
-	dyns.resize(256);
+	dyns.resize(MaxDynEntries);
 
 	if (!read_memory(dyns.data(), dyn_addr, dyns.size() * sizeof(Dyn))) {
 		return nullptr;
@@ -95,7 +98,7 @@ void *resolve_dl_debug_state_internal(uint64_t ld_base, std::function<bool(void 
 		return nullptr;
 	}
 
-	for (size_t idx = 0; idx < 4096; idx++) {
+	for (size_t idx = 0; idx < MaxSymEntries; idx++) {
 
 		Sym sym;
 		uint64_t sym_addr = symtab_addr + idx * syment_size;
