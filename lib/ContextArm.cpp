@@ -4,6 +4,31 @@
 #include <cinttypes>
 #include <cstdio>
 
+namespace {
+
+RegisterId simd_register_id(size_t index) {
+	// clang-format off
+	static constexpr RegisterId SimdRegisters[] = {
+		RegisterId::V0, RegisterId::V1, RegisterId::V2, RegisterId::V3,
+		RegisterId::V4, RegisterId::V5, RegisterId::V6, RegisterId::V7,
+		RegisterId::V8, RegisterId::V9, RegisterId::V10, RegisterId::V11,
+		RegisterId::V12, RegisterId::V13, RegisterId::V14, RegisterId::V15,
+		RegisterId::V16, RegisterId::V17, RegisterId::V18, RegisterId::V19,
+		RegisterId::V20, RegisterId::V21, RegisterId::V22, RegisterId::V23,
+		RegisterId::V24, RegisterId::V25, RegisterId::V26, RegisterId::V27,
+		RegisterId::V28, RegisterId::V29, RegisterId::V30, RegisterId::V31,
+	};
+	// clang-format on
+
+	if (index >= (sizeof(SimdRegisters) / sizeof(SimdRegisters[0]))) {
+		return RegisterId::Invalid;
+	}
+
+	return SimdRegisters[index];
+}
+
+}
+
 /**
  * @brief Dumps the context to stdout.
  *
@@ -37,6 +62,16 @@ void Context::dump() {
 		std::printf("R8   : %08" PRIx32 " R9   : %08" PRIx32 "\n", get(RegisterId::R8).as<uint32_t>(), get(RegisterId::R9).as<uint32_t>());
 		std::printf("R10  : %08" PRIx32 " R11  : %08" PRIx32 "\n", get(RegisterId::R10).as<uint32_t>(), get(RegisterId::R11).as<uint32_t>());
 		std::printf("R12  : %08" PRIx32 " ORIG_R0: %08" PRIx32 "\n", get(RegisterId::R12).as<uint32_t>(), get(RegisterId::ORIG_R0).as<uint32_t>());
+	}
+
+	if (vfp_filled_) {
+		std::printf("VFP FPSR: %08" PRIx32 " FPCR: %08" PRIx32 "\n", get(RegisterId::FPSR).as<uint32_t>(), get(RegisterId::FPCR).as<uint32_t>());
+		std::printf("VFP/SIMD registers:\n");
+		for (size_t n = 0; n < 32; ++n) {
+			const auto reg_id = simd_register_id(n);
+			const auto reg    = get(reg_id);
+			std::printf("V%02zu: %s\n", n, reg.to_string().c_str());
+		}
 	}
 }
 
@@ -84,6 +119,40 @@ RegisterRef Context::get_64(RegisterId reg) const {
 	case RegisterId::XSP:		return make_register("sp", ctx_64_.regs.sp, 0);
 	case RegisterId::XPC:		return make_register("pc", ctx_64_.regs.pc, 0);
 	case RegisterId::XPSTATE:	return make_register("pstate", ctx_64_.regs.pstate, 0);
+	case RegisterId::FPSR:		return make_register("fpsr", vfp_regs_.fpsr, 0, sizeof(vfp_regs_.fpsr));
+	case RegisterId::FPCR:		return make_register("fpcr", vfp_regs_.fpcr, 0, sizeof(vfp_regs_.fpcr));
+	case RegisterId::V0:		return make_register("v0", vfp_regs_.vregs[0], 0, sizeof(vfp_regs_.vregs[0]));
+	case RegisterId::V1:		return make_register("v1", vfp_regs_.vregs[1], 0, sizeof(vfp_regs_.vregs[1]));
+	case RegisterId::V2:		return make_register("v2", vfp_regs_.vregs[2], 0, sizeof(vfp_regs_.vregs[2]));
+	case RegisterId::V3:		return make_register("v3", vfp_regs_.vregs[3], 0, sizeof(vfp_regs_.vregs[3]));
+	case RegisterId::V4:		return make_register("v4", vfp_regs_.vregs[4], 0, sizeof(vfp_regs_.vregs[4]));
+	case RegisterId::V5:		return make_register("v5", vfp_regs_.vregs[5], 0, sizeof(vfp_regs_.vregs[5]));
+	case RegisterId::V6:		return make_register("v6", vfp_regs_.vregs[6], 0, sizeof(vfp_regs_.vregs[6]));
+	case RegisterId::V7:		return make_register("v7", vfp_regs_.vregs[7], 0, sizeof(vfp_regs_.vregs[7]));
+	case RegisterId::V8:		return make_register("v8", vfp_regs_.vregs[8], 0, sizeof(vfp_regs_.vregs[8]));
+	case RegisterId::V9:		return make_register("v9", vfp_regs_.vregs[9], 0, sizeof(vfp_regs_.vregs[9]));
+	case RegisterId::V10:		return make_register("v10", vfp_regs_.vregs[10], 0, sizeof(vfp_regs_.vregs[10]));
+	case RegisterId::V11:		return make_register("v11", vfp_regs_.vregs[11], 0, sizeof(vfp_regs_.vregs[11]));
+	case RegisterId::V12:		return make_register("v12", vfp_regs_.vregs[12], 0, sizeof(vfp_regs_.vregs[12]));
+	case RegisterId::V13:		return make_register("v13", vfp_regs_.vregs[13], 0, sizeof(vfp_regs_.vregs[13]));
+	case RegisterId::V14:		return make_register("v14", vfp_regs_.vregs[14], 0, sizeof(vfp_regs_.vregs[14]));
+	case RegisterId::V15:		return make_register("v15", vfp_regs_.vregs[15], 0, sizeof(vfp_regs_.vregs[15]));
+	case RegisterId::V16:		return make_register("v16", vfp_regs_.vregs[16], 0, sizeof(vfp_regs_.vregs[16]));
+	case RegisterId::V17:		return make_register("v17", vfp_regs_.vregs[17], 0, sizeof(vfp_regs_.vregs[17]));
+	case RegisterId::V18:		return make_register("v18", vfp_regs_.vregs[18], 0, sizeof(vfp_regs_.vregs[18]));
+	case RegisterId::V19:		return make_register("v19", vfp_regs_.vregs[19], 0, sizeof(vfp_regs_.vregs[19]));
+	case RegisterId::V20:		return make_register("v20", vfp_regs_.vregs[20], 0, sizeof(vfp_regs_.vregs[20]));
+	case RegisterId::V21:		return make_register("v21", vfp_regs_.vregs[21], 0, sizeof(vfp_regs_.vregs[21]));
+	case RegisterId::V22:		return make_register("v22", vfp_regs_.vregs[22], 0, sizeof(vfp_regs_.vregs[22]));
+	case RegisterId::V23:		return make_register("v23", vfp_regs_.vregs[23], 0, sizeof(vfp_regs_.vregs[23]));
+	case RegisterId::V24:		return make_register("v24", vfp_regs_.vregs[24], 0, sizeof(vfp_regs_.vregs[24]));
+	case RegisterId::V25:		return make_register("v25", vfp_regs_.vregs[25], 0, sizeof(vfp_regs_.vregs[25]));
+	case RegisterId::V26:		return make_register("v26", vfp_regs_.vregs[26], 0, sizeof(vfp_regs_.vregs[26]));
+	case RegisterId::V27:		return make_register("v27", vfp_regs_.vregs[27], 0, sizeof(vfp_regs_.vregs[27]));
+	case RegisterId::V28:		return make_register("v28", vfp_regs_.vregs[28], 0, sizeof(vfp_regs_.vregs[28]));
+	case RegisterId::V29:		return make_register("v29", vfp_regs_.vregs[29], 0, sizeof(vfp_regs_.vregs[29]));
+	case RegisterId::V30:		return make_register("v30", vfp_regs_.vregs[30], 0, sizeof(vfp_regs_.vregs[30]));
+	case RegisterId::V31:		return make_register("v31", vfp_regs_.vregs[31], 0, sizeof(vfp_regs_.vregs[31]));
 
 	case RegisterId::STACK_POINTER:		  return make_register("sp", ctx_64_.regs.sp, 0);
 	case RegisterId::INSTRUCTION_POINTER: return make_register("pc", ctx_64_.regs.pc, 0);
@@ -125,6 +194,40 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::PC:		return make_register("pc", ctx_32_.regs.regs[15], 0);
 	case RegisterId::CPSR:		return make_register("cpsr", ctx_32_.regs.regs[16], 0);
 	case RegisterId::ORIG_R0:	return make_register("orig_r0", ctx_32_.regs.regs[17], 0);
+	case RegisterId::FPSR:		return make_register("fpsr", vfp_regs_.fpsr, 0, sizeof(vfp_regs_.fpsr));
+	case RegisterId::FPCR:		return make_register("fpcr", vfp_regs_.fpcr, 0, sizeof(vfp_regs_.fpcr));
+	case RegisterId::V0:		return make_register("v0", vfp_regs_.vregs[0], 0, sizeof(vfp_regs_.vregs[0]));
+	case RegisterId::V1:		return make_register("v1", vfp_regs_.vregs[1], 0, sizeof(vfp_regs_.vregs[1]));
+	case RegisterId::V2:		return make_register("v2", vfp_regs_.vregs[2], 0, sizeof(vfp_regs_.vregs[2]));
+	case RegisterId::V3:		return make_register("v3", vfp_regs_.vregs[3], 0, sizeof(vfp_regs_.vregs[3]));
+	case RegisterId::V4:		return make_register("v4", vfp_regs_.vregs[4], 0, sizeof(vfp_regs_.vregs[4]));
+	case RegisterId::V5:		return make_register("v5", vfp_regs_.vregs[5], 0, sizeof(vfp_regs_.vregs[5]));
+	case RegisterId::V6:		return make_register("v6", vfp_regs_.vregs[6], 0, sizeof(vfp_regs_.vregs[6]));
+	case RegisterId::V7:		return make_register("v7", vfp_regs_.vregs[7], 0, sizeof(vfp_regs_.vregs[7]));
+	case RegisterId::V8:		return make_register("v8", vfp_regs_.vregs[8], 0, sizeof(vfp_regs_.vregs[8]));
+	case RegisterId::V9:		return make_register("v9", vfp_regs_.vregs[9], 0, sizeof(vfp_regs_.vregs[9]));
+	case RegisterId::V10:		return make_register("v10", vfp_regs_.vregs[10], 0, sizeof(vfp_regs_.vregs[10]));
+	case RegisterId::V11:		return make_register("v11", vfp_regs_.vregs[11], 0, sizeof(vfp_regs_.vregs[11]));
+	case RegisterId::V12:		return make_register("v12", vfp_regs_.vregs[12], 0, sizeof(vfp_regs_.vregs[12]));
+	case RegisterId::V13:		return make_register("v13", vfp_regs_.vregs[13], 0, sizeof(vfp_regs_.vregs[13]));
+	case RegisterId::V14:		return make_register("v14", vfp_regs_.vregs[14], 0, sizeof(vfp_regs_.vregs[14]));
+	case RegisterId::V15:		return make_register("v15", vfp_regs_.vregs[15], 0, sizeof(vfp_regs_.vregs[15]));
+	case RegisterId::V16:		return make_register("v16", vfp_regs_.vregs[16], 0, sizeof(vfp_regs_.vregs[16]));
+	case RegisterId::V17:		return make_register("v17", vfp_regs_.vregs[17], 0, sizeof(vfp_regs_.vregs[17]));
+	case RegisterId::V18:		return make_register("v18", vfp_regs_.vregs[18], 0, sizeof(vfp_regs_.vregs[18]));
+	case RegisterId::V19:		return make_register("v19", vfp_regs_.vregs[19], 0, sizeof(vfp_regs_.vregs[19]));
+	case RegisterId::V20:		return make_register("v20", vfp_regs_.vregs[20], 0, sizeof(vfp_regs_.vregs[20]));
+	case RegisterId::V21:		return make_register("v21", vfp_regs_.vregs[21], 0, sizeof(vfp_regs_.vregs[21]));
+	case RegisterId::V22:		return make_register("v22", vfp_regs_.vregs[22], 0, sizeof(vfp_regs_.vregs[22]));
+	case RegisterId::V23:		return make_register("v23", vfp_regs_.vregs[23], 0, sizeof(vfp_regs_.vregs[23]));
+	case RegisterId::V24:		return make_register("v24", vfp_regs_.vregs[24], 0, sizeof(vfp_regs_.vregs[24]));
+	case RegisterId::V25:		return make_register("v25", vfp_regs_.vregs[25], 0, sizeof(vfp_regs_.vregs[25]));
+	case RegisterId::V26:		return make_register("v26", vfp_regs_.vregs[26], 0, sizeof(vfp_regs_.vregs[26]));
+	case RegisterId::V27:		return make_register("v27", vfp_regs_.vregs[27], 0, sizeof(vfp_regs_.vregs[27]));
+	case RegisterId::V28:		return make_register("v28", vfp_regs_.vregs[28], 0, sizeof(vfp_regs_.vregs[28]));
+	case RegisterId::V29:		return make_register("v29", vfp_regs_.vregs[29], 0, sizeof(vfp_regs_.vregs[29]));
+	case RegisterId::V30:		return make_register("v30", vfp_regs_.vregs[30], 0, sizeof(vfp_regs_.vregs[30]));
+	case RegisterId::V31:		return make_register("v31", vfp_regs_.vregs[31], 0, sizeof(vfp_regs_.vregs[31]));
 
 	case RegisterId::STACK_POINTER:		  return make_register("sp", ctx_32_.regs.regs[13], 0);
 	case RegisterId::INSTRUCTION_POINTER: return make_register("pc", ctx_32_.regs.regs[15], 0);

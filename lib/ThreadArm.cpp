@@ -407,10 +407,13 @@ void Thread::get_context(Context *ctx) const {
 		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
 	}
 
+	std::memset(&ctx->vfp_regs_, 0, sizeof(ctx->vfp_regs_));
+	ctx->vfp_filled_ = false;
+
 #if defined(NT_ARM_VFP)
 	struct iovec vfp_iov = {&ctx->vfp_regs_, sizeof(ctx->vfp_regs_)};
-	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_ARM_VFP, &vfp_iov); ret.is_err()) {
-		std::memset(&ctx->vfp_regs_, 0, sizeof(ctx->vfp_regs_));
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_ARM_VFP, &vfp_iov); ret.ok() && vfp_iov.iov_len == sizeof(ctx->vfp_regs_)) {
+		ctx->vfp_filled_ = true;
 	}
 #endif
 }

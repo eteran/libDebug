@@ -71,6 +71,42 @@ enum class RegisterId {
 	XPC,     // Program counter
 	XPSTATE, // Current program status register
 
+	// VFP / SIMD
+	FPSR,
+	FPCR,
+	V0,
+	V1,
+	V2,
+	V3,
+	V4,
+	V5,
+	V6,
+	V7,
+	V8,
+	V9,
+	V10,
+	V11,
+	V12,
+	V13,
+	V14,
+	V15,
+	V16,
+	V17,
+	V18,
+	V19,
+	V20,
+	V21,
+	V22,
+	V23,
+	V24,
+	V25,
+	V26,
+	V27,
+	V28,
+	V29,
+	V30,
+	V31,
+
 	// Generic names
 	INSTRUCTION_POINTER,
 	STACK_POINTER,
@@ -140,6 +176,7 @@ private:
 		Context_Arm_Vfp vfp_regs_;
 	};
 
+	bool vfp_filled_ = false;
 	bool is_64_bit_ = false;
 	bool is_set_    = false;
 };
