@@ -59,9 +59,30 @@ public:
 		}
 
 		if (this != &rhs) {
+			// NOTE(eteran): effectively zero-extend the value to the size of the register
 			std::memset(ptr_, 0, size_);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 			std::memcpy(ptr_, rhs.data(), std::min(size_, rhs.size()));
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+			std::memcpy(reinterpret_cast<uint8_t *>(ptr_) + (size_ - std::min(size_, rhs.size())), rhs.data(), std::min(size_, rhs.size()));
+#endif
 		}
+	}
+
+	template <class Integer, std::enable_if_t<std::is_integral_v<Integer>, bool> = true>
+	void assign(Integer value) {
+		if (!is_valid()) {
+			throw DebuggerError("RegisterRef: invalid write to '%s'", name_.c_str());
+		}
+
+		// NOTE(eteran): effectively zero-extend the value to the size of the register
+		std::memset(ptr_, 0, size_);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+		std::memcpy(ptr_, &value, std::min(size_, sizeof(Integer)));
+
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		std::memcpy(reinterpret_cast<uint8_t *>(ptr_) + (size_ - std::min(size_, sizeof(Integer))), &value, std::min(size_, sizeof(Integer)));
+#endif
 	}
 
 public:
@@ -73,10 +94,13 @@ public:
 		}
 
 		// NOTE(eteran): effectively zero-extend the value to the size of the integer being read into
-		// NOTE(eteran): this assumes little-endian, which is true for x86 for now.
 		Integer value;
 		std::memset(&value, 0, sizeof(Integer));
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 		std::memcpy(&value, ptr_, std::min(size_, sizeof(Integer)));
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		std::memcpy(reinterpret_cast<uint8_t *>(&value) + (sizeof(Integer) - size_), ptr_, std::min(size_, sizeof(Integer)));
+#endif
 		return value;
 	}
 
@@ -88,9 +112,13 @@ public:
 		}
 
 		// NOTE(eteran): effectively zero-extend the value to the size of the register
-		// NOTE(eteran): this assumes little-endian, which is true for x86 for now.
 		std::memset(ptr_, 0, size_);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 		std::memcpy(ptr_, &value, std::min(size_, sizeof(Integer)));
+
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		std::memcpy(reinterpret_cast<uint8_t *>(ptr_) + (size_ - std::min(size_, sizeof(Integer))), &value, std::min(size_, sizeof(Integer)));
+#endif
 		return *this;
 	}
 
