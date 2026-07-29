@@ -3,6 +3,12 @@ project(Debug CXX)
 
 enable_testing()
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
+
+include("DetectCompiler")
+include("DetectOS")
+include("DetectArchitecture")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENABLE_COVERAGE "Enable compilation with coverage flags" OFF)

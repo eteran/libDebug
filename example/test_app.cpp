@@ -2,8 +2,11 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <immintrin.h>
 #include <thread>
+
+#if defined(__x86_64__) || defined(__i386__)
+#include <x86intrin.h>
+#endif
 
 int main() {
 
@@ -14,7 +17,9 @@ int main() {
 		std::printf("Hello, world! Angle: %f\n", std::sin(angle));
 		angle += 10.0;
 	}
+
 #if 0
+#if defined(__x86_64__) || defined(__i386__)
 	__attribute__((aligned(32))) const uint32_t data[] = {
 		0x11111111,
 		0x22222222,
@@ -27,6 +32,7 @@ int main() {
 	};
 
 	__asm__ __volatile__("vmovaps %0, %%xmm7" : : "m"(data));
+#endif
 #endif
 	while (1) {
 		__asm__ __volatile__("int3");

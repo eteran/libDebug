@@ -897,7 +897,7 @@ void Thread::get_xstate32(Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::get_debug_registers(Context *ctx) const {
-#ifdef __x86_64__
+#if defined(__x86_64__)
 	get_debug_registers64(ctx);
 #elif defined(__i386__)
 	if (is_64_bit_) {
@@ -1342,7 +1342,7 @@ void Thread::set_registers(const Context *ctx) const {
  * @param ctx A pointer to the context object.
  */
 void Thread::set_debug_registers(const Context *ctx) const {
-#ifdef __x86_64__
+#if defined(__x86_64__)
 	set_debug_registers64(ctx);
 #elif defined(__i386__)
 	if (is_64_bit_) {
