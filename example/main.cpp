@@ -131,6 +131,7 @@ int main() {
 
 				process->report();
 #if 1
+#if defined(__x86_64__) || defined(__i386__)
 				auto current = process->active_thread();
 
 				// EXPERIMENT: copy XMM7 to XMM0
@@ -138,6 +139,7 @@ int main() {
 				current->get_context(&ctx);
 				ctx[RegisterId::YMM0].assign(ctx[RegisterId::YMM7]);
 				current->set_context(&ctx);
+#endif
 #endif
 				return EventStatus::Continue;
 			})) {

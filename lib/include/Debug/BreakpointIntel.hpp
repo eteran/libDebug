@@ -8,8 +8,6 @@
 
 class Process;
 
-// TODO(eteran): make this platform agnostic.
-
 class Breakpoint {
 public:
 	static constexpr size_t MinBreakpointSize = 1;

@@ -118,6 +118,7 @@ void run_fault_signal_case(const FaultSignalCase &test_case) {
 		true);
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 	with_attached_child(
 		child_run_executable_buffer<1>,
@@ -158,6 +159,7 @@ void run_alt_breakpoint_case(const AltBreakpointCase &test_case) {
 		},
 		true);
 }
+#endif
 
 }
 
@@ -171,10 +173,10 @@ TEST(BreakpointHit) {
 
 			bool hit = false;
 			auto cb  = [&](const Event &e) -> EventStatus {
-                if (e.type == Event::Type::Stopped) {
-                    hit = true;
-                }
-                return EventStatus::Continue;
+				if (e.type == Event::Type::Stopped) {
+					hit = true;
+				}
+				return EventStatus::Continue;
 			};
 
 			const bool observed = poll_debug_events_until(
@@ -247,16 +249,16 @@ TEST(EnabledBreakpointCanBeSteppedOverThenHitAgain) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-                if (e.tid != ctx.child_pid) {
-                    return EventStatus::Continue;
-                }
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
 
-                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-                    first_breakpoint_stop = true;
-                    return EventStatus::Stop;
-                }
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
 
-                return EventStatus::Continue;
+				return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -376,16 +378,16 @@ TEST(SteppingOnDisabledBreakpointDoesNotRearmIt) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-                if (e.tid != ctx.child_pid) {
-                    return EventStatus::Continue;
-                }
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
 
-                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-                    first_breakpoint_stop = true;
-                    return EventStatus::Stop;
-                }
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
 
-                return EventStatus::Continue;
+				return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -451,16 +453,16 @@ TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
 
 			bool first_breakpoint_stop = false;
 			auto wait_first_cb         = [&](const Event &e) -> EventStatus {
-                if (e.tid != ctx.child_pid) {
-                    return EventStatus::Continue;
-                }
+				if (e.tid != ctx.child_pid) {
+					return EventStatus::Continue;
+				}
 
-                if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
-                    first_breakpoint_stop = true;
-                    return EventStatus::Stop;
-                }
+				if (e.type == Event::Type::Stopped && e.siginfo.si_signo == SIGTRAP) {
+					first_breakpoint_stop = true;
+					return EventStatus::Stop;
+				}
 
-                return EventStatus::Continue;
+				return EventStatus::Continue;
 			};
 
 			const bool first_observed = poll_debug_events_until(
@@ -515,6 +517,7 @@ TEST(ResumingOnDisabledBreakpointDoesNotRearmIt) {
 		});
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 TEST(AltBreakpointTypesReported) {
 	constexpr std::array<AltBreakpointCase, 4> TestCases = {
 		AltBreakpointCase{Breakpoint::TypeId::INT1, "INT1 did not report expected SIGTRAP", SIGTRAP, 0},
@@ -586,6 +589,7 @@ TEST(HardwareExecuteBreakpointHit) {
 			ctx.process->wait();
 		});
 }
+#endif
 
 TEST(FaultSignalsReported) {
 	constexpr std::array<FaultSignalCase, 3> TestCases = {
