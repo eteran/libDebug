@@ -126,6 +126,9 @@ private:
 			uint16_t u16;
 			uint32_t u32;
 			uint64_t u64;
+#ifdef __SIZEOF_INT128__
+			__uint128_t u128;
+#endif
 		};
 
 		switch (size_) {
@@ -149,6 +152,13 @@ private:
 			op(u64);
 			std::memcpy(ptr_, &u64, 8);
 			break;
+#ifdef __SIZEOF_INT128__
+		case 16:
+			std::memcpy(&u128, ptr_, 16);
+			op(u128);
+			std::memcpy(ptr_, &u128, 16);
+			break;
+#endif
 		default:
 			assert(false && "Invalid size");
 		}
