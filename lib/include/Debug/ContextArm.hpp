@@ -12,6 +12,7 @@ enum class RegisterId {
 
 	Invalid,
 
+	// 32-bit registers
 	ORIG_R0, // Original value of R0 before a syscall (used for syscall return value)
 
 	R0,  // First argument / Return value
@@ -33,6 +34,7 @@ enum class RegisterId {
 	PC,   // Program counter
 	CPSR, // Current program status register
 
+	// 64-bit registers
 	X0,
 	X1,
 	X2,
@@ -68,6 +70,11 @@ enum class RegisterId {
 	XSP,     // Stack pointer
 	XPC,     // Program counter
 	XPSTATE, // Current program status register
+
+	// Generic names
+	INSTRUCTION_POINTER,
+	STACK_POINTER,
+	FLAGS_REGISTER,
 
 };
 

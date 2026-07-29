@@ -187,15 +187,10 @@ enum class RegisterId {
 	ZMM14,
 	ZMM15,
 
-	// Size generic registers
-	XAX,
-	XCX,
-	XDX,
-	XSI,
-	XDI,
-	XIP,
-	XSP,
-	XFLAGS,
+	// Generic names
+	INSTRUCTION_POINTER,
+	STACK_POINTER,
+	FLAGS_REGISTER,
 };
 
 // Reflects user_regs_struct in sys/user.h.

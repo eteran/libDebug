@@ -84,6 +84,12 @@ RegisterRef Context::get_64(RegisterId reg) const {
 	case RegisterId::XSP:		return make_register("sp", ctx_64_.regs.sp, 0);
 	case RegisterId::XPC:		return make_register("pc", ctx_64_.regs.pc, 0);
 	case RegisterId::XPSTATE:	return make_register("pstate", ctx_64_.regs.pstate, 0);
+
+	case RegisterId::STACK_POINTER:		  return make_register("sp", ctx_64_.regs.sp, 0);
+	case RegisterId::INSTRUCTION_POINTER: return make_register("pc", ctx_64_.regs.pc, 0);
+	case RegisterId::FLAGS_REGISTER:      return make_register("pstate", ctx_64_.regs.pstate, 0);
+
+
 	default:
 		Debugger::log("Unknown Register [64]: %d", static_cast<int>(reg));
 		return RegisterRef();
@@ -119,6 +125,11 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::PC:		return make_register("pc", ctx_32_.regs.regs[15], 0);
 	case RegisterId::CPSR:		return make_register("cpsr", ctx_32_.regs.regs[16], 0);
 	case RegisterId::ORIG_R0:	return make_register("orig_r0", ctx_32_.regs.regs[17], 0);
+
+	case RegisterId::STACK_POINTER:		  return make_register("sp", ctx_32_.regs.regs[13], 0);
+	case RegisterId::INSTRUCTION_POINTER: return make_register("pc", ctx_32_.regs.regs[15], 0);
+	case RegisterId::FLAGS_REGISTER:      return make_register("cpsr", ctx_32_.regs.regs[16], 0);
+
 	default:
 		Debugger::log("Unknown Register [32]: %d", static_cast<int>(reg));
 		return RegisterRef();

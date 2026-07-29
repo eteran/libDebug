@@ -116,15 +116,10 @@ RegisterRef Context::get_64(RegisterId reg) const {
 	case RegisterId::FS_BASE:	return make_register("fs_base", ctx_64_.regs.fs_base, 0);
 	case RegisterId::GS_BASE:	return make_register("gs_base", ctx_64_.regs.gs_base, 0);
 
-	// Size generic registers
-	case RegisterId::XAX:		return make_register("rax", ctx_64_.regs.rax, 0);
-	case RegisterId::XCX:		return make_register("rcx", ctx_64_.regs.rcx, 0);
-	case RegisterId::XDX:		return make_register("rdx", ctx_64_.regs.rdx, 0);
-	case RegisterId::XSI:		return make_register("rsi", ctx_64_.regs.rsi, 0);
-	case RegisterId::XDI:		return make_register("rdi", ctx_64_.regs.rdi, 0);
-	case RegisterId::XIP:		return make_register("rip", ctx_64_.regs.rip, 0);
-	case RegisterId::XSP:		return make_register("rsp", ctx_64_.regs.rsp, 0);
-	case RegisterId::XFLAGS:	return make_register("rflags", ctx_64_.regs.rflags, 0);
+	// Generic names
+	case RegisterId::INSTRUCTION_POINTER: return make_register("rip", ctx_64_.regs.rip, 0);
+	case RegisterId::STACK_POINTER:		  return make_register("rsp", ctx_64_.regs.rsp, 0);
+	case RegisterId::FLAGS_REGISTER:      return make_register("rflags", ctx_64_.regs.rflags, 0);
 
 	// 64-bit GP registers
 	case RegisterId::R15:		return make_register("r15", ctx_64_.regs.r15, 0);
@@ -395,15 +390,11 @@ RegisterRef Context::get_32(RegisterId reg) const {
 	case RegisterId::YMM6:		return make_register("ymm6",  xstate_.simd.registers[6].data, 0,  32);
 	case RegisterId::YMM7:		return make_register("ymm7",  xstate_.simd.registers[7].data, 0,  32);
 
-	// Size generic registers
-	case RegisterId::XAX:		return make_register("eax", ctx_32_.regs.eax, 0);
-	case RegisterId::XCX:		return make_register("ecx", ctx_32_.regs.ecx, 0);
-	case RegisterId::XDX:		return make_register("edx", ctx_32_.regs.edx, 0);
-	case RegisterId::XSI:		return make_register("esi", ctx_32_.regs.esi, 0);
-	case RegisterId::XDI:		return make_register("edi", ctx_32_.regs.edi, 0);
-	case RegisterId::XIP:		return make_register("eip", ctx_32_.regs.eip, 0);
-	case RegisterId::XSP:		return make_register("esp", ctx_32_.regs.esp, 0);
-	case RegisterId::XFLAGS:	return make_register("eflags", ctx_32_.regs.eflags, 0);
+	// Generic names
+	case RegisterId::INSTRUCTION_POINTER: return make_register("eip", ctx_32_.regs.eip, 0);
+	case RegisterId::STACK_POINTER:		  return make_register("esp", ctx_32_.regs.esp, 0);
+	case RegisterId::FLAGS_REGISTER:      return make_register("eflags", ctx_32_.regs.eflags, 0);
+
 	default:
 		Debugger::log("Unknown Register [32]: %d", static_cast<int>(reg));
 		return RegisterRef();
