@@ -42,26 +42,28 @@ if(TARGET_ARCH_FAMILY_X86)
     add_test(NAME UnitTests64 COMMAND UnitTests64)
 
 
-    # 32-bit unit test executable
-    add_executable(UnitTests32 ${SOURCES})
+    if(BUILD_32_BIT)
+        # 32-bit unit test executable
+        add_executable(UnitTests32 ${SOURCES})
 
-    target_link_libraries(UnitTests32 PUBLIC Debug32)
-    set_target_properties(UnitTests32 PROPERTIES
-        CXX_STANDARD 17
-        CXX_EXTENSIONS OFF
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
+        target_link_libraries(UnitTests32 PUBLIC Debug32)
+        set_target_properties(UnitTests32 PROPERTIES
+            CXX_STANDARD 17
+            CXX_EXTENSIONS OFF
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
 
-    # Apply architecture compile option and optional coverage flags
-    target_compile_options(UnitTests32 PRIVATE -m32)
-    if(ENABLE_COVERAGE)
-        target_compile_options(UnitTests32 PRIVATE -g -O0 --coverage)
-        set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32 --coverage")
-    else()
-        set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32")
+        # Apply architecture compile option and optional coverage flags
+        target_compile_options(UnitTests32 PRIVATE -m32)
+        if(ENABLE_COVERAGE)
+            target_compile_options(UnitTests32 PRIVATE -g -O0 --coverage)
+            set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32 --coverage")
+        else()
+            set_target_properties(UnitTests32 PROPERTIES LINK_FLAGS "-m32")
+        endif()
+
+        add_test(NAME UnitTests32 COMMAND UnitTests32)
     endif()
-
-    add_test(NAME UnitTests32 COMMAND UnitTests32)
 elseif(TARGET_ARCH_FAMILY_ARM)
     # 64-bit unit test executable
     add_executable(UnitTests64 ${SOURCES})

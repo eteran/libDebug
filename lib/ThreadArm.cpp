@@ -12,6 +12,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include <elf.h>
 #include <sys/procfs.h>
@@ -392,6 +393,26 @@ void Thread::get_context(Context *ctx) const {
 
 	ctx->is_64_bit_ = is_64_bit_;
 	ctx->is_set_    = true;
+
+	struct iovec iov;
+	if (is_64_bit_) {
+		iov.iov_base = &ctx->ctx_64_.regs;
+		iov.iov_len  = sizeof(ctx->ctx_64_.regs);
+	} else {
+		iov.iov_base = &ctx->ctx_32_.regs;
+		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
+	}
+
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to get registers for thread %d: %s", tid_, strerror(ret.error()));
+	}
+
+#if defined(NT_ARM_VFP)
+	struct iovec vfp_iov = {&ctx->vfp_regs_, sizeof(ctx->vfp_regs_)};
+	if (auto ret = do_ptrace(PTRACE_GETREGSET, tid_, NT_ARM_VFP, &vfp_iov); ret.is_err()) {
+		std::memset(&ctx->vfp_regs_, 0, sizeof(ctx->vfp_regs_));
+	}
+#endif
 }
 
 /**
@@ -402,6 +423,26 @@ void Thread::get_context(Context *ctx) const {
 void Thread::set_context(const Context *ctx) const {
 
 	assert(state_ == State::Stopped);
+
+	struct iovec iov;
+	if (is_64_bit_) {
+		iov.iov_base = const_cast<Context_Arm_64 *>(&ctx->ctx_64_.regs);
+		iov.iov_len  = sizeof(ctx->ctx_64_.regs);
+	} else {
+		iov.iov_base = const_cast<Context_Arm_32 *>(&ctx->ctx_32_.regs);
+		iov.iov_len  = sizeof(ctx->ctx_32_.regs);
+	}
+
+	if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_PRSTATUS, &iov); ret.is_err()) {
+		throw DebuggerError("Failed to set registers for thread %d: %s", tid_, strerror(ret.error()));
+	}
+
+#if defined(NT_ARM_VFP)
+	struct iovec vfp_iov = {const_cast<Context_Arm_Vfp *>(&ctx->vfp_regs_), sizeof(ctx->vfp_regs_)};
+	if (auto ret = do_ptrace(PTRACE_SETREGSET, tid_, NT_ARM_VFP, &vfp_iov); ret.is_err()) {
+		throw DebuggerError("Failed to set VFP registers for thread %d: %s", tid_, strerror(ret.error()));
+	}
+#endif
 }
 
 /**
@@ -410,7 +451,30 @@ void Thread::set_context(const Context *ctx) const {
  * @return The instruction pointer value.
  */
 uint64_t Thread::get_instruction_pointer() const {
+	Context ctx;
+	get_context(&ctx);
+
+	if (is_64_bit_) {
+		return ctx.get(RegisterId::XPC).as<uint64_t>();
+	}
+
+	return ctx.get(RegisterId::PC).as<uint32_t>();
 }
 
+/**
+ * @brief Sets the instruction pointer for the thread.
+ *
+ * @param ip The instruction pointer value.
+ */
 void Thread::set_instruction_pointer(uint64_t ip) const {
+	Context ctx;
+	get_context(&ctx);
+
+	if (is_64_bit_) {
+		ctx.get(RegisterId::XPC) = ip;
+	} else {
+		ctx.get(RegisterId::PC) = static_cast<uint32_t>(ip);
+	}
+
+	set_context(&ctx);
 }

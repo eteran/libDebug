@@ -91,33 +91,35 @@ if(TARGET_ARCH_FAMILY_X86)
     target_link_libraries(Debug64 GSL)
 
 
-    # 32-bit library target
-    add_library(Debug32 ${SOURCES})
+    if(BUILD_32_BIT)
+        # 32-bit library target
+        add_library(Debug32 ${SOURCES})
 
-    target_include_directories(Debug32
-        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
+        target_include_directories(Debug32
+            PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
 
-    # Apply target properties and optional coverage flags
-    set_target_properties(Debug32
-        PROPERTIES CXX_STANDARD 17
-                CXX_EXTENSIONS OFF
-    )
+        # Apply target properties and optional coverage flags
+        set_target_properties(Debug32
+            PROPERTIES CXX_STANDARD 17
+                    CXX_EXTENSIONS OFF
+        )
 
-    # Always apply architecture compile option
-    target_compile_options(Debug32
-        PRIVATE -m32
-        PUBLIC ${COMPILER_FLAGS}
-    )
+        # Always apply architecture compile option
+        target_compile_options(Debug32
+            PRIVATE -m32
+            PUBLIC ${COMPILER_FLAGS}
+        )
 
-    if(ENABLE_COVERAGE)
-        target_compile_options(Debug32 PRIVATE -g -O0 --coverage)
-        set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32 --coverage")
-    else()
-        set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32")
+        if(ENABLE_COVERAGE)
+            target_compile_options(Debug32 PRIVATE -g -O0 --coverage)
+            set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32 --coverage")
+        else()
+            set_target_properties(Debug32 PROPERTIES LINK_FLAGS "-m32")
+        endif()
+
+        target_link_libraries(Debug32 GSL)
     endif()
-
-    target_link_libraries(Debug32 GSL)
 elseif(TARGET_ARCH_FAMILY_ARM)
     # 64-bit library target
     add_library(Debug64 ${SOURCES})

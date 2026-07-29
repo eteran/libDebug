@@ -20,6 +20,8 @@ else()
 	message(STATUS "Code coverage instrumentation: OFF")
 endif()
 
+option(BUILD_32_BIT "Enable compilation of 32-bit targets" OFF)
+
 add_subdirectory(lib)
 add_subdirectory(example)
 add_subdirectory(tests)

@@ -89,8 +89,15 @@ struct Context_Arm_64 {
 	uint64_t pstate;
 };
 
+struct Context_Arm_Vfp {
+	uint32_t vregs[32][4];
+	uint32_t fpsr;
+	uint32_t fpcr;
+};
+
 static_assert(sizeof(Context_Arm_32) == 72, "Context_Arm_32 is messed up!");
 static_assert(sizeof(Context_Arm_64) == 272, "Context_Arm_64 is messed up!");
+static_assert(sizeof(Context_Arm_Vfp) == 520, "Context_Arm_Vfp is messed up!");
 
 class Context {
 	friend class Thread;
@@ -127,6 +134,10 @@ private:
 	union {
 		Context64 ctx_64_ = {};
 		Context32 ctx_32_;
+	};
+
+	union {
+		Context_Arm_Vfp vfp_regs_;
 	};
 
 	bool is_64_bit_ = false;

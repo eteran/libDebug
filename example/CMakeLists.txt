@@ -44,24 +44,26 @@ if(TARGET_ARCH_FAMILY_X86)
         PUBLIC ${COMPILER_FLAGS}
     )
 
-    # 32-bit Debugger executable
-    add_executable(Debugger32 ${SOURCES})
+    if(BUILD_32_BIT)
+        # 32-bit Debugger executable
+        add_executable(Debugger32 ${SOURCES})
 
-    target_link_libraries(Debugger32 PUBLIC Debug32)
+        target_link_libraries(Debugger32 PUBLIC Debug32)
 
-    set_target_properties(
-        Debugger32
-        PROPERTIES CXX_STANDARD 17
-                CXX_EXTENSIONS OFF
-                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-                COMPILE_OPTIONS -m32
-                LINK_FLAGS -m32
-    )
+        set_target_properties(
+            Debugger32
+            PROPERTIES CXX_STANDARD 17
+                    CXX_EXTENSIONS OFF
+                    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+                    COMPILE_OPTIONS -m32
+                    LINK_FLAGS -m32
+        )
 
-    target_compile_options(
-        Debugger64
-        PUBLIC ${COMPILER_FLAGS}
-    )
+        target_compile_options(
+            Debugger32
+            PUBLIC ${COMPILER_FLAGS}
+        )
+    endif()
 
     # 64-bit Test application
     add_executable(TestApp64 test_app.cpp)
@@ -75,17 +77,19 @@ if(TARGET_ARCH_FAMILY_X86)
     )
     target_link_libraries(TestApp64)
 
-    # 32-bit Test executable
-    add_executable(TestApp32 test_app.cpp)
-    set_target_properties(
-        TestApp32
-        PROPERTIES CXX_STANDARD 17
-                CXX_EXTENSIONS OFF
-                COMPILE_OPTIONS "-m32;-mno-sse;-mno-sse2;-mno-sse3;-mno-sse4.1;-mno-sse4.2;-mno-avx;-mno-avx2"
-                LINK_FLAGS "-m32"
-                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
-    target_link_libraries(TestApp32)
+    if(BUILD_32_BIT)
+        # 32-bit Test executable
+        add_executable(TestApp32 test_app.cpp)
+        set_target_properties(
+            TestApp32
+            PROPERTIES CXX_STANDARD 17
+                    CXX_EXTENSIONS OFF
+                    COMPILE_OPTIONS "-m32;-mno-sse;-mno-sse2;-mno-sse3;-mno-sse4.1;-mno-sse4.2;-mno-avx;-mno-avx2"
+                    LINK_FLAGS "-m32"
+                    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+        target_link_libraries(TestApp32)
+    endif()
 elseif(TARGET_ARCH_FAMILY_ARM)
     # 64-bit Debugger executable
     add_executable(Debugger64 ${SOURCES})
