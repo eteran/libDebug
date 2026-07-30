@@ -26,11 +26,11 @@ public:
 	void get_context(Context *ctx) const;
 	void set_context(const Context *ctx) const;
 
-	uint64_t get_instruction_pointer() const override;
+	[[nodiscard]] uint64_t get_instruction_pointer() const override;
 	void set_instruction_pointer(uint64_t ip) const override;
 
 private:
-	bool detect_64_bit() const;
+	[[nodiscard]] bool detect_64_bit() const;
 };
 
 #endif
