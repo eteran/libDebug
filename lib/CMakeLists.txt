@@ -14,11 +14,13 @@ set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Ptrace.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/RegisterRef.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/ThreadBase.hpp
     Debugger.cpp
     Elf.cpp
     Memory.cpp
     Proc.cpp
     Process.cpp
+    ThreadBase.cpp
 )
 
 if(TARGET_ARCH_FAMILY_X86)
