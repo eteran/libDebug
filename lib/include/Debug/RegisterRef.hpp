@@ -128,15 +128,17 @@ public:
 			throw DebuggerError("RegisterRef: invalid read from '%s'", name_.c_str());
 		}
 
+		static constexpr char HexDigits[] = "0123456789abcdef";
+
 		auto ptr = static_cast<const uint8_t *>(ptr_);
 
 		std::string str;
 		str.reserve(size_ * 2);
 
 		for (size_t i = size_; i > 0; --i) {
-			char buf[3];
-			std::snprintf(buf, sizeof(buf), "%02x", ptr[i - 1]);
-			str.append(buf);
+			const uint8_t value = ptr[i - 1];
+			str.push_back(HexDigits[(value >> 4) & 0x0fU]);
+			str.push_back(HexDigits[value & 0x0fU]);
 		}
 
 		return str;
@@ -256,6 +258,20 @@ RegisterRef make_register(std::string_view name, T &var, size_t offset) {
 	assert(offset < sizeof(T));
 	auto ptr = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(&var) + offset);
 	return RegisterRef(name, ptr, sizeof(T) - offset);
+}
+
+/**
+ * @brief Creates a register reference.
+ *
+ * @param name The name of the register.
+ * @param var The variable containing the register data.
+ * @param offset The offset into the variable where the register data starts.
+ * @return A register reference.
+ */
+template <class T>
+RegisterRef make_register(std::string_view name, T &var) {
+	auto ptr = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(&var));
+	return RegisterRef(name, ptr, sizeof(T));
 }
 
 /**
