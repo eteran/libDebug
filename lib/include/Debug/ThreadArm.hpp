@@ -6,9 +6,6 @@
 #include "ThreadBase.hpp"
 
 #include <cstdint>
-#include <optional>
-#include <sys/ptrace.h>
-#include <sys/wait.h>
 
 class Process;
 

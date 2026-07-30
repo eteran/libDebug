@@ -1,27 +1,15 @@
 
 #include "Debug/ThreadArm.hpp"
-#include "Debug/Breakpoint.hpp"
 #include "Debug/Context.hpp"
 #include "Debug/Debugger.hpp"
 #include "Debug/DebuggerError.hpp"
-#include "Debug/Process.hpp"
 #include "Debug/Ptrace.hpp"
 
-#include <cassert>
-#include <cinttypes>
-#include <csignal>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <cstddef>
 
 #include <elf.h>
-#include <sys/procfs.h>
-#include <sys/ptrace.h>
-#include <sys/syscall.h>
 #include <sys/uio.h>
 #include <sys/user.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 /**
  * @brief Construct a new Thread object.
