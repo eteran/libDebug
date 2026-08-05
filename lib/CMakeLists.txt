@@ -14,6 +14,7 @@ set(SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Ptrace.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/Region.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Debug/RegisterRef.hpp
+    BreakpointCommon.cpp
     Debugger.cpp
     Elf.cpp
     Memory.cpp
