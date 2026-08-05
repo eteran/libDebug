@@ -1,7 +1,7 @@
 
-#include "Debug/ThreadBase.hpp"
 #include "Debug/DebuggerError.hpp"
 #include "Debug/Ptrace.hpp"
+#include "Debug/Thread.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -19,22 +19,12 @@ constexpr long TraceOptions = PTRACE_O_TRACECLONE |
  * @param f The flags to use for creating the ptrace options.
  * @return The ptrace options value.
  */
-long ThreadBase::create_ptrace_options(ThreadBase::Flag f) {
+long Thread::create_ptrace_options(Thread::Flag f) {
 	long options = TraceOptions;
-	if (f & ThreadBase::KillOnTracerExit) {
+	if (f & Thread::KillOnTracerExit) {
 		options |= PTRACE_O_EXITKILL;
 	}
 	return options;
-}
-
-/**
- * @brief Construct a new ThreadBase object.
- *
- * @param process The process that this thread belongs to.
- * @param tid The thread id to attach to.
- */
-ThreadBase::ThreadBase(Process *process, pid_t tid)
-	: process_(process), tid_(tid) {
 }
 
 /**
@@ -42,7 +32,7 @@ ThreadBase::ThreadBase(Process *process, pid_t tid)
  *
  * @return true if the thread status is exited, false otherwise.
  */
-bool ThreadBase::is_exited() const {
+bool Thread::is_exited() const {
 	assert(state_ == State::Stopped);
 	return WIFEXITED(wstatus_);
 }
@@ -52,7 +42,7 @@ bool ThreadBase::is_exited() const {
  *
  * @return true if the thread status is signaled, false otherwise.
  */
-bool ThreadBase::is_signaled() const {
+bool Thread::is_signaled() const {
 	assert(state_ == State::Stopped);
 	return WIFSIGNALED(wstatus_);
 }
@@ -62,7 +52,7 @@ bool ThreadBase::is_signaled() const {
  *
  * @return true if the thread status is stopped, false otherwise.
  */
-bool ThreadBase::is_stopped() const {
+bool Thread::is_stopped() const {
 	assert(state_ == State::Stopped);
 	return WIFSTOPPED(wstatus_);
 }
@@ -72,7 +62,7 @@ bool ThreadBase::is_stopped() const {
  *
  * @return true if the thread status is continued, false otherwise.
  */
-bool ThreadBase::is_continued() const {
+bool Thread::is_continued() const {
 	assert(state_ == State::Stopped);
 	return WIFCONTINUED(wstatus_);
 }
@@ -82,7 +72,7 @@ bool ThreadBase::is_continued() const {
  *
  * @return The exit status of the thread.
  */
-int ThreadBase::exit_status() const {
+int Thread::exit_status() const {
 	assert(state_ == State::Stopped);
 	return WEXITSTATUS(wstatus_);
 }
@@ -92,7 +82,7 @@ int ThreadBase::exit_status() const {
  *
  * @return The signal status of the thread.
  */
-int ThreadBase::signal_status() const {
+int Thread::signal_status() const {
 	assert(state_ == State::Stopped);
 	return WTERMSIG(wstatus_);
 }
@@ -102,7 +92,7 @@ int ThreadBase::signal_status() const {
  *
  * @return The stop status of the thread.
  */
-int ThreadBase::stop_status() const {
+int Thread::stop_status() const {
 	assert(state_ == State::Stopped);
 	return WSTOPSIG(wstatus_);
 }
@@ -111,7 +101,7 @@ int ThreadBase::stop_status() const {
  * @brief Causes a running thread the stop execution. This will be
  * eventually followed by a debug event when it actually stops.
  */
-void ThreadBase::stop() const {
+void Thread::stop() const {
 	assert(state_ == State::Running);
 
 	if (syscall(SYS_tgkill, process_->pid(), tid_, SIGSTOP) == -1) {
@@ -122,7 +112,7 @@ void ThreadBase::stop() const {
 /**
  * @brief Terminates this thread.
  */
-void ThreadBase::kill() const {
+void Thread::kill() const {
 	assert(state_ == State::Running);
 
 	if (syscall(SYS_tgkill, process_->pid(), tid_, SIGKILL) == -1) {
@@ -134,7 +124,7 @@ void ThreadBase::kill() const {
  * @brief Detaches from the associated thread, if any.
  * no-op if already detached
  */
-void ThreadBase::detach() {
+void Thread::detach() {
 	if (tid_ != -1) {
 		// NOTE(eteran): we intentionally DO NOT try to catch or report errors from
 		// ptrace detach because we want to make a best effort to detach even if the
@@ -149,7 +139,7 @@ void ThreadBase::detach() {
 /**
  * @brief Waits for an event on this thread.
  */
-void ThreadBase::wait() {
+void Thread::wait() {
 
 	assert(state_ == State::Running);
 
@@ -164,7 +154,7 @@ void ThreadBase::wait() {
  * @brief Causes the thread to step one instruction. This will be
  * eventually followed by a debug event when it stops again.
  */
-void ThreadBase::step() {
+void Thread::step() {
 	step(0);
 }
 
@@ -174,7 +164,7 @@ void ThreadBase::step() {
  *
  * @param signal The signal to deliver to the thread after stepping. If 0, no signal is delivered.
  */
-void ThreadBase::step(int signal) {
+void Thread::step(int signal) {
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
 	pending_step_breakpoint_.reset();
@@ -206,21 +196,21 @@ void ThreadBase::step(int signal) {
  *
  * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
  */
-void ThreadBase::resume(int signal) {
+void Thread::resume(int signal) {
 	resume_internal(signal, false);
 }
 
 /**
  * @brief Causes the thread to resume execution.
  */
-void ThreadBase::resume() {
+void Thread::resume() {
 	resume(0);
 }
 
 /**
  * @brief Causes the thread to resume execution until it enters or exits a system call.
  */
-void ThreadBase::resume_until_syscall() {
+void Thread::resume_until_syscall() {
 	resume_until_syscall(0);
 }
 
@@ -229,7 +219,7 @@ void ThreadBase::resume_until_syscall() {
  *
  * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
  */
-void ThreadBase::resume_until_syscall(int signal) {
+void Thread::resume_until_syscall(int signal) {
 	resume_internal(signal, true);
 }
 
@@ -239,7 +229,7 @@ void ThreadBase::resume_until_syscall(int signal) {
  * @param signal The signal to deliver to the thread when resuming. If 0, no signal is delivered.
  * @param until_syscall If true, the thread will resume until it enters or exits a system call. If false, it will resume normally.
  */
-void ThreadBase::resume_internal(int signal, bool until_syscall) {
+void Thread::resume_internal(int signal, bool until_syscall) {
 
 	assert(state_ == State::Stopped);
 	pending_signal_ = 0;
@@ -306,7 +296,7 @@ void ThreadBase::resume_internal(int signal, bool until_syscall) {
  *
  * @return true if the signal info was successfully loaded, false otherwise.
  */
-bool ThreadBase::load_signal_info() {
+bool Thread::load_signal_info() {
 	if (auto ret = do_ptrace(PTRACE_GETSIGINFO, tid_, 0L, &siginfo_); ret.is_err()) {
 		siginfo_ = {};
 		return false;

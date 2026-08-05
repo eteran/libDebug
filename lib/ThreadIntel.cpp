@@ -65,7 +65,7 @@ constexpr uint32_t DefaultMxcsr = 0x1f80;
  * @param f Controls the attach behavior of this constructor.
  */
 Thread::Thread(const internal_t &, Process *process, pid_t tid, Flag f)
-	: ThreadBase(process, tid) {
+	: process_(process), tid_(tid) {
 
 	assert(process);
 
