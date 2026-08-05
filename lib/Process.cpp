@@ -83,10 +83,10 @@ bool is_trap_event(int status) {
 }
 
 /**
- * @brief Checks if the given status is a clone event.
+ * @brief Checks if the given status is one of the ptrace events (clone, fork, vfork, exit).
  *
  * @param status The status to check.
- * @return true if the status is a clone event, false otherwise.
+ * @return true if the status is one of the ptrace events, false otherwise.
  */
 bool is_ptrace_event(int status, int event) {
 	// ptrace encodes the event in the high 16 bits of the wait status when a SIGTRAP stop is reported.
