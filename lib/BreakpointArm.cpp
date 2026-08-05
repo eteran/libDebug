@@ -49,10 +49,3 @@ Breakpoint::Breakpoint(const Process *process, uint64_t address, TypeId type)
 		__builtin_unreachable();
 	}
 }
-
-/**
- * @brief Disable and then destroy the Breakpoint object.
- */
-Breakpoint::~Breakpoint() {
-	disable();
-}

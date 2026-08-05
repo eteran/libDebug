@@ -1,9 +1,16 @@
 
 #include "Debug/Breakpoint.hpp"
-#include "Debug/Process.hpp"
 #include "Debug/DebuggerError.hpp"
+#include "Debug/Process.hpp"
 
 #include <cstring>
+
+/**
+ * @brief Disable and then destroy the Breakpoint object.
+ */
+Breakpoint::~Breakpoint() {
+	disable();
+}
 
 /**
  * @brief Enables the breakpoint by backing up the bytes at the target address as needed.
