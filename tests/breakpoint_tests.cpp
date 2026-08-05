@@ -50,10 +50,26 @@ uint8_t *map_executable_page() {
 	CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate executable page");
 
 	auto code = static_cast<uint8_t *>(mem);
-	code[0]   = 0x90; // NOP
-	code[1]   = 0x90; // NOP
-	code[2]   = 0xc3; // RET
-
+#if defined(__x86_64__) || defined(__i386__)
+	code[0] = 0x90; // NOP
+	code[1] = 0x90; // NOP
+	code[2] = 0xc3; // RET
+#elif defined(__aarch64__)
+	code[0]  = 0x1f;
+	code[1]  = 0x20;
+	code[2]  = 0x03;
+	code[3]  = 0xd5; // NOP
+	code[4]  = 0x1f;
+	code[5]  = 0x20;
+	code[6]  = 0x03;
+	code[7]  = 0xd5; // NOP
+	code[8]  = 0xc0;
+	code[9]  = 0x03;
+	code[10] = 0x5f;
+	code[11] = 0xd6; // RET
+#else
+#error "Unsupported architecture for executable page mapping"
+#endif
 	return code;
 }
 
