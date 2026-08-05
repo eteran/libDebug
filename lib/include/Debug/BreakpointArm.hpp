@@ -17,6 +17,8 @@ public:
 	enum class TypeId : int {
 		Automatic = 0,
 		BRK,
+		HLT,
+		UDF,
 
 		TYPE_COUNT,
 	};
