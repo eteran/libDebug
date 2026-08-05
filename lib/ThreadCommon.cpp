@@ -28,6 +28,40 @@ long Thread::create_ptrace_options(Thread::Flag f) {
 }
 
 /**
+ * @brief Construct a new Thread object.
+ *
+ * @param tid The thread id to attach to.
+ * @param f Controls the attach behavior of this constructor.
+ */
+Thread::Thread(const internal_t &, Process *process, pid_t tid, Flag f)
+	: process_(process), tid_(tid) {
+
+	assert(process);
+
+	if (f & Thread::Attach) {
+		if (auto ret = do_ptrace(PTRACE_ATTACH, tid, 0L, 0L); ret.is_err()) {
+			throw DebuggerError("Failed to attach to thread %d: %s", tid, strerror(ret.error()));
+		}
+	}
+
+	wait();
+
+	const long options = create_ptrace_options(f);
+	if (auto ret = do_ptrace(PTRACE_SETOPTIONS, tid, 0L, options); ret.is_err()) {
+		throw DebuggerError("Failed to set ptrace options for thread %d: %s", tid, strerror(ret.error()));
+	}
+
+	is_64_bit_ = detect_64_bit();
+}
+
+/**
+ * @brief Destroy the Thread object.
+ */
+Thread::~Thread() {
+	detach();
+}
+
+/**
  * @brief Checks if the thread status is exited.
  *
  * @return true if the thread status is exited, false otherwise.
