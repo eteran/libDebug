@@ -118,6 +118,11 @@ int main() {
 		dump_memory(process.get(), regions[0].start(), 256);
 	}
 
+	ProcStat proc_stat = read_proc_stat(process->pid());
+	std::printf("Process Stat:\n");
+	std::printf("  PID : %d\n", proc_stat.pid);
+	std::printf("  COMM: %s\n", proc_stat.comm);
+
 	process->resume();
 
 	for (int i = 0; i < 100; ++i) {

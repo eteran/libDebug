@@ -51,6 +51,17 @@ TEST(ProcHelper) {
 	CHECK_MSG(h != 0 || !regions.empty(), "hash_regions returned zero and regions is empty");
 }
 
+TEST(ProcStat) {
+	const pid_t pid = getpid();
+	const ProcStat proc_stat = read_proc_stat(pid);
+
+	CHECK_MSG(proc_stat.pid == pid, "read_proc_stat returned an unexpected pid");
+	CHECK_MSG(proc_stat.comm[0] != '\0', "read_proc_stat returned an empty command name");
+	CHECK_MSG(proc_stat.state != '\0', "read_proc_stat returned an empty state");
+	CHECK_MSG(proc_stat.num_threads > 0, "read_proc_stat returned an invalid thread count");
+	CHECK_MSG(proc_stat.starttime > 0, "read_proc_stat returned an invalid start time");
+}
+
 TEST(EnumerateProcesses) {
 	pid_t self = getpid();
 	auto procs = enumerate_processes();

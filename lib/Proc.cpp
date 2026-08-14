@@ -293,3 +293,97 @@ std::vector<Region> enumerate_regions(pid_t pid) {
 
 	return regions;
 }
+
+ProcStat read_proc_stat(pid_t pid) {
+
+	ProcStat proc_stat = {};
+
+	char path[PATH_MAX];
+	std::snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+
+	FILE *fp = std::fopen(path, "r");
+	if (!fp) {
+		return proc_stat;
+	}
+
+	char line[PATH_MAX];
+	while (std::fgets(line, sizeof(line), fp)) {
+		const int matched = std::sscanf(line,
+										"%d (%255[^)]) %c "
+										"%d %d %d %d %d %u "
+										"%llu %llu %llu %llu %llu %llu "
+										"%lld %lld %lld %lld %lld %lld "
+										"%llu %llu %lld "
+										"%llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu "
+										"%d %d %u %u "
+										"%llu %llu %lld "
+										"%llu %llu %llu %llu %llu %llu %llu %d",
+										&proc_stat.pid,
+										proc_stat.comm,
+										&proc_stat.state,
+										&proc_stat.ppid,
+										&proc_stat.pgrp,
+										&proc_stat.session,
+										&proc_stat.tty_nr,
+										&proc_stat.tpgid,
+										&proc_stat.flags,
+										&proc_stat.minflt,
+										&proc_stat.cminflt,
+										&proc_stat.majflt,
+										&proc_stat.cmajflt,
+										&proc_stat.utime,
+										&proc_stat.stime,
+										&proc_stat.cutime,
+										&proc_stat.cstime,
+										&proc_stat.priority,
+										&proc_stat.nice,
+										&proc_stat.num_threads,
+										&proc_stat.itrealvalue,
+										&proc_stat.starttime,
+										&proc_stat.vsize,
+										&proc_stat.rss,
+										&proc_stat.rsslim,
+										&proc_stat.startcode,
+										&proc_stat.endcode,
+										&proc_stat.startstack,
+										&proc_stat.kstkesp,
+										&proc_stat.kstkeip,
+										&proc_stat.signal,
+										&proc_stat.blocked,
+										&proc_stat.sigignore,
+										&proc_stat.sigcatch,
+										&proc_stat.wchan,
+										&proc_stat.nswap,
+										&proc_stat.cnswap,
+										&proc_stat.exit_signal,
+										&proc_stat.processor,
+										&proc_stat.rt_priority,
+										&proc_stat.policy,
+
+										// Linux 2.6.18
+										&proc_stat.delayacct_blkio_ticks,
+
+										// Linux 2.6.24
+										&proc_stat.guest_time,
+										&proc_stat.cguest_time,
+
+										// Linux 3.3
+										&proc_stat.start_data,
+										&proc_stat.end_data,
+										&proc_stat.start_brk,
+
+										// Linux 3.5
+										&proc_stat.arg_start,
+										&proc_stat.arg_end,
+										&proc_stat.env_start,
+										&proc_stat.env_end,
+										&proc_stat.exit_code);
+
+		if (matched != 52) {
+			proc_stat = {};
+		}
+	}
+
+	fclose(fp);
+	return proc_stat;
+}
