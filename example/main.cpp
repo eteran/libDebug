@@ -33,13 +33,15 @@ void dump_regions(const std::vector<Region> &regions) {
  */
 void dump_memory(Process *process, uint64_t address, size_t n) {
 
+	constexpr size_t BufferSize = 4096;
+
 	uint64_t first             = address;
 	const uint64_t last        = address + n;
 	int64_t remaining          = 0;
 	int64_t buffer_index       = 0;
 	constexpr int64_t StepSize = 16;
 
-	uint8_t buffer[4096] = {};
+	uint8_t buffer[BufferSize] = {};
 
 	while (first < last) {
 		if (remaining <= 0) {

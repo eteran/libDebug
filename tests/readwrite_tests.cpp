@@ -5,11 +5,12 @@
 
 namespace {
 
+constexpr size_t PageSize = 4096;
+
 void run_readwrite_case(bool disable_proc_mem) {
 	with_attached_child(
 		[](int addr_write_fd, int sync_read_fd) {
-			constexpr size_t PageSize = 4096;
-			void *mem                 = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+			void *mem = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 			CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate memory");
 
 			auto ptr = static_cast<uint8_t *>(mem);
@@ -55,8 +56,7 @@ void run_readwrite_case(bool disable_proc_mem) {
 void run_readwrite_edges_case(bool disable_proc_mem) {
 	with_attached_child(
 		[](int addr_write_fd, int sync_read_fd) {
-			constexpr size_t PageSize = 4096;
-			void *mem                 = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+			void *mem = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 			CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate memory");
 
 			auto ptr = static_cast<uint8_t *>(mem);

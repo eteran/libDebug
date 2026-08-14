@@ -123,6 +123,9 @@ std::vector<pid_t> enumerate_processes() {
  * @return The hash of the memory map.
  */
 uint64_t hash_regions(pid_t pid) {
+
+	constexpr size_t BufferSize = 4096;
+
 	hasher h;
 
 	char path[PATH_MAX];
@@ -133,7 +136,7 @@ uint64_t hash_regions(pid_t pid) {
 		return 0;
 	}
 
-	char buffer[4096];
+	char buffer[BufferSize];
 	ssize_t n;
 	while ((n = read(fd, buffer, sizeof(buffer))) > 0) {
 		h.update(buffer, static_cast<size_t>(n));

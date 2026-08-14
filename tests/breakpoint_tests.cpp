@@ -12,6 +12,8 @@ using namespace std::chrono_literals;
 
 namespace {
 
+constexpr size_t PageSize = 4096;
+
 struct AltBreakpointCase {
 	Breakpoint::TypeId type;
 	const char *name;
@@ -45,8 +47,8 @@ void trigger_sigfpe_fault() {
  * @brief Maps an executable memory page, writes a simple function that returns immediately, and returns the address of the mapped page.
  */
 uint8_t *map_executable_page() {
-	constexpr size_t PageSize = 4096;
-	void *mem                 = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+	void *mem = mmap(nullptr, PageSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 	CHECK_MSG(mem != MAP_FAILED, "mmap failed to allocate executable page");
 
 	auto code = static_cast<uint8_t *>(mem);
