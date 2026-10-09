@@ -29,7 +29,14 @@ struct FaultSignalCase {
 
 void trigger_sigsegv_fault() {
 	volatile int *ptr = nullptr;
-	*ptr              = 1;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
+#endif
+	*ptr = 1;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 	_exit(1);
 }
 
